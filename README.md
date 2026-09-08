@@ -5,7 +5,7 @@ call implementation for iOS: media, session, user interface and the Matrix side,
 [matrix-rust-rtc](https://github.com/BillCarsonFr/matrix-rust-rtc).
 
 <p align="center">
-  <img src="Tests/ElementCallTests/__Snapshots__/PreviewTests/elementCallView.Connected-group-iPhone-en-GB.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
+  <img src="screenshot.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
 </p>
 
 **This is not the web app, and not the embedded widget.** Three things share the Element Call name:
