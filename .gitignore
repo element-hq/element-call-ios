@@ -1,0 +1,20 @@
+.DS_Store
+/.build
+/Packages
+/*.xcodeproj
+xcuserdata/
+DerivedData/
+.swiftpm/config/registries.json
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
+.nova
+node_modules
+
+# Make sure the IDETemplateMacros.plist is committed.
+!.swiftpm
+
+# Kept local for now: candid notes on gaps in matrix-rust-rtc and the SDK bindings, for those
+# owners rather than for consumers of this package. The code does not depend on it: the removal
+# checklist for the widget-driver stopgap lives in WidgetMatrixBridge.swift's header, and the
+# linker-flag measurement is in the README.
+FEEDBACK.md
