@@ -21,6 +21,15 @@ struct ElementCallStageLayoutTests {
     let spacing: CGFloat = 12
     let metrics = ElementCallStageLayout.Metrics(area: CGSize(width: 393, height: 734), bottomInset: 34, controlsClearance: 84)
     
+    /// The same phone on its side: 874 x 402, a 21 pt home indicator along the bottom, the sensor
+    /// housing 59 pt in on the leading edge, and the controls rail 84 pt in from the trailing one.
+    let landscape = ElementCallStageLayout.Metrics(area: CGSize(width: 874, height: 402),
+                                                   bottomInset: 21,
+                                                   leadingInset: 59,
+                                                   controlsClearance: 84)
+    /// Where a landscape card may go: inside the sensor housing, inside the rail, above the indicator.
+    let landscapeCards = CGRect(x: 75, y: 0, width: 699, height: 369)
+    
     let local = tile("alice", isLocal: true)
     let bob = tile("bob")
     let carol = tile("carol")
@@ -162,5 +171,153 @@ struct ElementCallStageLayoutTests {
         let layout = ElementCallStageLayout.compute(tiles: [], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
         #expect(layout.placements.isEmpty)
         #expect(layout.pageCount == 0)
+    }
+    
+    // MARK: - Landscape
+    
+    static let group = ["bob", "carol", "dan", "erin", "frank", "grace", "heidi"].map { tile($0) }
+    
+    @Test
+    func landscapeGivesTheSpotlightTheWidthAndQueuesTheRestBesideIt() throws {
+        let tiles = [local] + Self.group
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let spotlight = try placement(bob, in: layout)
+        
+        // Most of the width, all of the height between the top and the home indicator. Portrait's
+        // 40%-of-the-height spotlight would be a 6:1 letterbox here.
+        #expect(spotlight.isSpotlight)
+        #expect(spotlight.frame.minX == landscapeCards.minX)
+        #expect(spotlight.frame.minY == 0)
+        #expect(spotlight.frame.height == landscapeCards.height)
+        #expect(spotlight.frame.width > landscapeCards.width * 0.6)
+        
+        // Everyone else is one tile wide, in a column, in the order they came.
+        let column = layout.placements.filter { !$0.isSpotlight }
+        #expect(column.count == Self.group.count)
+        #expect(Set(column.map(\.frame.width)).count == 1)
+        #expect(Set(column.map(\.frame.minX)).count == 1)
+        let columnX = try #require(column.first?.frame.minX)
+        #expect(columnX > spotlight.frame.maxX)
+        #expect(layout.pageAxis == .vertical)
+    }
+    
+    /// The regression this whole layout exists for: portrait's arithmetic put a 346 pt tile into
+    /// 96 pt of space, so tiles ran off the bottom of the screen and under the control bar.
+    @Test
+    func landscapeKeepsEveryTileOnScreenAndClearOfTheChrome() {
+        let tiles = [local] + Self.group
+        for page in 0..<4 {
+            let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: page, metrics: landscape)
+            // Only the page in view has to be on screen; the others are parked a stage away, which
+            // is what makes the swipe a translation rather than a rebuild.
+            for placement in layout.placements where placement.page == nil || placement.page == page {
+                #expect(placement.frame.minX >= landscapeCards.minX)
+                #expect(placement.frame.maxX <= landscapeCards.maxX)
+                #expect(placement.frame.minY >= 0)
+                #expect(placement.frame.maxY <= landscapeCards.maxY)
+                #expect(placement.frame.height > 0)
+            }
+        }
+    }
+    
+    @Test
+    func landscapePagesUpTheColumnRatherThanSideways() throws {
+        let tiles = [local] + Self.group
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        
+        // Two cells fit the column, so seven others need four pages.
+        #expect(layout.pageCount == 4)
+        let first = try #require(layout.placements.first { $0.page == 0 })
+        let second = try #require(layout.placements.first { $0.page == 1 })
+        #expect(second.frame.minX == first.frame.minX)
+        #expect(second.frame.minY == first.frame.minY + landscape.area.height)
+        
+        // The dots stack in the gutter the layout guarantees between spotlight and column.
+        let indicator = try #require(layout.pageIndicatorCenter)
+        let spotlight = try placement(bob, in: layout)
+        #expect(indicator.x < first.frame.minX)
+        #expect(indicator.x > spotlight.frame.maxX)
+    }
+    
+    @Test
+    func landscapeCardsClearTheSensorHousingAndTheControlsRail() {
+        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let onScreen = layout.placements.filter { $0.page == nil || $0.page == 0 }
+        // 59 pt of housing plus the 16 pt margin on one side; 84 pt of rail plus the margin on the other.
+        #expect(onScreen.map(\.frame.minX).min() == 75)
+        #expect(onScreen.map(\.frame.maxX).max() == 774)
+    }
+    
+    /// The column is sized to fit its tiles, not to a share of the width and then whatever happens.
+    /// A phone on its side leaves the stage about 300 pt tall under the top bar, and 22% of 812 pt
+    /// is a 179 pt column whose cells miss a second row by 8 pt: seven people became seven pages,
+    /// each one tile beside half a column of nothing.
+    @Test
+    func aShortLandscapeStageNarrowsTheColumnRatherThanPagingEveryTile() throws {
+        let tight = ElementCallStageLayout.Metrics(area: CGSize(width: 812, height: 300), bottomInset: 1, controlsClearance: 84)
+        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: tight)
+        
+        let onFirstPage = layout.placements.filter { $0.page == 0 }
+        #expect(onFirstPage.count == 2)
+        #expect(layout.pageCount == 4)
+        // Still a usable column, not a sliver.
+        let cell = try #require(onFirstPage.first?.frame)
+        #expect(cell.width >= 140)
+        // And the two of them still fit above the home indicator.
+        #expect(onFirstPage.map(\.frame.maxY).max() ?? 0 <= tight.cardsBottom)
+    }
+    
+    @Test
+    func landscapeAloneGivesTheOneTileTheWholeStage() throws {
+        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: landscape)
+        let only = try placement(local, in: layout)
+        // Nobody to sit beside, so it takes the column's room too rather than leaving a gap.
+        #expect(only.frame == landscapeCards)
+        #expect(layout.pageCount == 1)
+    }
+    
+    @Test
+    func landscapeThumbnailDodgesTheRailInsteadOfTheBottomBar() throws {
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob], spotlightMemberID: nil, layout: .oneToOne, currentPage: 0, metrics: landscape)
+        let main = try placement(bob, in: layout)
+        let thumbnail = try placement(local, in: layout)
+        
+        #expect(main.appearance == .fullBleed)
+        #expect(main.frame == CGRect(origin: .zero, size: landscape.area))
+        // The rail is on the trailing edge now, so the thumbnail stops short of it rather than
+        // hovering above a bottom bar that is no longer there.
+        #expect(thumbnail.frame.maxX == landscape.area.width - 84 - 16)
+        #expect(thumbnail.frame.maxY == landscape.area.height - 21 - 16)
+    }
+    
+    // MARK: - Visibility
+    
+    @Test
+    func onlyTheNeighbouringPagePausesAndTheRestIsReleased() {
+        // A tile that never pages, and the page in view: both drawing.
+        #expect(ElementCallTileVisibility.forPage(nil, currentPage: 3, livePages: [3]) == .live)
+        #expect(ElementCallTileVisibility.forPage(3, currentPage: 3, livePages: [3]) == .live)
+        // Either neighbour is one swipe away, so it keeps its subscription and only pauses.
+        #expect(ElementCallTileVisibility.forPage(2, currentPage: 3, livePages: [3]) == .paused)
+        #expect(ElementCallTileVisibility.forPage(4, currentPage: 3, livePages: [3]) == .paused)
+        // Anything further is a closed tile in the core's sense, and costs a subscription to keep.
+        #expect(ElementCallTileVisibility.forPage(1, currentPage: 3, livePages: [3]) == .released)
+        #expect(ElementCallTileVisibility.forPage(9, currentPage: 3, livePages: [3]) == .released)
+        // A swipe in progress has two pages on screen, and the one being left keeps its picture
+        // until the snap finishes: a page that is live is live however far away it counts as.
+        #expect(ElementCallTileVisibility.forPage(4, currentPage: 3, livePages: [3, 4]) == .live)
+        #expect(ElementCallTileVisibility.forPage(2, currentPage: 3, livePages: [2, 3]) == .live)
+    }
+    
+    @Test
+    func aBigCallReleasesFarMoreThanItHolds() {
+        // Thirty people, two to a landscape page: the point of the exercise is that what we keep
+        // does not grow with the call.
+        let tiles = (0..<30).map { Self.tile("member\($0)") }
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: tiles[0].memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let states = layout.placements.map { ElementCallTileVisibility.forPage($0.page, currentPage: 0, livePages: [0]) }
+        #expect(states.filter { $0 == .live }.count == 3)
+        #expect(states.filter { $0 == .paused }.count == 2)
+        #expect(states.filter { $0 == .released }.count == 25)
     }
 }

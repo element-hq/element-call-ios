@@ -69,6 +69,9 @@ public final class MatrixRtcCall {
     private var playbackSinks = [String: AudioPlaybackSink]()
     private var videoSources = [VideoStreamKey: RemoteVideoSource]()
     private var appliedConstraints = [VideoStreamKey: MatrixRtcVideoConstraints]()
+    /// Members whose video is released rather than merely paused. Held as member IDs because that
+    /// is what the stage knows: a tile it has paged far away wants neither camera nor screen share.
+    private var releasedVideoMembers = Set<String>()
     private var tasks = [Task<Void, Never>]()
     
     private struct VideoStreamKey: Hashable {
@@ -308,10 +311,15 @@ public final class MatrixRtcCall {
             return source
         }()
         source.attach(slot)
-        // A tile that comes back after the stream went idle needs the SFU sending again; the tile's
-        // own size report refines this shortly after.
-        if let applied = appliedConstraints[key], !applied.isVisible {
-            setVideoConstraints(.init(isVisible: true, pixelSize: applied.pixelSize), memberID: memberID, kind: kind)
+        // A tile only attaches once it is on screen, so whatever the stage last decided about this
+        // member is out of date the moment we get here: drop the release before asking for the
+        // stream, or the diff below would immediately take it away again.
+        releasedVideoMembers.remove(memberID)
+        // A tile that comes back after the stream went idle (or was released) needs the SFU sending
+        // again; the tile's own size report refines this shortly after.
+        let applied = appliedConstraints[key]
+        if applied == nil || applied?.isVisible == false || applied?.isEnabled == false {
+            setVideoConstraints(.init(isVisible: true, pixelSize: applied?.pixelSize), memberID: memberID, kind: kind)
         }
     }
     
@@ -327,6 +335,9 @@ public final class MatrixRtcCall {
     /// A surface reports how big it draws a stream (nil when it stops drawing it).
     public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRtcStreamKind = .camera) {
         guard memberID != localMemberID else { return }
+        // A surface that is still laid out but released (Picture in Picture keeps one alive) must
+        // not re-subscribe the stream behind the stage's back.
+        guard !releasedVideoMembers.contains(memberID) else { return }
         let key = VideoStreamKey(memberID: memberID, kind: kind)
         var sizes = drawnSizes[key] ?? [:]
         sizes[slot.id] = size
@@ -344,14 +355,15 @@ public final class MatrixRtcCall {
         // Our own streams are not subscribed from the SFU; and layout jitters by a pixel between
         // passes, which is not news worth a round trip: snap to a 16 px grid.
         guard memberID != localMemberID else { return }
-        let constraints = MatrixRtcVideoConstraints(isVisible: constraints.isVisible,
+        let constraints = MatrixRtcVideoConstraints(isEnabled: constraints.isEnabled,
+                                                    isVisible: constraints.isEnabled && constraints.isVisible,
                                                     pixelSize: constraints.pixelSize.map { size in
                                                         CGSize(width: (size.width / 16).rounded() * 16, height: (size.height / 16).rounded() * 16)
                                                     })
         let key = VideoStreamKey(memberID: memberID, kind: kind)
         guard appliedConstraints[key] != constraints else { return }
         appliedConstraints[key] = constraints
-        MatrixRtcLog.info("Constraints for \(memberID) (\(kind)): visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
+        MatrixRtcLog.info("Constraints for \(memberID) (\(kind)): enabled=\(constraints.isEnabled) visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
         
         let detail: FfiVideoDetail = if constraints.isVisible, let size = constraints.pixelSize {
             .dimensions(width: UInt32(size.width), height: UInt32(size.height))
@@ -362,7 +374,33 @@ public final class MatrixRtcCall {
         Task.detached(priority: .utility) {
             mediaSession.setConstraints(memberId: memberID,
                                         kind: kind.ffi,
-                                        constraints: FfiMediaConstraints(enabled: true, visible: constraints.isVisible, detail: detail, lowBandwidth: false))
+                                        constraints: FfiMediaConstraints(enabled: constraints.isEnabled, visible: constraints.isVisible, detail: detail, lowBandwidth: false))
+        }
+    }
+    
+    /// The members whose video the stage has paged far enough away to release: unsubscribed rather
+    /// than paused, for both the camera and a screen share, since a tile that far off shows neither.
+    ///
+    /// This is a set rather than a per-tile call so there is one place that knows which members are
+    /// released. An earlier shape had each tile release itself on the way out, and members who left
+    /// while off screen were never restored, because the tile that owed them the call had gone.
+    public func setReleasedVideoMembers(_ memberIDs: Set<String>) {
+        let released = memberIDs.subtracting([localMemberID])
+        guard released != releasedVideoMembers else { return }
+        // Only the members that changed side need a round trip; setVideoConstraints de-duplicates
+        // the rest anyway, but a big call would otherwise walk every member on every swipe.
+        let changed = released.symmetricDifference(releasedVideoMembers)
+        releasedVideoMembers = released
+        for memberID in changed {
+            let isEnabled = !released.contains(memberID)
+            for kind in [MatrixRtcStreamKind.camera, .screenShare] {
+                let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
+                // Restoring stops at paused, never straight to visible: the tile is a page away, and
+                // it is its own attach that says it is being drawn again and at what size.
+                setVideoConstraints(.init(isEnabled: isEnabled, isVisible: false, pixelSize: applied?.pixelSize),
+                                    memberID: memberID,
+                                    kind: kind)
+            }
         }
     }
     
@@ -380,6 +418,7 @@ public final class MatrixRtcCall {
         playbackSinks.removeAll()
         videoSources.values.forEach { $0.close() }
         videoSources.removeAll()
+        releasedVideoMembers.removeAll()
         audioEngine.stop()
         do {
             try await mediaSession.disconnect()

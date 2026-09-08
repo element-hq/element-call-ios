@@ -62,8 +62,31 @@ Three flags are not optional, and each fails in a way that does not name its own
 
 `swift build` alone will fail: the package is iOS-only. Always go through `xcodebuild`.
 
-The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`, which the
-workflow reads. One place, not four.
+The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`. The
+harness reads them and fails loudly when the simulator does not match. **The workflows do not read
+them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
+`SIMULATOR_RUNTIME` are duplicated literals in both workflow files, so changing the pinned device is
+three edits, not one.
+
+### Re-recording snapshots
+
+Delete the images and run the tests; the harness records whatever is missing.
+
+```bash
+rm -rf Tests/ElementCallTests/__Snapshots__/PreviewTests
+# then the xcodebuild command above
+```
+
+**Not `RECORD_FAILURES=true` on the command line.** The harness reads it from its own environment,
+and nothing on an `xcodebuild` command line gets there: not a build setting, not the `TEST_RUNNER_`
+prefix, not the calling shell. It works when set in a scheme, which is why it works from inside
+Xcode. On the command line it does nothing, silently, and you conclude your change had no visual
+effect. `record-snapshots.yml` deletes for this reason.
+
+`SnapshotEnvironment.renderDevices` is what each preview is rendered as, and the orientation is part
+of it. Note the **iPad entry has always been landscape**: the snapshot library's bare `iPad10_2`
+means `iPad10_2(.landscape)` while its bare `iPhoneX` means portrait. There is no iPad portrait
+coverage.
 
 ---
 
@@ -93,6 +116,10 @@ that way.
 - Never store a function value directly in a generic `Mutex`. Each `withLock` reabstracts and writes
   back one more thunk, so a per-frame callback overflows the stack after a few minutes. Box it in a
   struct.
+- **Orientation is the shape of the space, never the size class.** `ElementCallStageLayout.Metrics`
+  and `ElementCallView` both decide on `width > height` and must keep agreeing. An iPad in landscape
+  has a *regular* vertical size class, so a size-class branch would leave its controls at the bottom
+  while the stage laid its tiles out for a side rail.
 - Follow the [Swift API Design Guidelines]: `ID` not `Id`, `URL` not `Url`.
 - `MatrixRtc*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
   own API. Nothing may be called `MatrixRtc`, which is the bindings' own module.

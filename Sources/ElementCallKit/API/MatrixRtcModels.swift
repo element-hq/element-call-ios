@@ -201,11 +201,19 @@ public nonisolated struct MatrixRtcVideoInfo: Sendable, Hashable {
 
 /// What a tile actually draws, so the SFU sends only the layer that fits.
 public nonisolated struct MatrixRtcVideoConstraints: Sendable, Hashable {
+    /// Whether we are subscribed at all. The core draws a firm line between the two ways of not
+    /// wanting a picture, and so do we: `isVisible == false` pauses a stream that is about to come
+    /// back, and resumes instantly; `isEnabled == false` releases it as fully as the transport
+    /// allows, which is the only one that stops a big call from holding a subscription per member.
+    /// Pausing something that will not be looked at again for minutes wastes a subscription;
+    /// releasing something a swipe is about to reveal costs a visible re-negotiation.
+    public let isEnabled: Bool
     public let isVisible: Bool
     /// The drawn size in pixels, nil to let the SFU pick.
     public let pixelSize: CGSize?
     
-    public init(isVisible: Bool, pixelSize: CGSize?) {
+    public init(isEnabled: Bool = true, isVisible: Bool, pixelSize: CGSize?) {
+        self.isEnabled = isEnabled
         self.isVisible = isVisible
         self.pixelSize = pixelSize
     }

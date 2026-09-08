@@ -21,31 +21,39 @@ struct ElementCallView: View {
     let callProvider: () -> MatrixRtcCall?
     
     var body: some View {
-        ZStack {
-            // Minimized (bar or Picture in Picture): nothing mounted, so the tiles' streams close and
-            // only the window's own slot keeps decoding.
-            if context.viewState.isMaximized {
-                style.theme.bgCanvasDefault.ignoresSafeArea()
-                
-                VStack(spacing: 12) {
-                    topBar
-                        .padding(.horizontal, 16)
-                    if context.viewState.isScreenSharing {
-                        screenShareBanner
-                            .transition(.move(edge: .top).combined(with: .opacity))
+        // Orientation is read as the shape of the space we were given, not from the device or the
+        // size class: a half-screen iPad app in portrait wants the portrait arrangement whatever
+        // the hardware is doing, and an iPad in landscape is landscape even though its vertical
+        // size class says regular. The stage decides the same way, so the two cannot disagree.
+        GeometryReader { geometry in
+            let isLandscape = geometry.size.width > geometry.size.height
+            ZStack {
+                // Minimized (bar or Picture in Picture): nothing mounted, so the tiles' streams close
+                // and only the window's own slot keeps decoding.
+                if context.viewState.isMaximized {
+                    style.theme.bgCanvasDefault.ignoresSafeArea()
+                    
+                    VStack(spacing: 12) {
+                        topBar
+                            .padding(.horizontal, 16)
+                            // The rail runs up the trailing edge and is centred, so it reaches into
+                            // the top bar's row: without this the overflow button sits on top of it.
+                            .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
+                        if context.viewState.isScreenSharing {
+                            screenShareBanner
+                                .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        content
                     }
-                    content
+                    .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
+                    
+                    controls(isLandscape: isLandscape)
+                } else {
+                    Color.clear
                 }
-                .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
-                
-                VStack(spacing: 0) {
-                    Spacer()
-                    ElementCallControlsView(context: context)
-                        .padding(.bottom, Self.controlsBottomPadding)
-                }
-            } else {
-                Color.clear
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .environment(\.colorScheme, .dark)
         .alert(context.alertInfo?.title ?? "",
@@ -151,9 +159,29 @@ struct ElementCallView: View {
     
     // MARK: - Content
     
-    /// The floating controls: a 56 pt button in an 8 pt capsule, this far above the safe area.
-    private static let controlsBottomPadding: CGFloat = 12
-    private static let controlsHeight: CGFloat = 56 + 2 * 8
+    /// The floating controls sit this far in from the edge they are on. Their thickness is the same
+    /// either way round, so the stage reserves one clearance and does not care which edge it is.
+    private static let controlsEdgePadding: CGFloat = 12
+    static let controlsClearance: CGFloat = ElementCallControlsView.thickness + controlsEdgePadding
+    
+    /// Pinned to the bottom in portrait and to the trailing edge in landscape, over the stage
+    /// either way: the stage has already kept its cards out from under them.
+    @ViewBuilder
+    private func controls(isLandscape: Bool) -> some View {
+        if isLandscape {
+            HStack(spacing: 0) {
+                Spacer()
+                ElementCallControlsView(context: context, axis: .vertical)
+                    .padding(.trailing, Self.controlsEdgePadding)
+            }
+        } else {
+            VStack(spacing: 0) {
+                Spacer()
+                ElementCallControlsView(context: context, axis: .horizontal)
+                    .padding(.bottom, Self.controlsEdgePadding)
+            }
+        }
+    }
     
     @ViewBuilder
     private var content: some View {
@@ -170,7 +198,7 @@ struct ElementCallView: View {
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
-                             controlsClearance: Self.controlsHeight + Self.controlsBottomPadding) { action in
+                             controlsClearance: Self.controlsClearance) { action in
                 context.send(viewAction: action)
             }
         }
