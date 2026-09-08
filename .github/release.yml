@@ -1,0 +1,36 @@
+changelog:
+  categories:
+    - title: ✨ Features
+      labels:
+        - pr-feature
+    - title: 🙌 Improvements
+      labels:
+        - pr-change
+    - title: 🐛 Bugfixes
+      labels:
+        - pr-bugfix
+    # This package's public surface is the ports and the accessibility identifiers, and hosts pin it
+    # by exact version, so a breaking change needs to be loud in the release notes.
+    - title: ⚠️ API Changes
+      labels:
+        - pr-api
+    - title: 🦻 Accessibility
+      labels:
+        - pr-a11y
+    - title: 🧱 Build
+      labels:
+        - pr-build
+    - title: 📄 Documentation
+      labels:
+        - pr-doc
+    - title: 🚧 In development 🚧
+      labels:
+        - pr-wip
+
+    # No pr-i18n: text comes from the host through ElementCallStrings rather than being translated
+    # here. No pr-element-pro: this package has no enterprise variant.
+
+    - title: Others
+      labels:
+        - pr-misc
+        - "*"

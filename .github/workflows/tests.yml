@@ -1,0 +1,105 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  tests:
+    runs-on: macos-26
+    timeout-minutes: 30
+    concurrency:
+      group: ${{ github.ref == 'refs/heads/main' && format('tests-main-{0}', github.sha) || format('tests-{0}', github.ref) }}
+      cancel-in-progress: true
+
+    env:
+      # Snapshot references are pinned to one device and OS: font rendering differs otherwise.
+      # These three must match Tests/ElementCallTests/Support/SnapshotEnvironment.swift, which the
+      # harness reads, and it fails loudly rather than silently if they drift.
+      XCODE_APP: /Applications/Xcode_26.5.app
+      SIMULATOR_NAME: iPhone SE (3rd generation)
+      SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
+      SIMULATOR_LABEL: ElementCall Snapshots
+
+    steps:
+      # Snapshot references live in Git LFS, and without them every snapshot test fails on a
+      # text pointer rather than an image.
+      - uses: nschloe/action-cached-lfs-checkout@385a8ecc719e50b8c71af6ab01a624b486b7c3bc # v1.2.5
+        with:
+          persist-credentials: false
+
+      - name: Configure Xcode
+        run: sudo xcode-select -s "$XCODE_APP"
+
+      - name: Install tools
+        run: brew install sourcery swiftformat swiftlint
+
+      # The package must never reach for the host application's world. SwiftLint carries the rules
+      # that enforce it, at error severity, so this failing is the boundary breaking rather than a
+      # style nit. Not --strict: the media layer arrived from the spike with sixteen force-unwrap
+      # and large-tuple warnings that element-x-ios also carries, and promoting those to errors is
+      # separate work from standing up continuous integration.
+      - name: Lint
+        run: |
+          swiftformat --lint .
+          swiftlint
+
+      # Regenerated rather than trusted, then checked for drift: the committed file is what a
+      # developer reads in a diff, so it must not go stale.
+      - name: Generate preview tests
+        working-directory: Tools/Sourcery
+        run: sourcery --config PreviewTestsConfig.yml
+
+      - name: Fail if the generated tests are stale
+        run: git diff --exit-code -- Tests/ElementCallTests/GeneratedPreviewTests.swift
+
+      - name: Create the snapshot simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # Two flags that are not optional, both of which fail in confusing ways when missed.
+      #
+      # `-ObjC` keeps libwebrtc's Objective-C categories from being dead-stripped out of the static
+      # archive. Library targets never link, so a plain build passes without it and only the test
+      # bundle dies, on launch, with an unrecognised selector.
+      #
+      # The destination is a concrete arm64 simulator by id. A generic one also builds Intel, for
+      # which the media xcframework has no slice, and EXCLUDED_ARCHS on the command line does not
+      # reach the targets SwiftPM generates.
+      - name: Run tests
+        run: |
+          set -o pipefail && xcodebuild test \
+            -scheme ElementCall-Package \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -testLanguage en -testRegion GB \
+            OTHER_LDFLAGS='$(inherited) -ObjC' \
+            -resultBundlePath Logs/ElementCallTests.xcresult \
+            | xcbeautify --renderer github-actions
+
+      - name: Zip artifacts
+        if: failure()
+        run: zip -r Logs/ElementCallTests.xcresult.zip Logs/ElementCallTests.xcresult/
+
+      - name: Archive artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: test-results
+          path: Logs/ElementCallTests.xcresult.zip
+          retention-days: 1
+          if-no-files-found: ignore
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+          xcode: true
+          xcode_archive_path: Logs/ElementCallTests.xcresult

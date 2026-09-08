@@ -1,0 +1,16 @@
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+    patch: false
+
+ignore:
+  - "Sources/*/Generated"
+  # Preview and snapshot plumbing that ships in the product so Sourcery can scan it.
+  - "Sources/ElementCallUI/Previews"
+  # Port fakes ship in the product too, so a host can use them for its own previews.
+  - "Sources/ElementCall/Ports/ElementCallFakes.swift"
+  - "Tests"
+  - "Tools"

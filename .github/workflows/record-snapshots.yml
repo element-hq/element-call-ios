@@ -1,0 +1,80 @@
+name: Record Snapshots
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  record:
+    # Label-triggered, and never on a fork: this pushes a commit to the pull request branch.
+    if: github.event.label.name == 'record-snapshots' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-26
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+
+    env:
+      XCODE_APP: /Applications/Xcode_26.5.app
+      SIMULATOR_NAME: iPhone SE (3rd generation)
+      SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
+
+    steps:
+      - name: Remove the label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              name: 'record-snapshots'
+            })
+
+      - uses: nschloe/action-cached-lfs-checkout@385a8ecc719e50b8c71af6ab01a624b486b7c3bc # v1.2.5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: true
+
+      - name: Configure Xcode
+        run: sudo xcode-select -s "$XCODE_APP"
+
+      - name: Install tools
+        run: brew install sourcery
+
+      - name: Generate preview tests
+        working-directory: Tools/Sourcery
+        run: sourcery --config PreviewTestsConfig.yml
+
+      - name: Create the snapshot simulator
+        id: simulator
+        run: |
+          udid=$(xcrun simctl create "ElementCall Snapshots" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+
+      # RECORD_FAILURES overwrites whatever no longer matches, so failures here are expected and
+      # the run is about the images it leaves behind. A package needs no test-plan rewriting for
+      # this, unlike the app.
+      - name: Re-record
+        continue-on-error: true
+        run: |
+          xcodebuild test \
+            -scheme ElementCall-Package \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -testLanguage en -testRegion GB \
+            OTHER_LDFLAGS='$(inherited) -ObjC' \
+            RECORD_FAILURES=true
+
+      - name: Commit the images
+        run: |
+          git config user.name "Element CI"
+          git config user.email "ci@element.io"
+          git add Tests/ElementCallTests/__Snapshots__/
+          if git diff --cached --quiet; then
+            echo "No snapshot changes detected."
+          else
+            git commit -m "Record preview snapshots"
+            git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}
+          fi
