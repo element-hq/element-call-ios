@@ -54,24 +54,30 @@ jobs:
           udid=$(xcrun simctl create "ElementCall Snapshots" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
-      # RECORD_FAILURES overwrites whatever no longer matches, so failures here are expected and
-      # the run is about the images it leaves behind. A package needs no test-plan rewriting for
-      # this, unlike the app.
+      # The marker file is how the harness is told to overwrite what no longer matches; see the
+      # comment on `recordMarkerURL`, which explains why RECORD_FAILURES=true on this command line
+      # reached nothing and this job used to record new images only.
+      #
+      # Recording only what fails, rather than deleting the directory and recording everything, is
+      # what keeps the commit to the images that actually changed. Byte-identical re-encoding is not
+      # guaranteed across Xcode versions, so a wholesale re-record rewrites every image in Git LFS
+      # whenever the toolchain moves, and buries the handful that a reviewer needs to look at.
       - name: Re-record
         continue-on-error: true
         run: |
+          touch Tests/ElementCallTests/.record-snapshots
           xcodebuild test \
             -scheme ElementCall-Package \
             -destination "id=${{ steps.simulator.outputs.udid }}" \
             -testLanguage en -testRegion GB \
-            OTHER_LDFLAGS='$(inherited) -ObjC' \
-            RECORD_FAILURES=true
+            OTHER_LDFLAGS='$(inherited) -ObjC'
+          rm -f Tests/ElementCallTests/.record-snapshots
 
       - name: Commit the images
         run: |
           git config user.name "Element CI"
           git config user.email "ci@element.io"
-          git add Tests/ElementCallTests/__Snapshots__/
+          git add -A Tests/ElementCallTests/__Snapshots__/
           if git diff --cached --quiet; then
             echo "No snapshot changes detected."
           else

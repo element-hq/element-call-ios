@@ -5,7 +5,9 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import Combine
 import ElementCall
+import ElementCallKit
 import SwiftUI
 
 /// The full-screen call. This is what a host presents.
@@ -28,5 +30,49 @@ public struct ElementCallScreen: View {
             viewModel.call
         }
         .environment(\.elementCallStyle, viewModel.context.style)
+        .reportInterfaceOrientation { [viewModel] in viewModel.call }
+    }
+}
+
+/// Keeps the capturer's idea of which way up the phone is in step with the interface.
+///
+/// The camera tags what it sends with the interface orientation so the far end can turn it back the
+/// right way, and until now nothing told it when that changed: rotate mid-call and everyone else
+/// watched you sideways for the rest of it, because the orientation was read once when the camera
+/// started and never again.
+///
+/// It reads the scene's interface orientation rather than the device's, because that is the one the
+/// capturer is compensating for and the two disagree whenever rotation is locked. But it listens for
+/// the *device* notification, because the interface orientation is a property with nothing to
+/// subscribe to, and because a half turn from portrait to upside down changes it while changing no
+/// size a layout could have noticed.
+private struct InterfaceOrientationReporter: ViewModifier {
+    let callProvider: () -> MatrixRtcCall?
+    
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
+                report()
+            }
+            .onAppear {
+                // UIKit only posts the notification while someone has asked for it. Paired with the
+                // end below, which is refcounted, so this does not disturb anyone else asking.
+                UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+                report()
+            }
+            .onDisappear {
+                UIDevice.current.endGeneratingDeviceOrientationNotifications()
+            }
+    }
+    
+    private func report() {
+        guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        callProvider()?.updateInterfaceOrientation(scene.interfaceOrientation)
+    }
+}
+
+private extension View {
+    func reportInterfaceOrientation(_ callProvider: @escaping () -> MatrixRtcCall?) -> some View {
+        modifier(InterfaceOrientationReporter(callProvider: callProvider))
     }
 }

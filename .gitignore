@@ -18,3 +18,6 @@ node_modules
 # checklist for the widget-driver stopgap lives in WidgetMatrixBridge.swift's header, and the
 # linker-flag measurement is in the README.
 FEEDBACK.md
+
+# The marker that asks the snapshot harness to overwrite what no longer matches.
+Tests/ElementCallTests/.record-snapshots

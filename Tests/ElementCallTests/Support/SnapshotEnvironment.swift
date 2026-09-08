@@ -32,6 +32,17 @@ enum SnapshotEnvironment {
     
     /// What each preview is rendered as. The name is what lands in the file name; the device only
     /// selects a size and safe area, and is unrelated to the simulator above.
-    static let renderDevices = [(name: "iPhone", device: "iPhone 17"),
-                                (name: "iPad", device: "iPad")]
+    ///
+    /// The orientation goes in the name rather than in a segment of its own, so that a landscape
+    /// image sits next to its portrait twin under a name that already tells them apart and the file
+    /// name template needs to know nothing about orientations.
+    ///
+    /// The iPad has always been rendered on its side, because the snapshot library's bare `iPad10_2`
+    /// means `iPad10_2(.landscape)` while its bare `iPhoneX` means portrait. Saying so here rather
+    /// than leaving it implicit: reading the flag as false and "correcting" it silently re-renders
+    /// twenty-one reference images into a shape nobody asked for. There is no iPad portrait yet,
+    /// which is a gap now that the layout has two shapes to get wrong.
+    static let renderDevices = [(name: "iPhone", device: "iPhone 17", isLandscape: false),
+                                (name: "iPad", device: "iPad", isLandscape: true),
+                                (name: "iPhone-landscape", device: "iPhone 17", isLandscape: true)]
 }

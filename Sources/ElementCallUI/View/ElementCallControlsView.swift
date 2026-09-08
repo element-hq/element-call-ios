@@ -9,13 +9,31 @@ import AVKit
 import ElementCall
 import SwiftUI
 
-/// The floating bottom bar from the design: mic, camera, audio route, screen share, hang up.
+/// The floating control bar from the design: mic, camera, audio route, screen share, hang up.
+/// Along the bottom in portrait, up the trailing edge in landscape, where height is the scarce
+/// side and a horizontal bar would cost the spotlight a fifth of it.
+///
+/// `AnyLayout` rather than a branch between an `HStack` and a `VStack`: the layout changes but the
+/// buttons keep their identity, so a rotation slides each one to its new place instead of tearing
+/// the bar down and fading a new one in.
 struct ElementCallControlsView: View {
     @Bindable var context: ElementCallScreenContext
     @Environment(\.elementCallStyle) private var style
+    var axis: Axis = .horizontal
+    
+    /// The bar's thickness across the axis it runs along: a 56 pt button in 8 pt of capsule. The
+    /// same number either way round, which is what lets the stage reserve one clearance for both.
+    static let thickness: CGFloat = 56 + 2 * 8
+    
+    /// Tighter up the rail than along the bar: five 56 pt buttons at 12 pt apart come to 344 pt,
+    /// which overflows the 375 pt short side of a phone and clipped the mic and the hang-up button
+    /// off both ends. Landscape has width to spare and no height at all.
+    private var layout: AnyLayout {
+        axis == .horizontal ? AnyLayout(HStackLayout(spacing: 12)) : AnyLayout(VStackLayout(spacing: 8))
+    }
     
     var body: some View {
-        HStack(spacing: 12) {
+        layout {
             controlButton(icon: context.viewState.isMicrophoneMuted ? .micOff : .micOn,
                           isActive: !context.viewState.isMicrophoneMuted,
                           label: context.viewState.isMicrophoneMuted ? "Unmute" : "Mute") {
@@ -113,8 +131,8 @@ struct ElementCallAudioRoutePicker: UIViewRepresentable {
 // MARK: - Previews
 
 struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
-    static func controls(_ state: ElementCallScreenViewState) -> some View {
-        ElementCallControlsView(context: .preview(state: state))
+    static func controls(_ state: ElementCallScreenViewState, axis: Axis = .horizontal) -> some View {
+        ElementCallControlsView(context: .preview(state: state), axis: axis)
             .padding()
             .background(ElementCallStyle.stock.theme.bgCanvasDefault)
             .environment(\.colorScheme, .dark)
@@ -127,5 +145,7 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
                                                       isMicrophoneMuted: true,
                                                       isScreenSharing: true))
             .previewDisplayName("Muted and sharing")
+        controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group), axis: .vertical)
+            .previewDisplayName("Vertical rail")
     }
 }

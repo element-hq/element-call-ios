@@ -20,6 +20,7 @@ struct PreviewTests {
     private struct SnapshotDevice {
         let name: String
         let device: String
+        let isLandscape: Bool
     }
     
     private let deviceConfig: ViewImageConfig = .iPhoneX
@@ -27,13 +28,29 @@ struct PreviewTests {
     private let requiredOSVersion = SnapshotEnvironment.requiredOSVersion
     /// The name is what lands in the file name; the device selects a size and safe area.
     private let snapshotDevices: [SnapshotDevice] = SnapshotEnvironment.renderDevices.map {
-        .init(name: $0.name, device: $0.device)
+        .init(name: $0.name, device: $0.device, isLandscape: $0.isLandscape)
     }
     
     private var recordMode: SnapshotTestingConfiguration.Record = .missing
     
+    /// Recording is asked for with a file, not an environment variable.
+    ///
+    /// The harness used to read `RECORD_FAILURES` from its environment, and `record-snapshots.yml`
+    /// duly set it on the xcodebuild command line, where it reached nothing: not as a build setting,
+    /// not behind the `TEST_RUNNER_` prefix, not from the calling shell. It arrives when it is set in
+    /// a scheme, which is why it works from inside Xcode, and does nothing at all from a terminal.
+    /// So the job re-recorded new images only and reported "No snapshot changes detected" for every
+    /// changed one it was asked to record.
+    ///
+    /// A file beside this one always arrives, because `#filePath` is the checkout the tests were
+    /// built from. `RECORD_FAILURES` still works for anyone running from Xcode.
+    static let recordMarkerURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .appendingPathComponent(".record-snapshots")
+    
     init() {
-        if ProcessInfo().environment["RECORD_FAILURES"].map(Bool.init) == true {
+        if ProcessInfo().environment["RECORD_FAILURES"].map(Bool.init) == true
+            || FileManager.default.fileExists(atPath: Self.recordMarkerURL.path) {
             recordMode = .failed
         }
         
@@ -88,7 +105,7 @@ struct PreviewTests {
         let sanitizedSuiteName = String(testName.dropLast(2))
         
         for snapshotDevice in snapshotDevices {
-            guard var device = PreviewDevice(rawValue: snapshotDevice.device).snapshotDevice() else {
+            guard var device = PreviewDevice(rawValue: snapshotDevice.device).snapshotDevice(isLandscape: snapshotDevice.isLandscape) else {
                 fatalError("Unknown device name: \(snapshotDevice.device)")
             }
             // Ignore specific device safe area (using the workaround value to fix rendering issues).
@@ -165,24 +182,28 @@ private class SnapshotPreferences: @unchecked Sendable {
 // MARK: - SnapshotTesting + Extensions
 
 private extension PreviewDevice {
-    func snapshotDevice() -> ViewImageConfig? {
+    /// The orientation is passed rather than baked in because every one of these has a landscape
+    /// counterpart in the library; the harness simply never asked for one, so nothing was rendered
+    /// on its side and the layout that only breaks on its side went unnoticed.
+    func snapshotDevice(isLandscape: Bool = false) -> ViewImageConfig? {
+        let orientation: ViewImageConfig.Orientation = isLandscape ? .landscape : .portrait
         switch rawValue {
         case "iPhone 17", "iPhone 16", "iPhone 15", "iPhone 14", "iPhone 13", "iPhone 12", "iPhone 11", "iPhone 10":
-            return .iPhoneX
+            return .iPhoneX(orientation)
         case "iPhone 6", "iPhone 6s", "iPhone 7", "iPhone 8":
-            return .iPhone8
+            return .iPhone8(orientation)
         case "iPhone 6 Plus", "iPhone 6s Plus", "iPhone 8 Plus":
-            return .iPhone8Plus
+            return .iPhone8Plus(orientation)
         case "iPhone SE (1st generation)", "iPhone SE (2nd generation)":
-            return .iPhoneSe
+            return .iPhoneSe(orientation)
         case "iPad":
-            return .iPad10_2
+            return .iPad10_2(orientation)
         case "iPad Mini":
-            return .iPadMini
+            return .iPadMini(orientation)
         case "iPad Pro 11":
-            return .iPadPro11
+            return .iPadPro11(orientation)
         case "iPad Pro 12.9":
-            return .iPadPro12_9
+            return .iPadPro12_9(orientation)
         default: return nil
         }
     }
