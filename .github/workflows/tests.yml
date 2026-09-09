@@ -3,7 +3,9 @@ name: Tests
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    # release/** as well as main: a release branch's tip is a commit nobody has tested otherwise,
+    # and release.yml refuses to tag a commit without a green run here.
+    branches: [main, release/**]
   pull_request:
     types: [opened, synchronize, reopened]
 

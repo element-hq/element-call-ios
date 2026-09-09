@@ -64,6 +64,18 @@ Release notes are generated from pull request labels, so every pull request need
 becomes the changelog entry, so write it as a sentence describing the change rather than referring to
 an issue number.
 
+Nothing enforces this: no workflow fails over a missing label, so a reviewer noticing is the only
+thing keeping an entry out of the catch-all *Others* heading. It is recoverable — the notes are
+generated when a release is cut, not when a pull request merges, so labelling a merged pull request
+still works — but the person cutting the release has to spot it.
+
+There is **one case where you also write in [`CHANGES.md`](CHANGES.md) by hand**: something a host has
+to act on, such as a renamed accessibility identifier, a port gaining a requirement, or a new build
+setting. Add it under `## Unreleased` and the release will carry it into that version's section, above
+the generated list, where whoever bumps the version will read it. Ordinary changes need nothing there.
+
+See [RELEASING.md](RELEASING.md) for how a release is cut.
+
 ## Tests
 
 ```bash

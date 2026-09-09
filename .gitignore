@@ -21,3 +21,6 @@ FEEDBACK.md
 
 # The marker that asks the snapshot harness to overwrite what no longer matches.
 Tests/ElementCallTests/.record-snapshots
+
+# Left behind by a local rehearsal of scripts/release.sh.
+release-notes.md

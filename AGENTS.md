@@ -66,7 +66,8 @@ The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnviron
 harness reads them and fails loudly when the simulator does not match. **The workflows do not read
 them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
 `SIMULATOR_RUNTIME` are duplicated literals in both workflow files, so changing the pinned device is
-three edits, not one.
+three edits, not one. `release.yml` is deliberately not a fourth: it runs on Linux and gates on the
+`Tests` run for the commit rather than testing anything itself.
 
 ### Re-recording snapshots
 
@@ -89,6 +90,36 @@ means `iPad10_2(.landscape)` while its bare `iPhoneX` means portrait. There is n
 coverage.
 
 ---
+
+## Releasing
+
+A release is a **tag**, nothing more. Bare semver — `0.1.0`, `0.2.0-rc.1` — because that is what
+SwiftPM matches a host's `exactVersion` against, and **the tag is the only place a version exists**:
+there is no version constant, no `MARKETING_VERSION`, nothing to bump in a pull request.
+
+The pipeline is `.github/workflows/release.yml` plus `scripts/release.sh`, which holds all of the
+validation and never touches the remote so it can be rehearsed locally. Release notes come from the
+`pr-` labels via `.github/release.yml`, and land in `CHANGES.md` inside the tagged commit.
+
+Three things about it are easy to break by tidying:
+
+- **Releases are cut from a `release/<version>` branch, never from `main`.** That is what keeps the
+  whole pipeline on the built-in `GITHUB_TOKEN`: it pushes only to that unprotected branch and a new
+  tag, and the changelog reaches `main` through an ordinary pull request. Pointing it at `main` would
+  need a token that can bypass branch protection.
+- **The newest release tag is read with `git tag --merged HEAD` and `versionsort.suffix=-`.** The
+  first scopes it to the branch's own line of history, so a fix to an older line is neither refused
+  for going backwards nor given notes generated against a release it does not contain. The second
+  stops git ranking `0.2.0-rc.1` above `0.2.0`, which would make `previous_tag_name` the rc.
+- **`CHANGES.md` keeps a `## Unreleased` heading**, which the release renames to `## <version> -
+  <date>` before opening a fresh one. Hand-written entries there are carried into the released
+  section above the generated list. Do not delete the heading; the release refuses without it.
+
+**This package ships source, not a binary**, and that is a decision with reasons rather than a
+limitation — `matrix-rust-rtc` ships an xcframework because it contains Rust, not because that is how
+Swift packages are released. Do not add a `binaryTarget` or a build-and-attach step to the release
+workflow. [RELEASING.md](RELEASING.md) has the reasoning and the trigger that would justify revisiting
+it.
 
 ## What is temporary
 

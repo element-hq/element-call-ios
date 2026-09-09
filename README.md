@@ -41,7 +41,23 @@ constraints an agent working here must not break.
 
 ## Integrating
 
-Give it an SDK `Client` and a handful of small conformances, and you get a call.
+Add it as a source dependency, pinned to an exact version:
+
+```swift
+.package(url: "https://github.com/element-hq/element-call-ios", exact: "0.1.0-rc.1")
+```
+
+```yaml
+# Or, in an XcodeGen project.yml
+ElementCall:
+  url: https://github.com/element-hq/element-call-ios
+  exactVersion: 0.1.0-rc.1
+```
+
+Exactly, not a range: a renamed accessibility identifier is a breaking change, and at `0.x` the ports
+are still moving. Releases are described in [RELEASING.md](RELEASING.md).
+
+Then give it an SDK `Client` and a handful of small conformances, and you get a call.
 
 ```swift
 let stack = ElementCallStack(transport: ElementCallSDKTransport(client: client, logger: logger)!,
@@ -91,12 +107,28 @@ Every port has a fake shipped alongside it, so previews and tests need no host a
 Colours and fonts are **computed properties read at draw time**, never captured once. Element's design
 system keeps its colours on a single shared instance that can be re-branded at runtime, so a snapshot
 taken at construction would leave the call screen on stock colours while the rest of the app changed.
-For the same reason this package must be consumed as a **source** dependency: a prebuilt binary would
-embed its own copy of the design system and never see the override.
 
 With no theme supplied, the package uses the real
 [Compound design tokens](https://github.com/element-hq/compound-design-tokens), which is a small
 package of static values with no such instance.
+
+### Why it must be a source dependency
+
+This said, for a while, that a prebuilt binary "would embed its own copy of the design system and
+never see the override". That does not follow, and it is worth correcting rather than quietly deleting,
+because it is the answer someone will reach for next time: the override travels through the
+`ElementCallTheme` **port**, which is a protocol, and a protocol crosses a binary boundary perfectly
+well. `CompoundDesignTokens` is static values, so a duplicated copy costs binary size, not colours.
+
+The real reason is in `Package.swift`. `ElementCallSDKTransport.init?(client:)` takes a
+`MatrixRustSDK.Client`, so that module appears in the module interface — and the manifest declares
+`MatrixRustSDK` as a deliberately wide `"26.09.01" ..< "100.0.0"` because pinning it exactly "forces
+every consumer onto that version, so resolution fails the moment a host bumps the SDK before this
+package cuts a release". A prebuilt binary is compiled against whichever SDK version CI happened to
+have, of a Rust-generated API that turns over monthly, which re-imposes exactly that coupling.
+
+[RELEASING.md](RELEASING.md#why-there-are-no-artifacts-on-the-release-page) has the rest, including the
+one thing that would justify revisiting it.
 
 ### Two host build requirements
 
