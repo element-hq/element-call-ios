@@ -80,7 +80,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
-        run: ./scripts/release.sh "$VERSION"
+          DRY_RUN_FLAG: ${{ inputs.dry_run && '--dry-run' || '' }}
+        # $DRY_RUN_FLAG unquoted on purpose: it must vanish when empty rather than become an empty
+        # argument. It is a literal chosen by the expression above, never user input.
+        # shellcheck disable=SC2086
+        run: ./scripts/release.sh "$VERSION" $DRY_RUN_FLAG
 
       # --intent-to-add so this shows something on the very first release too, when CHANGES.md is a
       # new untracked file and a plain `git diff` would print nothing at all.

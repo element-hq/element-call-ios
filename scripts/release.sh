@@ -17,16 +17,19 @@ set -euo pipefail
 
 usage() {
     cat >&2 <<'USAGE'
-Usage: scripts/release.sh <version> [--notes-out <path>]
+Usage: scripts/release.sh <version> [--notes-out <path>] [--dry-run]
 
   <version>       The version to release, bare semver: 0.1.0, or 0.2.0-rc.1 for a prerelease.
   --notes-out     Where to write the generated release notes (default: release-notes.md).
+  --dry-run       The caller will not publish, so report an untested commit as a warning rather
+                  than refusing. Every other check still refuses.
 USAGE
     exit 64
 }
 
 VERSION=""
 NOTES_OUT="release-notes.md"
+DRY_RUN="no"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -34,6 +37,10 @@ while [ $# -gt 0 ]; do
             [ $# -ge 2 ] || usage
             NOTES_OUT="$2"
             shift 2
+            ;;
+        --dry-run)
+            DRY_RUN="yes"
+            shift
             ;;
         -h | --help)
             usage
@@ -71,6 +78,26 @@ fail() {
         echo "error: $1" >&2
     fi
     exit 1
+}
+
+warn() {
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        echo "::warning::$1"
+    else
+        echo "warning: $1" >&2
+    fi
+}
+
+# The untested-commit check is the one refusal a dry run downgrades. A dry run publishes nothing, so
+# blocking it behind a 30-minute macOS test run buys no safety and costs the operator a
+# run-wait-run loop at the step whose entire product is the notes. It still says so, loudly, and the
+# real release still refuses. Every other check refuses in both modes.
+refuse_or_warn() {
+    if [ "$DRY_RUN" = "yes" ]; then
+        warn "$1 (a dry run continues anyway; the real release will refuse)"
+    else
+        fail "$1"
+    fi
 }
 
 # --- 1. The version is bare semver ------------------------------------------------------------
@@ -151,11 +178,12 @@ if [ -n "${GITHUB_ACTIONS:-}" ]; then
 
     if [ "${RUN#*/}" != "success" ]; then
         case "$RUN" in
-            none/none) fail "No Tests run exists for $SHA. Push the branch and let Tests run before releasing it." ;;
-            *) fail "Tests has not succeeded for $SHA (status: ${RUN%%/*}, conclusion: ${RUN#*/}). Releasing an untested commit is not allowed; wait for it, or re-run it." ;;
+            none/none) refuse_or_warn "No Tests run exists for $SHA. Push the branch and let Tests run before releasing it." ;;
+            *) refuse_or_warn "Tests has not succeeded for $SHA (status: ${RUN%%/*}, conclusion: ${RUN#*/}). Wait for it, or re-run it." ;;
         esac
+    else
+        echo "Tests: success for $SHA"
     fi
-    echo "Tests: success for $SHA"
 else
     echo "Tests: not checked (local run)"
 fi
