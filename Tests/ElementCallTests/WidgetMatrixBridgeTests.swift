@@ -18,8 +18,20 @@ struct WidgetMatrixBridgeTests {
     private let widgetID = "widget"
     private let channel = FakeWidgetChannel()
     
-    private func makeBridge(requestTimeout: Duration = .seconds(5)) -> WidgetMatrixBridge {
-        WidgetMatrixBridge(roomID: "!room:example.org", widgetID: widgetID, channel: channel, requestTimeout: requestTimeout) { }
+    /// The two timeouts are separate knobs, and tests that shorten one must not shorten the other.
+    /// They used to be one value, so asking for a 50 ms *request* timeout also gave the
+    /// two-round-trip handshake 50 ms; when a loaded machine missed that, negotiation failed, the
+    /// bridge stopped replying, and the next `nextSent()` waited on a continuation nobody would
+    /// resume until the suite's one-minute limit killed it -- blaming whichever test held the clock.
+    /// So `unansweredRequestsTimeOut` shortens only the request timeout, and
+    /// `startTimesOutWithoutNegotiation`, which is genuinely about the handshake, shortens only that.
+    private func makeBridge(requestTimeout: Duration = .seconds(5),
+                            negotiationTimeout: Duration = .seconds(5)) -> WidgetMatrixBridge {
+        WidgetMatrixBridge(roomID: "!room:example.org",
+                           widgetID: widgetID,
+                           channel: channel,
+                           requestTimeout: requestTimeout,
+                           negotiationTimeout: negotiationTimeout) { }
     }
     
     // MARK: - Negotiation
@@ -60,7 +72,7 @@ struct WidgetMatrixBridgeTests {
     
     @Test
     func startTimesOutWithoutNegotiation() async {
-        let bridge = makeBridge(requestTimeout: .milliseconds(50))
+        let bridge = makeBridge(negotiationTimeout: .milliseconds(50))
         #expect(await bridge.start().failure == .notRunning)
     }
     
@@ -384,23 +396,31 @@ struct WidgetMatrixBridgeTests {
 private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable {
     /// A queue with waiting readers; `nil` is delivered once closed.
     private final class Pipe: Sendable {
+        /// Waiters are keyed so a timing-out reader can withdraw its own continuation. An array of
+        /// bare continuations could only ever be drained from the front, which is what `write` wants
+        /// and a timeout cannot use.
+        private struct Waiter {
+            let id: UUID
+            let continuation: CheckedContinuation<String?, Never>
+        }
+        
         private struct State {
             var queue = [String]()
-            var waiters = [CheckedContinuation<String?, Never>]()
+            var waiters = [Waiter]()
             var isOpen = true
         }
         
         private let state = Mutex(State())
         
         func write(_ message: String) {
-            let waiter = state.withLock { state -> CheckedContinuation<String?, Never>? in
+            let waiter = state.withLock { state -> Waiter? in
                 if state.waiters.isEmpty {
                     state.queue.append(message)
                     return nil
                 }
                 return state.waiters.removeFirst()
             }
-            waiter?.resume(returning: message)
+            waiter?.continuation.resume(returning: message)
         }
         
         func close() {
@@ -409,7 +429,7 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
                 defer { state.waiters.removeAll() }
                 return state.waiters
             }
-            waiters.forEach { $0.resume(returning: nil) }
+            waiters.forEach { $0.continuation.resume(returning: nil) }
         }
         
         var isOpen: Bool {
@@ -420,8 +440,29 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
             state.withLock { $0.queue.count }
         }
         
-        func read() async -> String? {
-            await withCheckedContinuation { continuation in
+        /// Waits at most `deadline` rather than forever, and reports `nil` when it gives up.
+        ///
+        /// Every hang this suite has produced looked the same: a test blocked on a message the
+        /// bridge was never going to send, the `@Suite(.timeLimit(.minutes(1)))` trait killed it a
+        /// minute later, and the failure named whichever test happened to be holding the clock
+        /// rather than the thing that broke. A deadline here turns that into a prompt failure at the
+        /// line that actually waited.
+        ///
+        /// Structured concurrency is no use for this: `withCheckedContinuation` does not observe
+        /// cancellation, so racing it against a sleep in a task group would leave the losing child
+        /// suspended for ever, and a task group does not return until every child is done. So this
+        /// follows the pattern the bridge itself uses for request timeouts -- a timer task that
+        /// resumes the pending continuation by id -- and `withdraw` makes exactly one of the two
+        /// paths win.
+        func read(deadline: Duration = .seconds(10)) async -> String? {
+            let id = UUID()
+            let timeout = Task { [weak self] in
+                try? await Task.sleep(for: deadline)
+                self?.withdraw(id)
+            }
+            defer { timeout.cancel() }
+            
+            return await withCheckedContinuation { continuation in
                 let ready = state.withLock { state -> String?? in
                     if !state.queue.isEmpty {
                         return .some(state.queue.removeFirst())
@@ -429,13 +470,23 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
                     if !state.isOpen {
                         return .some(nil)
                     }
-                    state.waiters.append(continuation)
+                    state.waiters.append(Waiter(id: id, continuation: continuation))
                     return nil
                 }
                 if let ready {
                     continuation.resume(returning: ready)
                 }
             }
+        }
+        
+        /// Resumes a waiter with `nil` if it is still pending. A no-op once `write` or `close` has
+        /// taken it, which is what stops the continuation being resumed twice.
+        private func withdraw(_ id: UUID) {
+            let waiter = state.withLock { state -> Waiter? in
+                guard let index = state.waiters.firstIndex(where: { $0.id == id }) else { return nil }
+                return state.waiters.remove(at: index)
+            }
+            waiter?.continuation.resume(returning: nil)
         }
     }
     
