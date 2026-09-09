@@ -56,6 +56,14 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     private let runDriver: @Sendable () async -> Void
     private let requestTimeout: Duration
     
+    /// How long the driver handshake may take, kept separate from `requestTimeout` even though it
+    /// defaults to it. A test that wants to observe a request timing out has to make
+    /// `requestTimeout` very short, and while these were one value that also shortened negotiation:
+    /// the handshake is two round-trips, so 50 ms was enough to fail it under load. Negotiation then
+    /// tore the bridge down and the next reply never came, so a test waiting on it hung until its
+    /// suite time limit -- a minute, blamed on whichever test held it. Two knobs, no race.
+    private let negotiationTimeoutDuration: Duration
+    
     private var channel: (any WidgetDriverChannel)?
     private var phase: Phase = .idle
     private var negotiationWaiters = [CheckedContinuation<Result<Void, MatrixRtcRoomBridgeError>, Never>]()
@@ -75,12 +83,14 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
          widgetID: String,
          channel: any WidgetDriverChannel,
          requestTimeout: Duration = .seconds(30),
+         negotiationTimeout: Duration? = nil,
          logger: (any ElementCallLogging)? = nil,
          runDriver: @escaping @Sendable () async -> Void) {
         self.roomID = roomID
         self.widgetID = widgetID
         self.channel = channel
         self.requestTimeout = requestTimeout
+        negotiationTimeoutDuration = negotiationTimeout ?? requestTimeout
         self.logger = logger
         self.runDriver = runDriver
     }
@@ -108,8 +118,8 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
             await self?.driverStopped()
         }
         
-        negotiationTimeout = Task { [weak self, requestTimeout] in
-            try? await Task.sleep(for: requestTimeout)
+        negotiationTimeout = Task { [weak self, negotiationTimeoutDuration] in
+            try? await Task.sleep(for: negotiationTimeoutDuration)
             await self?.failNegotiation(with: .timedOut)
         }
         return await withCheckedContinuation { continuation in

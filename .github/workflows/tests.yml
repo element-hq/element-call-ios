@@ -12,7 +12,69 @@ on:
 permissions: {}
 
 jobs:
+  # Which files changed, and can any of them alter what the tests job does? Ten seconds on Linux to
+  # decide whether to spend ten minutes on macOS.
+  #
+  # This deliberately does NOT use a trigger-level `paths:` filter, which is what element-x-ios does
+  # in compound-ios.yml. A trigger filter creates no workflow run at all, and scripts/release.sh
+  # refuses to tag a commit unless a run of THIS workflow succeeded for it -- so a docs-only commit
+  # would leave nothing to find and become unreleasable. A cheap job that always runs keeps the run
+  # in existence and green, with the expensive job skipped inside it. Please do not "tidy" this into
+  # a paths: filter.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      relevant: ${{ steps.filter.outputs.relevant }}
+
+    steps:
+      # Needed for push events, where the filter compares refs with git. Full history because the
+      # base can be an older commit on the default branch; the repository is a few megabytes, so
+      # this is cheap. No LFS: nothing here reads a snapshot.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          # `some-with-excludes` is not optional. The default, `some`, asks whether *some* file
+          # matches *some* pattern -- and every file matches `**`, so `relevant` would be true for a
+          # docs-only change and nothing would ever be skipped. This quantifier is the one that means
+          # "matches a pattern and no negated pattern".
+          predicate-quantifier: some-with-excludes
+          # A blocklist, on purpose: `**` includes everything, and the exclusions below are the paths
+          # known to be unable to change what the tests job does. Anything unrecognised therefore
+          # counts as relevant, so a newly added load-bearing file errs towards being tested, where an
+          # allowlist would silently stop testing it.
+          #
+          # Note what is NOT excluded, and must not be: Sources, Tests, Tools (Sourcery drives the
+          # generated-test staleness check), Package.swift, Package.resolved, .swiftformat,
+          # .swiftlint.yml, .gitattributes (it defines the LFS filter for the snapshot references)
+          # and this workflow itself.
+          filters: |
+            relevant:
+              - '**'
+              - '!**/*.md'
+              - '!LICENSE'
+              - '!LICENSE-*'
+              - '!screenshot.png'
+              - '!.editorconfig'
+              - '!.gitignore'
+              - '!codecov.yml'
+              - '!renovate.json'
+              - '!.swiftpm/**'
+              - '!scripts/**'
+              - '!.github/CODEOWNERS'
+              - '!.github/PULL_REQUEST_TEMPLATE.md'
+              - '!.github/release.yml'
+              - '!.github/workflows/release.yml'
+              - '!.github/workflows/record-snapshots.yml'
+
   tests:
+    needs: changes
+    if: needs.changes.outputs.relevant == 'true'
     runs-on: macos-26
     timeout-minutes: 30
     concurrency:
