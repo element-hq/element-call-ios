@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.1 - 2026-09-09
+
 Initial release: a native [MatrixRTC](https://github.com/matrix-org/matrix-spec-proposals/blob/main/proposals/4143-matrix-rtc.md)
 implementation of Element Call for iOS. Audio and video calls the app renders itself, with no web view
 involved.
@@ -38,3 +42,21 @@ in Picture in Picture when the app goes to the background.
   the keys sent in that window, and the first remote frames arrive black.
 
 Consumed as a **source** dependency, pinned to an exact version — see the README for why.
+
+
+
+### What's Changed
+
+✨ Features
+* Basic landscape layout support (not final) by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/1
+
+🧱 Build
+* Release pipeline by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/2
+* Fixup dry run by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/3
+* Devx/ci relax by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/4
+
+### New Contributors
+* @BillCarsonFr made their first contribution in https://github.com/element-hq/element-call-ios/pull/1
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/commits/0.1.0-rc.1
+
