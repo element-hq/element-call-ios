@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, bare semver: 0.1.0, or 0.2.0-rc.1 for a prerelease"
+        required: true
+      dry_run:
+        description: "Validate and print, change nothing"
+        type: boolean
+        default: true
+
+permissions: {}
+
+# Never two at once, and never cancel one in flight: between the push and the release there is a
+# moment where the tag exists and the release does not, and cancelling there leaves that visible.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # Ubuntu, deliberately. This package has no binary target -- the media xcframework belongs to the
+    # matrix-rust-rtc dependency, which does its own url+checksum release -- so a release here builds
+    # nothing and needs no Xcode, no simulator, and no fourth copy of the pinned-device triple that
+    # tests.yml and record-snapshots.yml already duplicate between them. Instead the script asks
+    # whether Tests already passed for this exact commit. See RELEASING.md.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # Skip in forks
+    if: github.repository == 'element-hq/element-call-ios'
+
+    # GITHUB_TOKEN is enough, and that is the point of releasing from a branch rather than from
+    # main. The release commit and tag go to release/<version>, which is not protected, so nothing
+    # here needs a personal access token that can bypass protection on main -- the changelog reaches
+    # main afterwards through an ordinary reviewed pull request.
+    #
+    # actions:read is for the Tests-run query; contents:write for the branch, the tag and the release.
+    permissions:
+      contents: write
+      actions: read
+
+    steps:
+      # The full history and all tags, because the script reads the tags reachable from HEAD to
+      # decide both what the previous release was and whether this version goes backwards.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      # A dry run is a read; rehearse it from anywhere, including main. Publishing is another matter:
+      # it must come from release/<version>, and the branch name must agree with the version being
+      # released, so a run dispatched against the wrong branch cannot mint a tag off it.
+      - name: Check the branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run on $BRANCH."
+            exit 0
+          fi
+
+          if [ "$BRANCH" != "release/$VERSION" ]; then
+            echo "::error::To release $VERSION, dispatch this from a branch named release/$VERSION (this is $BRANCH). See RELEASING.md."
+            exit 1
+          fi
+
+          echo "Releasing $VERSION from $BRANCH."
+
+      # Validates the version, requires a green Tests run for this commit, generates the notes from
+      # the pull request labels, and prepends them to CHANGES.md. Touches nothing but the working
+      # tree, so it is the same command a maintainer runs to rehearse. Every refusal is in here.
+      - name: Prepare the release
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/release.sh "$VERSION"
+
+      # --intent-to-add so this shows something on the very first release too, when CHANGES.md is a
+      # new untracked file and a plain `git diff` would print nothing at all.
+      - name: Show the changelog diff
+        run: |
+          git add --intent-to-add CHANGES.md
+          git --no-pager diff -- CHANGES.md
+
+      # Uploaded on every run, not just the dry one, and before anything is published. On a dry run
+      # this is the output to read; on a real run it is the recovery path -- if the release-creation
+      # step fails after the tag has been pushed, the notes it needed are here, and RELEASING.md's
+      # "If it fails halfway" says what to do with them.
+      - name: Upload the notes and changelog
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ inputs.version }}${{ inputs.dry_run && '-dry-run' || '' }}
+          path: |
+            ${{ steps.prepare.outputs.notes }}
+            CHANGES.md
+          retention-days: 30
+          if-no-files-found: error
+
+      # Everything from here changes the world, so the dry run stops here. dry_run defaults to true:
+      # the normal path is to run this workflow twice.
+
+      # One --atomic push, so the tag and the changelog entry describing it land together or not at
+      # all, and the tagged tree contains its own changelog. Without --atomic, git updates the two
+      # refs independently and a rejected branch push would still leave the tag published, pointing
+      # at a commit nobody can see.
+      - name: Commit, tag and push
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "Element CI"
+          git config user.email "ci@element.io"
+          git add CHANGES.md
+          git commit -m "Release $VERSION"
+          git tag -a "$VERSION" -m "$VERSION"
+          git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$VERSION"
+
+      # Idempotent, because the tag is pushed in the step above and re-dispatching the same version
+      # would be refused for existing already. If this step is what failed, running the workflow
+      # again cannot be the fix, so it must be able to finish the job on a tag that is already
+      # there rather than erroring on a release that is already there.
+      #
+      # --verify-tag so it refuses to invent a tag if the push above somehow did not land.
+      # --prerelease for anything with a hyphen in it, so an rc never becomes "latest" and Renovate,
+      # which ignores unstable versions, leaves it alone.
+      - name: Create the release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.prepare.outputs.version }}
+          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
+          NOTES: ${{ steps.prepare.outputs.notes }}
+        run: |
+          if gh release view "$VERSION" > /dev/null 2>&1; then
+            echo "Release $VERSION already exists; leaving it alone."
+          else
+            args=(--verify-tag --title "$VERSION" --notes-file "$NOTES")
+            if [ "$PRERELEASE" = "yes" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$VERSION" "${args[@]}"
+          fi
+
+          gh release view "$VERSION" --json url,isPrerelease,tagName
+
+      # The tag is the release and it is already public; this pull request only carries the
+      # changelog entry back to main. Opened by hand, deliberately: a pull request opened with
+      # GITHUB_TOKEN does not trigger other workflows, so Tests would not run on it.
+      - name: Say what is left to do
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          {
+            echo "### Released $VERSION"
+            echo
+            echo "- Tag and release: [$VERSION]($REPO_URL/releases/tag/$VERSION)"
+            echo
+            echo "**Now open the pull request** that carries the changelog entry back to \`main\`:"
+            echo
+            echo "  $REPO_URL/compare/main...$BRANCH?expand=1"
+            echo
+            echo "Merge it with a **merge commit**, not a squash, so the tagged commit stays an"
+            echo "ancestor of \`main\`. See RELEASING.md."
+          } >> "$GITHUB_STEP_SUMMARY"
