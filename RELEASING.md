@@ -209,8 +209,8 @@ Every refusal names its own cause in the run summary. In the order they are chec
 | Tag already exists | That version has shipped. Bump. |
 | Sorts below `<tag>`, already released in this history | Going backwards within one line. For a fix to an *older* line, branch from that line's tag — see [Hotfix](#hotfix). |
 | Already released, so this is a prerelease of the past | `0.2.0-rc.1` after `0.2.0` shipped. |
-| No Tests run exists for this commit | The branch is not pushed, or `Tests` never ran on it. |
-| Tests has not succeeded for this commit | See below. |
+| No Tests run exists for this commit | The branch is not pushed, or `Tests` never ran on it. **Warning only on a dry run.** |
+| Tests has not succeeded for this commit | See below. **Warning only on a dry run.** |
 | Could not query the Tests workflow | The token is missing `actions: read`. |
 | No changelog entries | Nothing has merged since the last tag. |
 | `CHANGES.md` has no `## Unreleased` heading | Someone removed it; restore it. See [The changelog](#the-changelog). |
@@ -229,6 +229,12 @@ it — and a commit nobody has tested cannot be released.
 
 `tests.yml` runs on pushes to `release/**` as well as `main`, so pushing the release branch is what
 produces the run this gate is waiting for.
+
+**On a dry run this is a warning, not a refusal**, and it is the only check that softens. A dry run
+publishes nothing, so blocking it behind a 30-minute macOS test run would buy no safety and cost you
+a run-wait-run loop at the step whose entire product is the notes. You still get the warning, and the
+real release still refuses — so a dry run that warns here is fine to act on, as long as `Tests` is
+green by the time you cut the release.
 
 ## Why there are no artifacts on the release page
 
@@ -274,8 +280,8 @@ The `git fetch` is not optional. The script reads **local** tags to decide what 
 was and whether the version goes backwards, so a stale clone will happily tell you a version is fine
 when the remote disagrees. CI has no such problem: it checks out with `fetch-depth: 0`.
 
-The Tests-run check is skipped outside CI, where the commit is usually unpushed. Everything else
-behaves identically.
+The Tests-run check is skipped outside CI, where the commit is usually unpushed; pass `--dry-run` to
+downgrade it to a warning rather than skip it. Everything else behaves identically.
 
 ## Repository setup
 
