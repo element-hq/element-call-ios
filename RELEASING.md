@@ -230,6 +230,12 @@ it — and a commit nobody has tested cannot be released.
 `tests.yml` runs on pushes to `release/**` as well as `main`, so pushing the release branch is what
 produces the run this gate is waiting for.
 
+It asks whether **any** run for the commit has succeeded, not whether the newest one has. That
+distinction is load-bearing: a release branch cut from `main` at the same commit starts a second run
+for a SHA that has already passed, and judging by the newest run would refuse a green commit and
+restart the wait on every push. So the wait happens once, on `main`, and pushing the release branch
+costs nothing.
+
 **On a dry run this is a warning, not a refusal**, and it is the only check that softens. A dry run
 publishes nothing, so blocking it behind a 30-minute macOS test run would buy no safety and cost you
 a run-wait-run loop at the step whose entire product is the notes. You still get the warning, and the

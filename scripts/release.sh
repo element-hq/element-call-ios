@@ -168,12 +168,19 @@ fi
 SHA="$(git rev-parse HEAD)"
 
 if [ -n "${GITHUB_ACTIONS:-}" ]; then
-    # An unfinished run has a null conclusion, so report `status` too -- "in_progress" is a very
-    # different instruction to the reader than "failure" or "no run at all". The `|| fail` matters:
-    # without it a 403 or 404 would kill the script inside the assignment, with no annotation, and
-    # the promise that every refusal names its own cause would be quietly false.
-    RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$SHA&per_page=1" \
-        --jq '.workflow_runs[0] | if . == null then "none/none" else "\(.status)/\(.conclusion // "pending")" end' \
+    # "Has *any* run for this commit succeeded", not "did the most recent one". One commit routinely
+    # has several runs: pushing release/<version> at the commit main is already on starts a fresh run
+    # for a SHA that has already passed, and asking only about the newest -- which is that new,
+    # in-progress one -- refused a commit whose tests were green. Every push restarted the wait.
+    #
+    # An unfinished run has a null conclusion, so the fallback reports `status` too: "in_progress" is
+    # a very different instruction to the reader than "failure" or "no run at all". The `|| fail`
+    # matters -- without it a 403 or 404 would kill the script inside the assignment, with no
+    # annotation, and the promise that every refusal names its own cause would be quietly false.
+    RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/tests.yml/runs?head_sha=$SHA&per_page=100" \
+        --jq 'if (.workflow_runs | length) == 0 then "none/none"
+              elif any(.workflow_runs[]; .conclusion == "success") then "completed/success"
+              else (.workflow_runs[0] | "\(.status)/\(.conclusion // "pending")") end' \
         || fail "Could not query the Tests workflow for $SHA. The token needs actions:read on this repository.")"
 
     if [ "${RUN#*/}" != "success" ]; then
