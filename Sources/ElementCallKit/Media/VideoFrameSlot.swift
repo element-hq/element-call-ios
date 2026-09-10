@@ -22,12 +22,36 @@ public final nonisolated class VideoFrameSlot: Sendable, Identifiable {
     
     private let latest = Mutex<MatrixRTCVideoFrame?>(nil)
     private let onFrame = Mutex<FrameHandler?>(nil)
+    private let firstFrame = Mutex<FrameHandler?>(nil)
+    private let hasFrame = Atomic<Bool>(false)
+    
+    /// Whether this slot has ever been offered a frame since the last ``clear()``.
+    ///
+    /// A tile draws video when the roster says the member publishes a camera, which is a claim
+    /// about signalling rather than about pixels. When the two disagree — the roster is stale, or
+    /// the far end publishes a track it never sends on — the tile used to be a black rectangle
+    /// with nothing to explain it. This is how a surface knows to keep showing the avatar.
+    public var hasReceivedFrame: Bool {
+        hasFrame.load(ordering: .relaxed)
+    }
     
     public init() { }
     
     public func offer(_ frame: MatrixRTCVideoFrame) {
         latest.withLock { $0 = frame }
+        // Fired once per clear, off the render path after the first frame: the exchange is what
+        // makes it once, so a surface can swap the avatar out without polling.
+        if !hasFrame.exchange(true, ordering: .relaxed) {
+            firstFrame.withLock { $0 }?.call()
+        }
         onFrame.withLock { $0 }?.call()
+    }
+    
+    /// Called on the offering thread the first time a frame arrives, and again after a ``clear()``.
+    /// Separate from ``setOnFrame(_:)``, which the renderer owns.
+    public func setOnFirstFrame(_ handler: (@Sendable () -> Void)?) {
+        let boxed = handler.map(FrameHandler.init)
+        firstFrame.withLock { $0 = boxed }
     }
     
     /// Takes the pending frame, leaving the slot empty.
@@ -46,6 +70,9 @@ public final nonisolated class VideoFrameSlot: Sendable, Identifiable {
     
     public func clear() {
         latest.withLock { $0 = nil }
+        // A slot is reused when its tile changes member, so the next stream has to earn its
+        // first frame again rather than inheriting the previous one's.
+        hasFrame.store(false, ordering: .relaxed)
     }
 }
 
