@@ -25,8 +25,16 @@ struct WidgetMatrixBridgeTests {
     /// resume until the suite's one-minute limit killed it -- blaming whichever test held the clock.
     /// So `unansweredRequestsTimeOut` shortens only the request timeout, and
     /// `startTimesOutWithoutNegotiation`, which is genuinely about the handshake, shortens only that.
-    private func makeBridge(requestTimeout: Duration = .seconds(5),
-                            negotiationTimeout: Duration = .seconds(5)) -> WidgetMatrixBridge {
+    ///
+    /// The defaults are deliberately far longer than any handshake needs, because for every test
+    /// but those two they are a safety net rather than the thing under test, and a net that fires
+    /// is indistinguishable from the bug above. Five seconds was not enough: the hosted runners
+    /// execute this suite under enough contention that a whole test can take forty-odd seconds of
+    /// wall clock, and `negotiationAnswersCapabilitiesAndResolvesStart` duly failed on
+    /// `nextSent() -> nil` after the net fired mid-handshake. Thirty is still half the suite's
+    /// one-minute limit, so a genuine hang fails here, with a useful message, rather than there.
+    private func makeBridge(requestTimeout: Duration = .seconds(30),
+                            negotiationTimeout: Duration = .seconds(30)) -> WidgetMatrixBridge {
         WidgetMatrixBridge(roomID: "!room:example.org",
                            widgetID: widgetID,
                            channel: channel,

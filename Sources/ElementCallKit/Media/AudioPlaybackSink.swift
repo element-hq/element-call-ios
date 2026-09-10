@@ -16,16 +16,8 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
     let memberID: String
     private let engine: CallAudioEngine
     private let ring = PCMRingBuffer(capacity: AudioFormat.samplesPerFrame * 20)
-    private let prefill = AudioFormat.samplesPerFrame * 3
-    private let flags = RenderFlags()
+    private let renderer: AudioPlaybackRenderer
     private let frameCount = Atomic<UInt64>(0)
-    
-    /// Shared with the render block, which must not capture the sink itself.
-    private final class RenderFlags: @unchecked Sendable {
-        let isPrimed = Atomic<Bool>(false)
-        let isDetached = Atomic<Bool>(false)
-        let underruns = Atomic<Int>(0)
-    }
     
     private let filler = Mutex<Task<Void, Never>?>(nil)
     private let onLevel: @Sendable (String, MatrixRtcAudioLevel) -> Void
@@ -34,42 +26,13 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
         self.memberID = memberID
         self.engine = engine
         self.onLevel = onLevel
+        renderer = AudioPlaybackRenderer(ring: ring, prefill: AudioFormat.samplesPerFrame * 3)
     }
     
     func start(stream: AudioFrameStream) {
-        let ring = ring
-        let flags = flags
-        let prefill = prefill
-        
-        // The render block captures only atomics and the ring, never self, so detaching while the
-        // engine runs is safe.
-        engine.addSourceNode(for: memberID) { _, _, frameCount, audioBufferList -> OSStatus in
-            let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            guard let first = buffers.first, let data = first.mData else { return noErr }
-            let floats = data.assumingMemoryBound(to: Float.self)
-            let count = Int(frameCount)
-            
-            if flags.isDetached.load(ordering: .relaxed) || (!flags.isPrimed.load(ordering: .relaxed) && ring.availableToRead < prefill) {
-                for index in 0..<count {
-                    floats[index] = 0
-                }
-                return noErr
-            }
-            flags.isPrimed.store(true, ordering: .relaxed)
-            
-            var scratch = [Int16](repeating: 0, count: count)
-            let real = scratch.withUnsafeMutableBufferPointer { ring.read(into: $0) }
-            if real < count {
-                flags.underruns.wrappingAdd(1, ordering: .relaxed)
-                if real == 0 {
-                    flags.isPrimed.store(false, ordering: .relaxed)
-                }
-            }
-            for index in 0..<count {
-                floats[index] = Float(scratch[index]) / Float(Int16.max)
-            }
-            return noErr
-        }
+        // The render block captures the renderer, never the sink, so detaching while the engine
+        // runs is safe.
+        engine.addSourceNode(for: memberID, render: renderer.renderBlock)
         
         let task = Task.detached(priority: .userInitiated) { [weak self] in
             while !Task.isCancelled, let frame = await stream.next() {
@@ -82,7 +45,9 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
     
     func stop() {
         filler.withLock { $0?.cancel(); $0 = nil }
-        flags.isDetached.store(true, ordering: .relaxed)
+        // Silence first, detach second: the detach is asynchronous and the block keeps rendering
+        // until the engine gets to it.
+        renderer.detach()
         engine.removeSourceNode(for: memberID)
     }
     
@@ -97,7 +62,7 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
             if count % 10 == 0 {
                 onLevel(memberID, .init(level: AudioLevelMeter.level(of: samples),
                                         frameCount: count,
-                                        underrunCount: flags.underruns.load(ordering: .relaxed)))
+                                        underrunCount: renderer.underruns.load(ordering: .relaxed)))
             }
         }
     }

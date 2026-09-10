@@ -116,12 +116,11 @@ public final class MatrixRtcCall {
     // MARK: - Audio device
     
     /// From CallKit's `didActivate audioSession` (or directly on the simulator).
+    ///
+    /// Returns before the engine is actually running: starting it means reconfiguring the graph,
+    /// which is exactly what must not happen synchronously on this thread.
     public func startAudio() {
-        do {
-            try audioEngine.start()
-        } catch {
-            MatrixRtcLog.error("Failed starting the audio engine: \(error)")
-        }
+        audioEngine.start()
     }
     
     /// From CallKit's `didDeactivate audioSession`.
@@ -419,7 +418,11 @@ public final class MatrixRtcCall {
         videoSources.values.forEach { $0.close() }
         videoSources.removeAll()
         releasedVideoMembers.removeAll()
-        audioEngine.stop()
+        // Stops the engine *and* detaches every node in one hop. Each `stop()` above only flips a
+        // flag and enqueues its detach, so the whole audio teardown costs this actor microseconds
+        // rather than blocking it on graph reconfiguration — which is what the render thread used
+        // to deadlock against.
+        audioEngine.shutdown()
         do {
             try await mediaSession.disconnect()
         } catch {
