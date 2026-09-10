@@ -39,6 +39,10 @@ constraints an agent working here must not break.
 
 `ElementCallMatrix` is the only module that knows the Matrix SDK exists, and SwiftLint enforces that.
 
+There is also an **`ElementCallAll`** product, which re-exports all four. A host that wants the whole
+thing takes that one dependency and writes one `import ElementCallAll`; the four remain published, so
+a host that only wants the media layer can still depend on `ElementCallKit` alone.
+
 ## Integrating
 
 Add it as a source dependency, pinned to an exact version:
