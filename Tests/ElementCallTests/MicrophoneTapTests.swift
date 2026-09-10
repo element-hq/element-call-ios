@@ -123,11 +123,13 @@ struct MicrophoneTapTests {
     /// exercised and the scratch buffer is proven reusable across calls rather than only correct
     /// once.
     ///
-    /// Deliberately modest: this suite runs in parallel with timing-sensitive tests elsewhere, and
-    /// an iteration count high enough to time a regression starves them into failing instead.
+    /// Deliberately modest: this suite runs in parallel with timing-sensitive tests elsewhere, on
+    /// hosted runners with few cores, and an iteration count high enough to *time* a regression
+    /// starves them into failing instead. 500 still wraps the 2048-sample ring a hundred times
+    /// over, which is the property actually being checked.
     @Test
     func sustainsManyCallbacksWithoutGrowing() {
-        let iterations = 5000
+        let iterations = 500
         let (tap, ring) = makeTap(ringCapacity: 2048)
         let samples = [Float](repeating: 0.25, count: 480)
         // Drained through one reused buffer, so the only allocation left in the loop would be the

@@ -14,7 +14,10 @@ import Testing
 
 /// The parts of the transport adapter that survive the widget-driver stopgap: how bridge failures are
 /// classified for the core, and the session-long to-device relay.
-@Suite(.timeLimit(.minutes(1)))
+///
+/// Serialized for the same reason as `WidgetMatrixBridgeTests`: real deadlines, and parallel
+/// execution on a hosted runner starves them.
+@Suite(.timeLimit(.minutes(1)), .serialized)
 struct MatrixRTCTransportAdapterTests {
     @Test
     func permanentRefusalsRetireTheFeature() {
