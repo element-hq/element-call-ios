@@ -34,6 +34,12 @@ knows, and what tends to go wrong.
 SwiftLint enforces 1 and 2 at error severity. **If you need something from the host, add a port. Never
 add a dependency.**
 
+A fifth target, `ElementCallAll`, exists only to `@_exported import` the four above so a host takes one
+dependency and writes one import. It contains no code and must never contain any: it is a product
+convenience, not a fifth layer, and putting anything in it would put that thing outside every boundary
+in the table. Note the lint rules read comments too — they have no `match_kinds` — so naming the Matrix
+SDK in a comment anywhere outside `ElementCallMatrix` fails the build.
+
 ---
 
 ## Building and testing

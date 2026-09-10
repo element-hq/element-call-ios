@@ -29,6 +29,10 @@ let package = Package(
     name: "ElementCall",
     platforms: [.iOS(.v18)],
     products: [
+        // One dependency and one import for a host that wants all of it. The four below stay
+        // published: the split is what SwiftLint enforces the module boundaries against, and a
+        // host wanting only the media layer should not have to link the view layer to get it.
+        .library(name: "ElementCallAll", targets: ["ElementCallAll"]),
         .library(name: "ElementCallKit", targets: ["ElementCallKit"]),
         .library(name: "ElementCall", targets: ["ElementCall"]),
         .library(name: "ElementCallUI", targets: ["ElementCallUI"]),
@@ -75,8 +79,18 @@ let package = Package(
                                "ElementCall",
                                .product(name: "MatrixRustSDK", package: "matrix-rust-components-swift")],
                 swiftSettings: [.defaultIsolation(MainActor.self)]),
+        // Nothing but re-exports. ElementCallUI and ElementCallMatrix already pull in the other
+        // two, but all four are named so that dropping one of those edges later cannot silently
+        // shrink what the umbrella offers.
+        .target(name: "ElementCallAll",
+                dependencies: ["ElementCallKit",
+                               "ElementCall",
+                               "ElementCallUI",
+                               "ElementCallMatrix"],
+                swiftSettings: [.defaultIsolation(MainActor.self)]),
         .testTarget(name: "ElementCallTests",
-                    dependencies: ["ElementCallUI",
+                    dependencies: ["ElementCallAll",
+                                   "ElementCallUI",
                                    "ElementCallMatrix",
                                    .product(name: "SnapshotTesting", package: "swift-snapshot-testing")],
                     exclude: ["__Snapshots__"],
