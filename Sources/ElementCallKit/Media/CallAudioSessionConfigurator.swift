@@ -21,6 +21,29 @@ public nonisolated enum CallAudioSessionConfigurator {
         try session.setPreferredIOBufferDuration(0.01)
     }
     
+    /// Whether *we* have to activate the session because nothing else will.
+    ///
+    /// Normally CallKit does it and reports back through `didActivate`, and activating it
+    /// ourselves as well makes that callback fire twice or not at all. Two runtimes have no
+    /// CallKit to do it:
+    ///
+    /// - the simulator, which is a compile-time fact;
+    /// - an iOS app running on macOS, which is **not**. Such a binary is `platform IOS` and is
+    ///   neither a simulator nor Catalyst, so no `#if` can see it and the question has to be asked
+    ///   of `ProcessInfo` at runtime. Getting this wrong is not a degraded call but a silent one:
+    ///   the session never activates, the input node reports 0 Hz forever, and
+    ///   ``InputStreamFormat/isUsable`` then refuses to build the graph.
+    ///
+    /// It lives here rather than at the call sites so activation and deactivation cannot disagree
+    /// about which platforms they apply to.
+    public static var isSelfActivating: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return ProcessInfo.processInfo.isiOSAppOnMac
+        #endif
+    }
+    
     /// For the simulator and any path where CallKit is not driving activation.
     public static func activate() throws {
         try AVAudioSession.sharedInstance().setActive(true, options: [])
