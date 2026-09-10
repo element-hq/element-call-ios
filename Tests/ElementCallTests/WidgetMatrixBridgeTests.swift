@@ -13,7 +13,14 @@ import Synchronization
 import Testing
 
 /// The widget-driver stopgap's wire handling, against a fake driver pipe.
-@Suite(.timeLimit(.minutes(1)))
+///
+/// Serialized on purpose. Every test here drives a bridge through a handshake with real deadlines
+/// on both sides, and run in parallel on a three-core hosted runner they starve each other: the
+/// suite finishes in 0.07s locally and took forty-odd seconds per test on CI, which is not
+/// contention so much as collapse. One at a time each takes about four milliseconds, so the
+/// deadlines stop being a lottery. It also costs nothing -- the whole suite is faster than one of
+/// its timeouts.
+@Suite(.timeLimit(.minutes(1)), .serialized)
 struct WidgetMatrixBridgeTests {
     private let widgetID = "widget"
     private let channel = FakeWidgetChannel()
@@ -26,15 +33,15 @@ struct WidgetMatrixBridgeTests {
     /// So `unansweredRequestsTimeOut` shortens only the request timeout, and
     /// `startTimesOutWithoutNegotiation`, which is genuinely about the handshake, shortens only that.
     ///
-    /// The defaults are deliberately far longer than any handshake needs, because for every test
-    /// but those two they are a safety net rather than the thing under test, and a net that fires
-    /// is indistinguishable from the bug above. Five seconds was not enough: the hosted runners
-    /// execute this suite under enough contention that a whole test can take forty-odd seconds of
-    /// wall clock, and `negotiationAnswersCapabilitiesAndResolvesStart` duly failed on
-    /// `nextSent() -> nil` after the net fired mid-handshake. Thirty is still half the suite's
-    /// one-minute limit, so a genuine hang fails here, with a useful message, rather than there.
-    private func makeBridge(requestTimeout: Duration = .seconds(30),
-                            negotiationTimeout: Duration = .seconds(30)) -> WidgetMatrixBridge {
+    /// Five seconds is ample once the suite is serialized, and must stay well under the pipe's own
+    /// ten-second read deadline: whichever fires first decides how the failure reads, and a
+    /// negotiation that gives up first produces a prompt `.timedOut` instead of a read that waits
+    /// out its deadline for a reply nobody is going to send. Raising these above the read deadline
+    /// was tried, to survive CI contention, and made things worse -- a test that used to fail in
+    /// five seconds sat for thirty, and ten of them then breached the suite's one-minute limit.
+    /// Contention was the problem; `.serialized` is the fix for it, not longer nets.
+    private func makeBridge(requestTimeout: Duration = .seconds(5),
+                            negotiationTimeout: Duration = .seconds(5)) -> WidgetMatrixBridge {
         WidgetMatrixBridge(roomID: "!room:example.org",
                            widgetID: widgetID,
                            channel: channel,
