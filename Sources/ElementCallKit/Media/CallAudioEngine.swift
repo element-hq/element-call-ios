@@ -164,9 +164,24 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
     
     // MARK: - Private
     
+    /// What the input node currently reports, as a value. Only meaningful off the render thread.
+    private var hardwareInputFormat: InputStreamFormat {
+        dispatchPrecondition(condition: .onQueue(queue))
+        return InputStreamFormat(engine.inputNode.outputFormat(forBus: 0))
+    }
+    
     private func startNow() {
         dispatchPrecondition(condition: .onQueue(queue))
         guard !isRunning else { return }
+        // Checked before *any* graph mutation, not just the input connect: the mixer-to-output
+        // connect below is the same unprotected Objective-C call and fails the same way. Bailing
+        // whole is also the honest answer -- with no session there is nothing to play out of
+        // either. `isRunning` stays false, so the next startAudioIfReady retries.
+        let hardware = hardwareInputFormat
+        guard hardware.isUsable else {
+            MatrixRTCLog.warning("Audio session is not active (input format \(hardware)); not starting the engine")
+            return
+        }
         if !isVoiceProcessingConfigured {
             // Voice processing (AEC/AGC/NS) must be enabled before prepare(), and only once the
             // session is active or the input format reads as 0 Hz.
@@ -225,9 +240,18 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
             self.sinkNode = nil
         }
         guard let inputReceiver else { return }
+        // installInputSink can land before the session is active -- always on an iOS app running
+        // on macOS, where CallKit never activates it, and racily on iOS if the microphone is
+        // published first. The receiver stays stored, so `startNow` attaches it once the format
+        // is real; connecting against an unusable one would kill the process instead.
+        let hardware = hardwareInputFormat
+        guard hardware.isUsable else {
+            MatrixRTCLog.warning("Input format \(hardware) is unusable; deferring the microphone sink")
+            return
+        }
         // Published before the node goes live: the block reads the format on its very first
         // callback, and the engine may already be running.
-        inputFormat.store(InputStreamFormat(engine.inputNode.outputFormat(forBus: 0)))
+        inputFormat.store(hardware)
         let node = AVAudioSinkNode(receiverBlock: inputReceiver.block)
         engine.attach(node)
         // The sink takes the input node's own format; converting happens off the render thread.

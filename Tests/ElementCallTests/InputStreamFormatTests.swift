@@ -35,6 +35,22 @@ struct InputStreamFormatTests {
         #expect(InputStreamFormat(packed: .max).channelCount >= 1)
     }
     
+    /// The guard that stands between an inactive audio session and an uncatchable AVFAudio
+    /// exception. An iOS app running on macOS never gets CallKit's activation, so the input node
+    /// reports 0 Hz forever, and connecting a node to that format kills the process.
+    @Test
+    func aFormatFromAnInactiveSessionIsNotUsable() {
+        #expect(!InputStreamFormat.unknown.isUsable)
+        #expect(!InputStreamFormat(channelCount: 2, isInterleaved: false, sampleRate: 0).isUsable)
+        #expect(!InputStreamFormat(channelCount: 0, isInterleaved: false, sampleRate: 48000).isUsable)
+    }
+    
+    @Test
+    func aRealHardwareFormatIsUsable() {
+        #expect(InputStreamFormat(channelCount: 1, isInterleaved: false, sampleRate: 48000).isUsable)
+        #expect(InputStreamFormat(channelCount: 2, isInterleaved: true, sampleRate: 44100).isUsable)
+    }
+    
     @Test
     func carriesFieldsIndependently() {
         let format = InputStreamFormat(channelCount: 2, isInterleaved: true, sampleRate: 44100)

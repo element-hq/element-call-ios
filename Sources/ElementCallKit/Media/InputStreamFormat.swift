@@ -34,6 +34,21 @@ nonisolated extension InputStreamFormat {
                   sampleRate: format.sampleRate)
     }
     
+    /// Whether a graph can actually be built against this format.
+    ///
+    /// `AVAudioEngine.connect(_:to:format:)` with a nil format adopts whatever the node reports,
+    /// and on an inactive audio session that is 0 Hz. AVFAudio then fails the bus's `setFormat:`
+    /// with `kAudioUnitErr_FormatNotSupported` (-10868) and raises an **Objective-C exception**,
+    /// which Swift cannot catch, so the process dies rather than degrading. There is no throwing
+    /// form of `connect`, so the only defence is to ask first.
+    ///
+    /// Reached on an iOS app running on macOS, where CallKit never activates the session and so
+    /// nothing ever makes the format real; also reachable on iOS proper if the microphone is
+    /// published before activation arrives.
+    var isUsable: Bool {
+        sampleRate > 0 && channelCount > 0
+    }
+    
     /// All three fields in one word, so a reader cannot see a new channel count against a stale
     /// interleaved flag. Three separate atomics would tear, and that particular tear indexes out of
     /// bounds on the render thread.
