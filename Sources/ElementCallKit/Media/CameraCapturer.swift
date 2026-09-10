@@ -22,7 +22,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
     
     private let queue = DispatchQueue(label: "io.element.matrixrtc.camera", qos: .userInitiated)
     private let state = Mutex<State>(.init())
-    private let onLocalFrame: @Sendable (MatrixRtcVideoFrame) -> Void
+    private let onLocalFrame: @Sendable (MatrixRTCVideoFrame) -> Void
     /// The system took the camera away (app in the background, another app using it) or gave it back.
     /// Without the multitasking-camera entitlement this fires on every backgrounding.
     var onInterruption: (@Sendable (Bool) -> Void)?
@@ -36,7 +36,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
     }
     
     /// - Parameter onLocalFrame: a copy of each published frame for the self view.
-    init(onLocalFrame: @escaping @Sendable (MatrixRtcVideoFrame) -> Void) {
+    init(onLocalFrame: @escaping @Sendable (MatrixRTCVideoFrame) -> Void) {
         self.onLocalFrame = onLocalFrame
         super.init()
         let center = NotificationCenter.default
@@ -44,12 +44,12 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
             center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: nil, queue: nil) { [weak self] notification in
                 guard let self, notification.object as? AVCaptureSession === state.withLock({ $0.session }) else { return }
                 let reason = (notification.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int).flatMap(AVCaptureSession.InterruptionReason.init)
-                MatrixRtcLog.info("Camera interrupted: \(reason.map { "\($0)" } ?? "unknown reason")")
+                MatrixRTCLog.info("Camera interrupted: \(reason.map { "\($0)" } ?? "unknown reason")")
                 onInterruption?(true)
             },
             center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: nil, queue: nil) { [weak self] notification in
                 guard let self, notification.object as? AVCaptureSession === state.withLock({ $0.session }) else { return }
-                MatrixRtcLog.info("Camera interruption ended")
+                MatrixRTCLog.info("Camera interruption ended")
                 onInterruption?(false)
             }
         ]
@@ -82,7 +82,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         guard let session else { return }
         queue.async {
             session.stopRunning()
-            MatrixRtcLog.info("Camera released")
+            MatrixRTCLog.info("Camera released")
         }
     }
     
@@ -117,13 +117,13 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         let timestampUs = Int64(CMTimeGetSeconds(timestamp) * 1_000_000)
         
         let frame = planes.ffiFrame(rotation: rotation, timestampUs: timestampUs)
-        onLocalFrame(MatrixRtcVideoFrame(planes: planes, rotation: .init(rotation), isMirrored: isFrontFacing))
+        onLocalFrame(MatrixRTCVideoFrame(planes: planes, rotation: .init(rotation), isMirrored: isFrontFacing))
         
         guard let track else { return }
         do {
             try track.captureVideo(frame: frame)
         } catch {
-            MatrixRtcLog.warning("captureVideo failed: \(error)")
+            MatrixRTCLog.warning("captureVideo failed: \(error)")
         }
     }
     
@@ -134,7 +134,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         // Prefer the requested camera, fall back to whatever exists rather than refusing.
         let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified)
         guard let device = discovery.devices.first(where: { $0.position == position }) ?? discovery.devices.first else {
-            throw MatrixRtcError.media("No camera available")
+            throw MatrixRTCError.media("No camera available")
         }
         let input = try AVCaptureDeviceInput(device: device)
         
@@ -148,7 +148,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         session.sessionPreset = .vga640x480
         guard session.canAddInput(input), session.canAddOutput(output) else {
             session.commitConfiguration()
-            throw MatrixRtcError.media("Cannot configure the camera session")
+            throw MatrixRTCError.media("Cannot configure the camera session")
         }
         session.addInput(input)
         session.addOutput(output)
@@ -169,7 +169,7 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         queue.async {
             previous?.stopRunning()
             session.startRunning()
-            MatrixRtcLog.info("Camera started (\(device.position == .front ? "front" : "back"))")
+            MatrixRTCLog.info("Camera started (\(device.position == .front ? "front" : "back"))")
         }
     }
 }

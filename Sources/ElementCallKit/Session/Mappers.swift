@@ -8,7 +8,7 @@
 import Foundation
 import MatrixRtc
 
-nonisolated extension MatrixRtcStreamKind {
+nonisolated extension MatrixRTCStreamKind {
     init(_ kind: FfiStreamKind) {
         switch kind {
         case .microphone: self = .microphone
@@ -30,7 +30,7 @@ nonisolated extension MatrixRtcStreamKind {
     }
 }
 
-nonisolated extension MatrixRtcElementCallCompat {
+nonisolated extension MatrixRTCElementCallCompat {
     var ffi: FfiElementCallCompat {
         switch self {
         case .off: .off
@@ -40,7 +40,7 @@ nonisolated extension MatrixRtcElementCallCompat {
     }
 }
 
-nonisolated extension MatrixRtcTransport {
+nonisolated extension MatrixRTCTransport {
     var ffi: FfiTransportConfig? {
         switch self {
         case .liveKit(let serviceURL): FfiTransportConfig(type: "livekit", livekitServiceUrl: serviceURL.absoluteString)
@@ -49,7 +49,7 @@ nonisolated extension MatrixRtcTransport {
     }
 }
 
-nonisolated extension MatrixRtcNotify {
+nonisolated extension MatrixRTCNotify {
     var ffi: FfiNotifyConfig {
         FfiNotifyConfig(notificationType: kind == .ring ? .ring : .notification,
                         intent: intent.rawValue,
@@ -59,7 +59,7 @@ nonisolated extension MatrixRtcNotify {
     }
 }
 
-nonisolated extension MatrixRtcMembership {
+nonisolated extension MatrixRTCMembership {
     init(_ membership: JoinedMembership) {
         self.init(memberID: membership.memberId,
                   userID: membership.sender,
@@ -68,7 +68,7 @@ nonisolated extension MatrixRtcMembership {
     }
 }
 
-nonisolated extension MatrixRtcParticipant {
+nonisolated extension MatrixRTCParticipant {
     init(_ participant: FfiParticipant) {
         self.init(memberID: participant.memberId,
                   userID: participant.userId,
@@ -80,7 +80,7 @@ nonisolated extension MatrixRtcParticipant {
     }
 }
 
-nonisolated extension MatrixRtcReceiveStats {
+nonisolated extension MatrixRTCReceiveStats {
     init(_ stats: FfiReceiveStats) {
         self.init(packetsReceived: stats.packetsReceived,
                   packetsLost: stats.packetsLost,
@@ -93,7 +93,7 @@ nonisolated extension MatrixRtcReceiveStats {
     }
 }
 
-nonisolated extension MatrixRtcFrameEncryptionState {
+nonisolated extension MatrixRTCFrameEncryptionState {
     init(_ state: FfiFrameEncryptionState) {
         switch state {
         case .ok: self = .ok
@@ -105,7 +105,7 @@ nonisolated extension MatrixRtcFrameEncryptionState {
     }
 }
 
-nonisolated extension MatrixRtcCallEvent {
+nonisolated extension MatrixRTCCallEvent {
     init(_ event: FfiCallEvent) {
         switch event {
         case .participantJoined(let memberId, let userId):
@@ -138,7 +138,7 @@ nonisolated extension MatrixRtcCallEvent {
         case .unknownParticipant(let identity):
             // Not surfaced: the transport knows an identity the membership projection doesn't (yet).
             self = .mediaConnectionDegraded(false)
-            MatrixRtcLog.debug("Unknown participant on the transport: \(identity)")
+            MatrixRTCLog.debug("Unknown participant on the transport: \(identity)")
         case .mediaConnectionState(let degraded):
             self = .mediaConnectionDegraded(degraded)
         case .ended(let reason):

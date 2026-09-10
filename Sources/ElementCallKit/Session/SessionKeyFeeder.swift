@@ -26,13 +26,13 @@ final nonisolated class SessionKeyFeeder: Sendable {
     
     func start() {
         let specKeys = Task { [manager, transport] in
-            for await message in transport.toDeviceMessages(eventTypes: [MatrixRtcEventTypes.encryptionKey]) {
+            for await message in transport.toDeviceMessages(eventTypes: [MatrixRTCEventTypes.encryptionKey]) {
                 guard let key = EncryptionKeyMapper.map(message) else {
-                    MatrixRtcLog.warning("Ignoring an unusable encryption key from \(message.attestedSenderID)")
+                    MatrixRTCLog.warning("Ignoring an unusable encryption key from \(message.attestedSenderID)")
                     continue
                 }
                 // `crossSigned` is what makes the core silently drop a key, so log what we claimed.
-                MatrixRtcLog.info("Encryption key for \(key.memberId) index \(key.keyIndex) from \(key.senderUserId ?? "?")/\(key.senderDeviceId ?? "?") crossSigned=\(key.senderIsCrossSigned)")
+                MatrixRTCLog.info("Encryption key for \(key.memberId) index \(key.keyIndex) from \(key.senderUserId ?? "?")/\(key.senderDeviceId ?? "?") crossSigned=\(key.senderIsCrossSigned)")
                 await Self.feed("encryption key for \(key.memberId)") { try await manager.receiveEncryptionKey(key: key) }
             }
         }
@@ -41,12 +41,12 @@ final nonisolated class SessionKeyFeeder: Sendable {
         // array the core parses itself. Subscribed unconditionally: the compat mode is chosen at join
         // time, far too late for a message that is delivered exactly once.
         let legacyKeys = Task { [manager, transport] in
-            for await message in transport.toDeviceMessages(eventTypes: [MatrixRtcEventTypes.legacyEncryptionKey]) {
+            for await message in transport.toDeviceMessages(eventTypes: [MatrixRTCEventTypes.legacyEncryptionKey]) {
                 guard message.wasEncrypted else {
-                    MatrixRtcLog.warning("Dropping a cleartext Element Call encryption key")
+                    MatrixRTCLog.warning("Dropping a cleartext Element Call encryption key")
                     continue
                 }
-                MatrixRtcLog.info("Element Call encryption key from \(message.attestedSenderID)/\(message.senderDeviceID ?? "?") crossSigned=\(message.isSenderCrossSigned)")
+                MatrixRTCLog.info("Element Call encryption key from \(message.attestedSenderID)/\(message.senderDeviceID ?? "?") crossSigned=\(message.isSenderCrossSigned)")
                 await Self.feed("Element Call key from \(message.attestedSenderID)") {
                     try await manager.receiveLegacyEncryptionKey(sender: message.attestedSenderID,
                                                                  contentJson: message.contentJSON,
@@ -73,7 +73,7 @@ final nonisolated class SessionKeyFeeder: Sendable {
         do {
             try await body()
         } catch {
-            MatrixRtcLog.error("Core rejected the \(what): \(error)")
+            MatrixRTCLog.error("Core rejected the \(what): \(error)")
         }
     }
 }

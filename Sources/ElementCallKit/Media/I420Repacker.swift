@@ -37,7 +37,7 @@ nonisolated enum I420Repacker {
         let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
         guard format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange || format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
               CVPixelBufferGetPlaneCount(pixelBuffer) == 2 else {
-            MatrixRtcLog.warning("Unsupported pixel format \(format), expected NV12")
+            MatrixRTCLog.warning("Unsupported pixel format \(format), expected NV12")
             return nil
         }
         

@@ -12,11 +12,11 @@ import Testing
 
 /// Pins the outbound bridge: each callback maps to exactly one transport call, cancel and restart
 /// are never swapped, failures are classified, and every to-device recipient gets a verdict.
-struct MatrixRtcCommandSenderTests {
+struct MatrixRTCCommandSenderTests {
     @Test
     func cancelAndRestartAreNotSwapped() async throws {
         let transport = RecordingTransport()
-        let sender = MatrixRtcCommandSender(transport: transport)
+        let sender = MatrixRTCCommandSender(transport: transport)
         
         try await sender.cancelDelayedEvent(roomId: "!r", delayId: "d1")
         try await sender.restartDelayedEvent(roomId: "!r", delayId: "d2")
@@ -27,11 +27,11 @@ struct MatrixRtcCommandSenderTests {
     @Test
     func stickyEventPassesContentAndDurationThroughVerbatim() async throws {
         let transport = RecordingTransport()
-        let sender = MatrixRtcCommandSender(transport: transport)
+        let sender = MatrixRTCCommandSender(transport: transport)
         
         let eventID = try await sender.sendStickyEvent(roomId: "!r", eventType: "org.matrix.msc4143.rtc.member", contentJson: "{\"a\":1}", durationMs: 7_200_000)
         
-        #expect(eventID == MatrixRtcCommandSender.noEventID)
+        #expect(eventID == MatrixRTCCommandSender.noEventID)
         #expect(transport.stickyEvents == ["org.matrix.msc4143.rtc.member|{\"a\":1}|7200000"])
     }
     
@@ -39,7 +39,7 @@ struct MatrixRtcCommandSenderTests {
     func permanentRefusalIsNotSupported() async {
         let transport = RecordingTransport()
         transport.delayedEventError = .notSupported("M_UNRECOGNIZED")
-        let sender = MatrixRtcCommandSender(transport: transport)
+        let sender = MatrixRTCCommandSender(transport: transport)
         
         await #expect(throws: CommandSenderError.NotSupported("sendDelayedEvent(m.rtc.member): M_UNRECOGNIZED")) {
             _ = try await sender.sendDelayedEvent(roomId: "!r", eventType: "m.rtc.member", contentJson: "{}", delayMs: 20000)
@@ -50,7 +50,7 @@ struct MatrixRtcCommandSenderTests {
     func transientFailureIsSendError() async {
         let transport = RecordingTransport()
         transport.delayedEventError = .failed("timeout")
-        let sender = MatrixRtcCommandSender(transport: transport)
+        let sender = MatrixRTCCommandSender(transport: transport)
         
         await #expect(throws: CommandSenderError.SendError("sendDelayedEvent(m.rtc.member): timeout")) {
             _ = try await sender.sendDelayedEvent(roomId: "!r", eventType: "m.rtc.member", contentJson: "{}", delayMs: 20000)
@@ -61,7 +61,7 @@ struct MatrixRtcCommandSenderTests {
     func toDeviceReportsOneVerdictPerRecipient() async throws {
         let transport = RecordingTransport()
         transport.toDeviceFailures = ["@bob:example.org": ["DEV2"]]
-        let sender = MatrixRtcCommandSender(transport: transport)
+        let sender = MatrixRTCCommandSender(transport: transport)
         
         let deliveries = try await sender.sendToDeviceMessage(recipients: [.init(userId: "@bob:example.org", deviceId: "DEV1"),
                                                                            .init(userId: "@bob:example.org", deviceId: "DEV2"),
@@ -79,7 +79,7 @@ struct MatrixRtcCommandSenderTests {
 private final nonisolated class RecordingTransport: ElementCallMatrixTransport, @unchecked Sendable {
     let userID = "@alice:example.org"
     let deviceID = "ALICE"
-    func rtcTransports(roomID: String) async throws -> [MatrixRtcTransport] {
+    func rtcTransports(roomID: String) async throws -> [MatrixRTCTransport] {
         []
     }
     
@@ -87,7 +87,7 @@ private final nonisolated class RecordingTransport: ElementCallMatrixTransport, 
     var delayedUpdates = [String]()
     var toDeviceMessages = [String: [String: String]]()
     var toDeviceFailures = [String: [String]]()
-    var delayedEventError: MatrixRtcTransportError?
+    var delayedEventError: MatrixRTCTransportError?
     
     func sendStateEvent(roomID: String, eventType: String, stateKey: String, contentJSON: String) async throws -> String {
         "$state"
@@ -112,7 +112,7 @@ private final nonisolated class RecordingTransport: ElementCallMatrixTransport, 
         return "delay"
     }
     
-    func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRtcDelayedEventAction) async throws {
+    func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRTCDelayedEventAction) async throws {
         delayedUpdates.append("\(delayID):\(action)")
     }
     
@@ -126,15 +126,15 @@ private final nonisolated class RecordingTransport: ElementCallMatrixTransport, 
     }
     
     func redactEvent(roomID: String, eventID: String, reason: String?) async throws { }
-    func requestOpenIDToken() async throws -> MatrixRtcOpenIDToken {
+    func requestOpenIDToken() async throws -> MatrixRTCOpenIDToken {
         .init(accessToken: "t", tokenType: "Bearer", matrixServerName: "example.org", expiresIn: 60)
     }
     
-    func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRtcToDeviceMessage> {
+    func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRTCToDeviceMessage> {
         AsyncStream { $0.finish() }
     }
     
-    func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRtcRoomStateEvent]> {
+    func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]> {
         AsyncStream { $0.finish() }
     }
     

@@ -19,7 +19,7 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
     private let ring = PCMRingBuffer(capacity: AudioFormat.samplesPerFrame * 50)
     private let isMuted = Atomic<Bool>(false)
     private let isTestToneEnabled = Atomic<Bool>(false)
-    private let onLevel: @Sendable (MatrixRtcAudioLevel) -> Void
+    private let onLevel: @Sendable (MatrixRTCAudioLevel) -> Void
     
     private let tap: MicrophoneTap
     
@@ -33,7 +33,7 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
         var reportedOversizedCallbacks = 0
     }
     
-    init(engine: CallAudioEngine, onLevel: @escaping @Sendable (MatrixRtcAudioLevel) -> Void) {
+    init(engine: CallAudioEngine, onLevel: @escaping @Sendable (MatrixRTCAudioLevel) -> Void) {
         self.engine = engine
         self.onLevel = onLevel
         tap = MicrophoneTap(ring: ring, format: engine.inputFormat)
@@ -128,7 +128,7 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
                                                                       numChannels: UInt32(AudioFormat.channelCount),
                                                                       samplesPerChannel: UInt32(AudioFormat.samplesPerFrame)))
                 } catch {
-                    MatrixRtcLog.warning("captureAudio failed: \(error)")
+                    MatrixRTCLog.warning("captureAudio failed: \(error)")
                 }
             }
             reportOversizedCallbacks()
@@ -145,7 +145,7 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
             return total - state.reportedOversizedCallbacks
         }
         if unreported > 0 {
-            MatrixRtcLog.warning("Microphone callback exceeded \(MicrophoneTap.scratchCapacity) frames \(unreported) time(s)")
+            MatrixRTCLog.warning("Microphone callback exceeded \(MicrophoneTap.scratchCapacity) frames \(unreported) time(s)")
         }
     }
     

@@ -11,6 +11,14 @@ version will actually read it.
 
 ## Unreleased
 
+**Every `MatrixRtc*` type is now `MatrixRTC*`** — `MatrixRTCCall`, `MatrixRTCSession`,
+`MatrixRTCParticipant`, `MatrixRTCLogRecord` and the rest, 33 public types in all. Initialisms are
+uniformly cased per the Swift API Design Guidelines. A find-and-replace of `MatrixRtc` followed by
+an uppercase letter covers a host's whole migration.
+
+Two things keep the old spelling because they are not ours: the bindings' module, so
+`import MatrixRtc` is unchanged, and the bindings' own `MatrixRtcFFI` and `MatrixRtcFfiError`.
+
 **`ElementCallLogging` now takes a record.** Replace
 
 ```swift
@@ -27,7 +35,7 @@ func log(_ record: ElementCallLogRecord) { … }
 of our own call site — so a host formatting logs with a position can stop passing a placeholder.
 Call sites are unchanged: `log(_:_:)` still exists as a convenience that fills in the position.
 
-**`MatrixRtcLogRecord` gained `file`, `line`, `timestampMs` and `thread`**, which the Rust core was
+**`MatrixRTCLogRecord` gained `file`, `line`, `timestampMs` and `thread`**, which the Rust core was
 already providing and we were dropping. Nothing to change — the struct is only constructed inside
 the package — but a host putting `target` in the file slot can now use `file`, and one stamping its
 own receive time should prefer `timestampMs`, which is when the record was emitted.

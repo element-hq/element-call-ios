@@ -14,7 +14,7 @@ import MatrixRtc
 /// failure is turned into a `CommandSenderError` — anything else crossing the FFI aborts the process.
 /// Cancellation stays a cancellation: dressing it as a send failure would tell the core the command
 /// was attempted when its session is simply gone.
-final nonisolated class MatrixRtcCommandSender: CommandSenderCallback, Sendable {
+final nonisolated class MatrixRTCCommandSender: CommandSenderCallback, Sendable {
     /// matrix-rust-sdk's `sendStickyRaw` returns nothing, so there is no event ID to report.
     static let noEventID = ""
     
@@ -74,7 +74,7 @@ final nonisolated class MatrixRtcCommandSender: CommandSenderCallback, Sendable 
             messages[recipient.userId, default: [:]][recipient.deviceId] = contentJson
         }
         
-        MatrixRtcLog.info("sendToDeviceMessage(\(messageType)) to \(recipients.map { "\($0.userId)/\($0.deviceId)" })")
+        MatrixRTCLog.info("sendToDeviceMessage(\(messageType)) to \(recipients.map { "\($0.userId)/\($0.deviceId)" })")
         
         return try await command("sendToDeviceMessage(\(messageType))") {
             let failures = try await transport.sendToDeviceMessage(eventType: messageType, messages: messages)
@@ -106,17 +106,17 @@ final nonisolated class MatrixRtcCommandSender: CommandSenderCallback, Sendable 
             return try await body()
         } catch is CancellationError {
             throw CancellationError()
-        } catch let error as MatrixRtcTransportError {
+        } catch let error as MatrixRTCTransportError {
             switch error {
             case .notSupported(let message):
-                MatrixRtcLog.warning("\(description) refused by the homeserver: \(message)")
+                MatrixRTCLog.warning("\(description) refused by the homeserver: \(message)")
                 throw CommandSenderError.NotSupported("\(description): \(message)")
             case .failed(let message):
-                MatrixRtcLog.error("\(description) failed: \(message)")
+                MatrixRTCLog.error("\(description) failed: \(message)")
                 throw CommandSenderError.SendError("\(description): \(message)")
             }
         } catch {
-            MatrixRtcLog.error("\(description) failed: \(error)")
+            MatrixRTCLog.error("\(description) failed: \(error)")
             throw CommandSenderError.SendError("\(description): \(error)")
         }
     }

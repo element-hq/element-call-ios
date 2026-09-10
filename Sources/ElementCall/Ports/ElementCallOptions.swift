@@ -18,7 +18,7 @@ public nonisolated protocol ElementCallOptions: Sendable {
     var isPictureInPictureEnabled: Bool { get }
     /// How membership is published. Pinned by the host because it has to match the other clients in
     /// the room, and it cannot change once a session has joined.
-    var elementCallCompatibility: MatrixRtcElementCallCompat { get }
+    var elementCallCompatibility: MatrixRTCElementCallCompat { get }
     /// Whether the developer stats overlay can be toggled on a tile.
     var areTileStatsAvailable: Bool { get }
     /// Whether *leaving the app* during an audio-only call may open the window by itself. A video
@@ -40,12 +40,12 @@ public nonisolated extension ElementCallOptions {
 /// Defaults for a host that has no opinion.
 public nonisolated struct ElementCallDefaultOptions: ElementCallOptions {
     public var isPictureInPictureEnabled: Bool
-    public var elementCallCompatibility: MatrixRtcElementCallCompat
+    public var elementCallCompatibility: MatrixRTCElementCallCompat
     public var areTileStatsAvailable: Bool
     public var isAutomaticPictureInPictureForAudioCallsEnabled: Bool
     
     public init(isPictureInPictureEnabled: Bool = true,
-                elementCallCompatibility: MatrixRtcElementCallCompat = .stateEvents,
+                elementCallCompatibility: MatrixRTCElementCallCompat = .stateEvents,
                 areTileStatsAvailable: Bool = false,
                 isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false) {
         self.isPictureInPictureEnabled = isPictureInPictureEnabled

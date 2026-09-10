@@ -20,9 +20,9 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
     private let frameCount = Atomic<UInt64>(0)
     
     private let filler = Mutex<Task<Void, Never>?>(nil)
-    private let onLevel: @Sendable (String, MatrixRtcAudioLevel) -> Void
+    private let onLevel: @Sendable (String, MatrixRTCAudioLevel) -> Void
     
-    init(memberID: String, engine: CallAudioEngine, onLevel: @escaping @Sendable (String, MatrixRtcAudioLevel) -> Void) {
+    init(memberID: String, engine: CallAudioEngine, onLevel: @escaping @Sendable (String, MatrixRTCAudioLevel) -> Void) {
         self.memberID = memberID
         self.engine = engine
         self.onLevel = onLevel
@@ -38,7 +38,7 @@ final nonisolated class AudioPlaybackSink: @unchecked Sendable {
             while !Task.isCancelled, let frame = await stream.next() {
                 self?.push(frame)
             }
-            MatrixRtcLog.debug("Audio stream ended for \(self?.memberID ?? "?")")
+            MatrixRTCLog.debug("Audio stream ended for \(self?.memberID ?? "?")")
         }
         filler.withLock { $0 = task }
     }
