@@ -51,16 +51,17 @@ struct ElementCallTileView: View {
                 ElementCallVideoView(memberID: tile.memberID,
                                      kind: kind,
                                      isLocal: tile.isLocal,
-                                     callProvider: callProvider)
+                                     callProvider: callProvider,
+                                     // `hasVideo` is a claim about signalling, not about pixels.
+                                     // When the two disagree the tile would be a black rectangle,
+                                     // so the avatar holds the space until a frame actually lands.
+                                     placeholder: { avatar })
                     // A tile slot (the spotlight in particular) keeps its view identity when its member
                     // changes; without an explicit identity the renderer would stay attached to the
                     // previous member's stream.
                     .id("\(tile.memberID)/\(kind)")
             } else {
-                style.avatars.avatar(userID: tile.userID,
-                                     displayName: tile.displayName,
-                                     avatarURL: tile.avatarURL,
-                                     size: appearance == .thumbnail ? .thumbnail : .full)
+                avatar
             }
             
             switch appearance {
@@ -89,6 +90,13 @@ struct ElementCallTileView: View {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(outlineColor, lineWidth: appearance == .thumbnail ? 1 : 3)
         }
+    }
+    
+    private var avatar: some View {
+        style.avatars.avatar(userID: tile.userID,
+                             displayName: tile.displayName,
+                             avatarURL: tile.avatarURL,
+                             size: appearance == .thumbnail ? .thumbnail : .full)
     }
     
     private var cardChrome: some View {
@@ -204,21 +212,37 @@ struct ElementCallTileView: View {
 
 /// Draws a member's stream while on screen; attaching opens the decoder, detaching closes it
 /// (after a linger). The local tile draws the camera directly.
-struct ElementCallVideoView: View {
+struct ElementCallVideoView<Placeholder: View>: View {
     let memberID: String
     let kind: MatrixRTCStreamKind
     let isLocal: Bool
     let callProvider: () -> MatrixRTCCall?
+    /// Shown until the stream delivers its first frame. See ``FrameGate``.
+    @ViewBuilder let placeholder: Placeholder
     
     @State private var slot = VideoFrameSlot()
+    @State private var gate = FrameGate()
     
     var body: some View {
-        VideoTileView(slot: slot) { size in
-            guard !isLocal, let call = callProvider() else { return }
-            call.reportDrawnSize(size, slot: slot, memberID: memberID, kind: kind)
+        ZStack {
+            if !gate.hasFrame {
+                placeholder
+            }
+            VideoTileView(slot: slot) { size in
+                guard !isLocal, let call = callProvider() else { return }
+                call.reportDrawnSize(size, slot: slot, memberID: memberID, kind: kind)
+            }
+            // Kept in the tree rather than branched away, so it is attached and drawing before it
+            // is shown; swapping it in on the first frame would mean attaching after it.
+            .opacity(gate.hasFrame ? 1 : 0)
         }
         .onAppear {
             guard let call = callProvider() else { return }
+            // A slot reused by this tile may already hold a frame from before it went off screen.
+            gate.hasFrame = slot.hasReceivedFrame
+            slot.setOnFirstFrame { [gate] in
+                Task { @MainActor in gate.hasFrame = true }
+            }
             if isLocal {
                 call.localVideo.attach(slot)
             } else {
@@ -226,6 +250,7 @@ struct ElementCallVideoView: View {
             }
         }
         .onDisappear {
+            slot.setOnFirstFrame(nil)
             guard let call = callProvider() else { return }
             if isLocal {
                 call.localVideo.detach(slot)
@@ -234,6 +259,15 @@ struct ElementCallVideoView: View {
             }
         }
     }
+}
+
+/// Carries "a frame has arrived" from the offering thread to the view.
+///
+/// A reference type because the slot's callback is `@Sendable` and fires off the main actor: it
+/// can capture this and hop, where it could not capture the view's own state.
+@Observable
+private final class FrameGate {
+    var hasFrame = false
 }
 
 // MARK: - Previews

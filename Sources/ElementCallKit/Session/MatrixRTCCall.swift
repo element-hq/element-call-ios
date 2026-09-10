@@ -521,6 +521,10 @@ public final class MatrixRTCCall {
     
     private func refreshParticipants() {
         let refreshed = mediaSession.participants().map(MatrixRTCParticipant.init)
+        // Bail before assigning rather than after: this is now called on a timer as well as on
+        // every event, and `participants` is observed by every tile, so an unconditional write
+        // would rebuild the whole stage once a second for nothing.
+        guard refreshed != participants else { return }
         if Set(refreshed.map(\.memberID)) != Set(participants.map(\.memberID)) {
             MatrixRTCLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
         }
@@ -574,6 +578,13 @@ public final class MatrixRTCCall {
     private func pollReceiveStats() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
+            // The roster is re-read here, not only after an event. The snapshot taken at join can
+            // report a member's camera as unmuted before the transport has learned otherwise, and
+            // if that member then does nothing, no event ever arrives to correct it: joining a
+            // call where somebody already has their camera off left their tile black for as long
+            // as they stayed still. Observed against Element Web, and it repaired itself the
+            // moment they toggled their camera, which is what identified the stale read.
+            refreshParticipants()
             var stats = [String: MatrixRTCReceiveStats]()
             for participant in participants where !participant.isLocal {
                 if let audio = await mediaSession.receiveStats(memberId: participant.memberID, kind: .microphone) {
