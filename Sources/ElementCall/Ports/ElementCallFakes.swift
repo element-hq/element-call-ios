@@ -154,7 +154,7 @@ public final class ElementCallFakeRoom: ElementCallRoomContext {
 
 /// Keeps every line, so a test can assert on what was logged.
 public final nonisolated class ElementCallFakeLogger: ElementCallLogging {
-    private let recorded = Mutex<[(level: ElementCallLogLevel, message: String)]>([])
+    private let recorded = Mutex<[ElementCallLogRecord]>([])
     
     public init() { }
     
@@ -162,8 +162,13 @@ public final nonisolated class ElementCallFakeLogger: ElementCallLogging {
         recorded.withLock { $0.map(\.message) }
     }
     
-    public func log(_ level: ElementCallLogLevel, _ message: String) {
-        recorded.withLock { $0.append((level, message)) }
+    /// The whole records, for a test that cares where a line came from.
+    public var records: [ElementCallLogRecord] {
+        recorded.withLock { $0 }
+    }
+    
+    public func log(_ record: ElementCallLogRecord) {
+        recorded.withLock { $0.append(record) }
     }
 }
 

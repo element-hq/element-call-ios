@@ -11,6 +11,27 @@ version will actually read it.
 
 ## Unreleased
 
+**`ElementCallLogging` now takes a record.** Replace
+
+```swift
+func log(_ level: ElementCallLogLevel, _ message: String) { … }
+```
+
+with
+
+```swift
+func log(_ record: ElementCallLogRecord) { … }
+```
+
+`ElementCallLogRecord` carries `level`, `message`, `file` and `line`, where `file` is the `#fileID`
+of our own call site — so a host formatting logs with a position can stop passing a placeholder.
+Call sites are unchanged: `log(_:_:)` still exists as a convenience that fills in the position.
+
+**`MatrixRtcLogRecord` gained `file`, `line`, `timestampMs` and `thread`**, which the Rust core was
+already providing and we were dropping. Nothing to change — the struct is only constructed inside
+the package — but a host putting `target` in the file slot can now use `file`, and one stamping its
+own receive time should prefer `timestampMs`, which is when the record was emitted.
+
 **Minimizing an audio call now opens a Picture in Picture window** showing the avatar placeholder,
 where it previously reported `pictureInPictureUnavailable`. A host that puts up its own minimized
 bar will stop seeing that action for audio calls — the bar is still used when the window genuinely

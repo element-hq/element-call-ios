@@ -527,8 +527,10 @@ public final class ElementCallController {
             ?? ElementCallMemberProfile(userID: participant.userID, displayName: nil, avatarURL: nil)
     }
     
-    private func log(_ level: ElementCallLogLevel, _ message: String) {
-        logger?.log(level, message)
+    /// Forwards the caller's position rather than its own, or every line in this file would be
+    /// attributed to the line below.
+    private func log(_ level: ElementCallLogLevel, _ message: String, file: String = #fileID, line: Int = #line) {
+        logger?.log(level, message, file: file, line: line)
     }
     
     private func fail(_ message: String) {
