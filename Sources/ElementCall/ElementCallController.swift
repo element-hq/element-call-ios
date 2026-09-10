@@ -60,15 +60,20 @@ public final class ElementCallController {
     public private(set) var session: MatrixRtcSession?
     public private(set) var call: MatrixRtcCall?
     
-    /// The system window for a minimized video call; audio-only calls use the bar instead. Internal
-    /// because the host drives it through ``requestMinimize()`` and ``restore()`` rather than directly.
+    /// The system window for a minimized call, audio ones included — an audio call shows the
+    /// avatar placeholder. Internal because the host drives it through ``requestMinimize()`` and
+    /// ``restore()`` rather than directly.
     let pictureInPicture = ElementCallPictureInPictureController()
     
     public var actions: AnyPublisher<ElementCallControllerAction, Never> {
         actionsSubject.eraseToAnyPublisher()
     }
     
-    /// Anyone in the call has video to show, which decides bar against Picture in Picture on minimize.
+    /// Anyone in the call has video to show.
+    ///
+    /// No longer decides whether minimizing uses the window — every call does — but it still
+    /// decides whether *backgrounding* the app opens one by itself, unless the host opted audio
+    /// calls in through ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``.
     public var hasVideo: Bool {
         call?.hasVideo ?? false
     }
@@ -186,13 +191,19 @@ public final class ElementCallController {
         pictureInPicture.sourceView
     }
     
-    /// Shrinks the call, and says how. A video call with the system window available uses it; every
+    /// Shrinks the call, and says how. Any call with the system window available uses it; every
     /// other case reports ``ElementCallControllerAction/pictureInPictureUnavailable`` so the host
     /// puts up its own minimized presentation, usually a bar.
+    ///
+    /// Audio calls go to the window too. They used to be excluded on `hasVideo`, which meant that
+    /// with every camera off the collapse button silently did nothing — the window shows the
+    /// avatar placeholder, which was already built and wired but unreachable. The bar remains the
+    /// fallback for the cases that are genuinely not about video: the host disabling the window,
+    /// a device that cannot do it, or a screen share holding it.
     public func requestMinimize() {
         isMaximized = false
         actionsSubject.send(.minimizeRequested)
-        if hasVideo, options.isPictureInPictureEnabled, pictureInPicture.isPossible {
+        if options.isPictureInPictureEnabled, pictureInPicture.isPossible {
             pictureInPicture.start()
         } else {
             actionsSubject.send(.pictureInPictureUnavailable)
@@ -277,6 +288,7 @@ public final class ElementCallController {
     
     private func bindPictureInPictureIfEnabled(_ call: MatrixRtcCall) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
+        pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
         pictureInPicture.bind(call: call) { [weak self] in self?.spotlightMemberID }
     }
     

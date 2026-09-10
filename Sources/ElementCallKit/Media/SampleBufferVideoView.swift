@@ -21,6 +21,15 @@ public final class SampleBufferVideoView: UIView {
     public var onAspectChange: ((CGFloat) -> Void)?
     /// The drawn size in pixels, so the SFU can be asked for a layer that fits the window.
     public var onPixelSizeChange: ((CGSize) -> Void)?
+    /// Whether any frame has reached the layer since the last ``clear()``.
+    ///
+    /// Picture in Picture needs this: `startPictureInPicture()` on a layer with no content fails
+    /// with `AVKitErrorDomain -1001` rather than waiting.
+    public private(set) var hasDrawnContent = false
+    /// Fired on the main thread when the first frame reaches the layer, and again after a
+    /// ``clear()``. Unlike ``onAspectChange`` it does not wait for the aspect to *change*, so it
+    /// still fires for a stream whose shape matches the one before it.
+    public var onFirstFrame: (() -> Void)?
     private var lastReportedSize: CGSize = .zero
     
     private let displayLayer = AVSampleBufferDisplayLayer()
@@ -61,12 +70,17 @@ public final class SampleBufferVideoView: UIView {
     
     /// Drops what is on screen, e.g. when the member being shown changes.
     public func clear() {
+        hasDrawnContent = false
         renderer.clear()
     }
     
     // MARK: - Private
     
     private func frameShown(rotation: MatrixRtcVideoRotation, isMirrored: Bool, aspect: CGFloat) {
+        if !hasDrawnContent {
+            hasDrawnContent = true
+            onFirstFrame?()
+        }
         if orientation != (rotation, isMirrored) {
             orientation = (rotation, isMirrored)
             applyTransform()

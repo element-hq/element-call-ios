@@ -42,6 +42,9 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     /// Set by the controller that owns this; nil until then, which only costs a few log lines.
     var logger: (any ElementCallLogging)?
     
+    /// Mirrors ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``, set at bind.
+    var automaticStartIncludesAudioCalls = false
+    
     var isActive: Bool {
         pictureInPictureController?.isPictureInPictureActive ?? false
     }
@@ -64,6 +67,8 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     private var attached: (memberID: String, kind: MatrixRtcStreamKind)?
     private var observationTask: Task<Void, Never>?
     private var automaticStartTask: Task<Void, Never>?
+    /// Whether a failed start is worth one more attempt. See ``start()``.
+    private var pendingStartRetry = false
     private weak var call: MatrixRtcCall?
     private var spotlightProvider: (() -> String?)?
     
@@ -112,8 +117,13 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         observeAutomaticStart()
     }
     
-    /// Leaving the app during a full-screen video call shrinks it to the window, like FaceTime (subject
-    /// to the system's "Start PiP Automatically" setting); an audio-only call keeps the bar instead.
+    /// Leaving the app during a full-screen video call shrinks it to the window, like FaceTime
+    /// (subject to the system's "Start PiP Automatically" setting).
+    ///
+    /// An audio call only follows if the host asked for it through
+    /// ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``: minimizing on
+    /// purpose is one thing, but a window appearing on every app switch to show a still avatar is
+    /// another, and CallKit's island already covers that case.
     private func observeAutomaticStart() {
         automaticStartTask?.cancel()
         automaticStartTask = Task { [weak self] in
@@ -121,7 +131,9 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
                 guard let self else { return }
                 await withCheckedContinuation { continuation in
                     withObservationTracking {
-                        self.pictureInPictureController?.canStartPictureInPictureAutomaticallyFromInline = self.call?.hasVideo ?? false
+                        let hasVideo = self.call?.hasVideo ?? false
+                        let audioQualifies = self.automaticStartIncludesAudioCalls && self.call != nil
+                        self.pictureInPictureController?.canStartPictureInPictureAutomaticallyFromInline = hasVideo || audioQualifies
                     } onChange: {
                         continuation.resume()
                     }
@@ -133,12 +145,31 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     func start() {
         guard let pictureInPictureController, !pictureInPictureController.isPictureInPictureActive else { return }
         stopReason = nil
-        // The size is only honoured when set before the window appears, and the first frame arrives after.
-        if let call, let candidate = call.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?()),
-           let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
-            applyPreferredSize(aspect: aspect)
-        }
+        let candidate = applyPreferredSizeForCurrentSource()
+        // A video window opened before the layer has any content fails with AVKitErrorDomain -1001.
+        // The placeholder is a hosted SwiftUI view and is ready immediately, so only video waits.
+        pendingStartRetry = candidate != nil
         pictureInPictureController.startPictureInPicture()
+    }
+    
+    /// Sizes the window for whatever it is about to show, and says what that was.
+    ///
+    /// Called from ``start()`` and again from `willStart`, because the system opens the window by
+    /// itself when `canStartPictureInPictureAutomaticallyFromInline` is set and that path never
+    /// goes through `start()`. Both are before the window appears, which is the only time the size
+    /// is honoured.
+    @discardableResult
+    private func applyPreferredSizeForCurrentSource() -> (memberID: String, kind: MatrixRtcStreamKind)? {
+        let candidate = call?.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?())
+        if let call, let candidate, let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
+            applyPreferredSize(aspect: aspect)
+        } else if candidate == nil {
+            // Nobody has video, so the window will show the avatar placeholder. Without this it
+            // would inherit whatever aspect the last video call left behind — a 9:16 slot with a
+            // circle marooned in the middle of it.
+            applyPreferredSize(aspect: 1)
+        }
+        return candidate
     }
     
     private func applyPreferredSize(aspect: CGFloat) {
@@ -160,6 +191,9 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     func unbind() {
         stop()
         detach()
+        // A retry armed against the old call must not open a window for the next one.
+        videoView.onFirstFrame = nil
+        pendingStartRetry = false
         observationTask?.cancel()
         observationTask = nil
         automaticStartTask?.cancel()
@@ -174,6 +208,9 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         Task { @MainActor in
             // Attach before the screen collapses so the spotlight stream never goes idle in between.
             self.stopReason = nil
+            // The system starts the window by itself when backgrounding a call, which never goes
+            // through `start()`; without this such a window keeps whatever size was last set.
+            self.applyPreferredSizeForCurrentSource()
             self.observeVideoSource()
         }
     }
@@ -222,12 +259,51 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     nonisolated func pictureInPictureController(_ pictureInPictureController: AVPictureInPictureController, failedToStartPictureInPictureWithError error: Error) {
         Task { @MainActor in
             logger?.log(.warning, "picture in picture failed to start: \(error)")
+            
+            // Minimizing a video call within a few seconds of connecting fails with
+            // AVKitErrorDomain -1001: the layer has no content yet. The same call minimizes
+            // cleanly later, so the fix is to wait for a frame rather than to try again straight
+            // away, which would fail for exactly the same reason. Only video needs this — the
+            // placeholder is a hosted SwiftUI view and is ready the moment it is asked for.
+            //
+            // Decided before tearing anything down, because waiting for a frame means keeping the
+            // stream attached and the source observation running.
+            if self.pendingStartRetry {
+                self.pendingStartRetry = false
+                if self.retryStartOnFirstFrame() {
+                    return
+                }
+            }
+            
+            // `willStart` has already started this; only `didStop` used to cancel it, so a failed
+            // start left an observation loop running for the rest of the call.
+            self.observationTask?.cancel()
+            self.observationTask = nil
             self.detach()
             self.actionsSubject.send(.failed)
         }
     }
     
     // MARK: - Private
+    
+    /// Arms a single retry for when the attached stream first draws.
+    ///
+    /// Returns false when there is nothing to wait for — no stream attached, or one that has
+    /// already drawn, in which case -1001 was not about missing content and retrying would only
+    /// fail again.
+    private func retryStartOnFirstFrame() -> Bool {
+        guard attached != nil, !videoView.hasDrawnContent else { return false }
+        logger?.log(.info, "picture in picture will retry once the video layer has content")
+        videoView.onFirstFrame = { [weak self] in
+            guard let self else { return }
+            videoView.onFirstFrame = nil
+            // Only if nobody restored the call in the meantime.
+            guard !isActive, isBound else { return }
+            logger?.log(.info, "retrying picture in picture")
+            start()
+        }
+        return true
+    }
     
     /// Follows the call's video state while the window is up, switching what it shows.
     private func observeVideoSource() {
@@ -251,7 +327,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         let candidate = call.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?())
         if candidate == nil {
             // Nobody has video: show who we are in the call with instead of a black window.
-            let shown = spotlightProvider?() ?? call.participants.first { !$0.isLocal }?.memberID
+            let shown = call.pictureInPicturePlaceholderMemberID(spotlightMemberID: spotlightProvider?())
             placeholderHost.rootView = placeholderProvider?(shown) ?? AnyView(Color.black)
             placeholderHost.view.isHidden = false
         } else {

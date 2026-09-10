@@ -11,7 +11,16 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**Minimizing an audio call now opens a Picture in Picture window** showing the avatar placeholder,
+where it previously reported `pictureInPictureUnavailable`. A host that puts up its own minimized
+bar will stop seeing that action for audio calls — the bar is still used when the window genuinely
+cannot open: the host disabled it, the device does not support it, or a screen share is running.
+Nothing to change unless the bar was relied on as the audio-call presentation.
+
+`ElementCallOptions` gains `isAutomaticPictureInPictureForAudioCallsEnabled`, which governs whether
+*backgrounding* the app during an audio call opens the window by itself. It has a default of
+`false`, so existing conformances keep compiling and behaviour is unchanged; set it to `true` to opt
+in. Minimizing on purpose is not affected by it.
 
 ## 0.1.0-rc.1 - 2026-09-09
 

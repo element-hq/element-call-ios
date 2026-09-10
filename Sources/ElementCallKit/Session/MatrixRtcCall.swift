@@ -243,6 +243,23 @@ public final class MatrixRtcCall {
         return nil
     }
     
+    /// Who the single-tile surface should *name* when nobody has video and it falls back to an
+    /// avatar. Separate from ``pictureInPictureCandidate(spotlightMemberID:)``, which answers what
+    /// stream to show and returns nil in exactly that case.
+    public func pictureInPicturePlaceholderMemberID(spotlightMemberID: String?) -> String? {
+        Self.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: spotlightMemberID)
+    }
+    
+    public nonisolated static func pictureInPicturePlaceholderMemberID(participants: [MatrixRtcParticipant],
+                                                                       spotlightMemberID: String?) -> String? {
+        // The spotlight can be us — it is only excluded when picking a stream — and showing the
+        // user their own avatar in the window tells them nothing about who they are talking to.
+        if let spotlightMemberID, participants.contains(where: { $0.memberID == spotlightMemberID && !$0.isLocal }) {
+            return spotlightMemberID
+        }
+        return participants.first { !$0.isLocal }?.memberID
+    }
+    
     private func handleCameraInterruption(_ interrupted: Bool) async {
         guard isCameraEnabled, isCameraInterrupted != interrupted else { return }
         isCameraInterrupted = interrupted
