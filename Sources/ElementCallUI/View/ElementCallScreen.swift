@@ -47,7 +47,7 @@ public struct ElementCallScreen: View {
 /// subscribe to, and because a half turn from portrait to upside down changes it while changing no
 /// size a layout could have noticed.
 private struct InterfaceOrientationReporter: ViewModifier {
-    let callProvider: () -> MatrixRtcCall?
+    let callProvider: () -> MatrixRTCCall?
     
     func body(content: Content) -> some View {
         content
@@ -72,7 +72,7 @@ private struct InterfaceOrientationReporter: ViewModifier {
 }
 
 private extension View {
-    func reportInterfaceOrientation(_ callProvider: @escaping () -> MatrixRtcCall?) -> some View {
+    func reportInterfaceOrientation(_ callProvider: @escaping () -> MatrixRTCCall?) -> some View {
         modifier(InterfaceOrientationReporter(callProvider: callProvider))
     }
 }

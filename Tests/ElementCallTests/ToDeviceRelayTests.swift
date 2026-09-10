@@ -15,23 +15,23 @@ import Testing
 /// The parts of the transport adapter that survive the widget-driver stopgap: how bridge failures are
 /// classified for the core, and the session-long to-device relay.
 @Suite(.timeLimit(.minutes(1)))
-struct MatrixRtcTransportAdapterTests {
+struct MatrixRTCTransportAdapterTests {
     @Test
     func permanentRefusalsRetireTheFeature() {
-        #expect(MatrixRtcRoomBridgeError.matrixAPI(errcode: "M_UNRECOGNIZED", httpStatus: 404, message: "Unrecognized request").transportError
+        #expect(MatrixRTCRoomBridgeError.matrixAPI(errcode: "M_UNRECOGNIZED", httpStatus: 404, message: "Unrecognized request").transportError
             == .notSupported("Unrecognized request"))
-        #expect(MatrixRtcRoomBridgeError.matrixAPI(errcode: "M_FORBIDDEN", httpStatus: 403, message: "Sending delayed events has been disallowed").transportError
+        #expect(MatrixRTCRoomBridgeError.matrixAPI(errcode: "M_FORBIDDEN", httpStatus: 403, message: "Sending delayed events has been disallowed").transportError
             == .notSupported("Sending delayed events has been disallowed"))
     }
     
     @Test
     func everythingElseIsRetried() {
-        #expect(MatrixRtcRoomBridgeError.matrixAPI(errcode: "M_FORBIDDEN", httpStatus: 403, message: "You don't have permission").transportError
+        #expect(MatrixRTCRoomBridgeError.matrixAPI(errcode: "M_FORBIDDEN", httpStatus: 403, message: "You don't have permission").transportError
             == .failed("You don't have permission"))
-        #expect(MatrixRtcRoomBridgeError.matrixAPI(errcode: "M_LIMIT_EXCEEDED", httpStatus: 429, message: "Too many requests").transportError
+        #expect(MatrixRTCRoomBridgeError.matrixAPI(errcode: "M_LIMIT_EXCEEDED", httpStatus: 429, message: "Too many requests").transportError
             == .failed("Too many requests"))
-        #expect(MatrixRtcRoomBridgeError.timedOut.transportError == .failed("timedOut"))
-        #expect(MatrixRtcRoomBridgeError.notRunning.transportError == .failed("notRunning"))
+        #expect(MatrixRTCRoomBridgeError.timedOut.transportError == .failed("timedOut"))
+        #expect(MatrixRTCRoomBridgeError.notRunning.transportError == .failed("notRunning"))
     }
     
     @Test
@@ -52,7 +52,7 @@ struct MatrixRtcTransportAdapterTests {
         #expect(try #require(await keys.next()).attestedSenderID == "@d:example.org")
     }
     
-    private func message(type: String, sender: String) -> MatrixRtcToDeviceMessage {
-        MatrixRtcToDeviceMessage(eventType: type, attestedSenderID: sender, senderDeviceID: "DEV", isSenderCrossSigned: true, wasEncrypted: true, contentJSON: "{}")
+    private func message(type: String, sender: String) -> MatrixRTCToDeviceMessage {
+        MatrixRTCToDeviceMessage(eventType: type, attestedSenderID: sender, senderDeviceID: "DEV", isSenderCrossSigned: true, wasEncrypted: true, contentJSON: "{}")
     }
 }

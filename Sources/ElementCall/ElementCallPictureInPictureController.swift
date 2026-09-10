@@ -64,12 +64,12 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     var placeholderProvider: ((String?) -> AnyView)?
     private var pictureInPictureController: AVPictureInPictureController?
     private var stopReason: StopReason?
-    private var attached: (memberID: String, kind: MatrixRtcStreamKind)?
+    private var attached: (memberID: String, kind: MatrixRTCStreamKind)?
     private var observationTask: Task<Void, Never>?
     private var automaticStartTask: Task<Void, Never>?
     /// Whether a failed start is worth one more attempt. See ``start()``.
     private var pendingStartRetry = false
-    private weak var call: MatrixRtcCall?
+    private weak var call: MatrixRTCCall?
     private var spotlightProvider: (() -> String?)?
     
     override init() {
@@ -105,7 +105,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     }
     
     /// Binds to a call; the spotlight provider is read whenever the call's video state changes.
-    func bind(call: MatrixRtcCall, spotlightProvider: @escaping () -> String?) {
+    func bind(call: MatrixRTCCall, spotlightProvider: @escaping () -> String?) {
         self.call = call
         self.spotlightProvider = spotlightProvider
         if pictureInPictureController == nil, AVPictureInPictureController.isPictureInPictureSupported() {
@@ -159,7 +159,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     /// goes through `start()`. Both are before the window appears, which is the only time the size
     /// is honoured.
     @discardableResult
-    private func applyPreferredSizeForCurrentSource() -> (memberID: String, kind: MatrixRtcStreamKind)? {
+    private func applyPreferredSizeForCurrentSource() -> (memberID: String, kind: MatrixRTCStreamKind)? {
         let candidate = call?.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?())
         if let call, let candidate, let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
             applyPreferredSize(aspect: aspect)

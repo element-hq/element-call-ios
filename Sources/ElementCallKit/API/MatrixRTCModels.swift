@@ -7,14 +7,14 @@
 
 import Foundation
 
-public nonisolated enum MatrixRtcConstants {
+public nonisolated enum MatrixRTCConstants {
     /// The application every room call uses.
     public static let callApplication = "m.call"
     /// The slot Element Call opens for a room-wide call. MSC4143 requires the `{application}#` prefix.
     public static let roomCallSlotID = "m.call#ROOM"
 }
 
-public nonisolated enum MatrixRtcEventTypes {
+public nonisolated enum MatrixRTCEventTypes {
     /// MSC4143 membership, spec and unstable spellings.
     public static let member = ["m.rtc.member", "org.matrix.msc4143.rtc.member"]
     /// The pre-MSC4354 Element Call membership room state.
@@ -25,12 +25,12 @@ public nonisolated enum MatrixRtcEventTypes {
     public static let legacyEncryptionKey = "io.element.call.encryption_keys"
 }
 
-public nonisolated enum MatrixRtcStreamKind: Sendable, Hashable {
+public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
     case microphone, camera, screenShare, screenShareAudio, data
 }
 
 /// How the membership is published, fixed for the lifetime of a session.
-public nonisolated enum MatrixRtcElementCallCompat: String, Sendable, CaseIterable, Codable {
+public nonisolated enum MatrixRTCElementCallCompat: String, Sendable, CaseIterable, Codable {
     /// MSC4143 as it stands.
     case off
     /// Membership as an MSC4354 sticky event with legacy fields alongside.
@@ -39,29 +39,29 @@ public nonisolated enum MatrixRtcElementCallCompat: String, Sendable, CaseIterab
     case stateEvents
 }
 
-public nonisolated enum MatrixRtcTransport: Sendable, Hashable {
+public nonisolated enum MatrixRTCTransport: Sendable, Hashable {
     case liveKit(serviceURL: URL)
     case unsupported(type: String)
 }
 
-public nonisolated enum MatrixRtcCallIntent: String, Sendable {
+public nonisolated enum MatrixRTCCallIntent: String, Sendable {
     case audio, video
 }
 
 /// MSC4075 notification sent with the membership when *starting* a call.
-public nonisolated struct MatrixRtcNotify: Sendable, Hashable {
+public nonisolated struct MatrixRTCNotify: Sendable, Hashable {
     public enum Kind: Sendable { case ring, notification }
     
     public let kind: Kind
-    public let intent: MatrixRtcCallIntent
+    public let intent: MatrixRTCCallIntent
     
-    public init(kind: Kind, intent: MatrixRtcCallIntent) {
+    public init(kind: Kind, intent: MatrixRTCCallIntent) {
         self.kind = kind
         self.intent = intent
     }
 }
 
-public nonisolated struct MatrixRtcLeaveReason: Sendable, Hashable {
+public nonisolated struct MatrixRTCLeaveReason: Sendable, Hashable {
     public let code: String
     public let reason: String?
     
@@ -71,7 +71,7 @@ public nonisolated struct MatrixRtcLeaveReason: Sendable, Hashable {
     }
 }
 
-public nonisolated struct MatrixRtcMembership: Sendable, Hashable, Identifiable {
+public nonisolated struct MatrixRTCMembership: Sendable, Hashable, Identifiable {
     public let memberID: String
     public let userID: String
     public let deviceID: String?
@@ -82,27 +82,27 @@ public nonisolated struct MatrixRtcMembership: Sendable, Hashable, Identifiable 
     }
 }
 
-public nonisolated struct MatrixRtcStreamState: Sendable, Hashable {
-    public let kind: MatrixRtcStreamKind
+public nonisolated struct MatrixRTCStreamState: Sendable, Hashable {
+    public let kind: MatrixRTCStreamKind
     public let isMuted: Bool
     
-    public init(kind: MatrixRtcStreamKind, isMuted: Bool) {
+    public init(kind: MatrixRTCStreamKind, isMuted: Bool) {
         self.kind = kind
         self.isMuted = isMuted
     }
 }
 
 /// The transport's view of a member; differs legitimately from the membership projection.
-public nonisolated struct MatrixRtcParticipant: Sendable, Hashable, Identifiable {
+public nonisolated struct MatrixRTCParticipant: Sendable, Hashable, Identifiable {
     public let memberID: String
     public let userID: String
     public let deviceID: String?
     public let isLocal: Bool
     public let isReachable: Bool
-    public let streams: [MatrixRtcStreamState]
+    public let streams: [MatrixRTCStreamState]
     public let handRaisedAt: Date?
     
-    public init(memberID: String, userID: String, deviceID: String?, isLocal: Bool, isReachable: Bool, streams: [MatrixRtcStreamState], handRaisedAt: Date?) {
+    public init(memberID: String, userID: String, deviceID: String?, isLocal: Bool, isReachable: Bool, streams: [MatrixRTCStreamState], handRaisedAt: Date?) {
         self.memberID = memberID
         self.userID = userID
         self.deviceID = deviceID
@@ -116,49 +116,49 @@ public nonisolated struct MatrixRtcParticipant: Sendable, Hashable, Identifiable
         memberID
     }
     
-    public func stream(_ kind: MatrixRtcStreamKind) -> MatrixRtcStreamState? {
+    public func stream(_ kind: MatrixRTCStreamKind) -> MatrixRTCStreamState? {
         streams.first { $0.kind == kind }
     }
     
-    public func isPublishing(_ kind: MatrixRtcStreamKind) -> Bool {
+    public func isPublishing(_ kind: MatrixRTCStreamKind) -> Bool {
         stream(kind).map { !$0.isMuted } ?? false
     }
 }
 
-public nonisolated struct MatrixRtcSpeakingMember: Sendable, Hashable {
+public nonisolated struct MatrixRTCSpeakingMember: Sendable, Hashable {
     public let memberID: String
     public let level: Float
 }
 
-public nonisolated enum MatrixRtcFrameEncryptionState: Sendable, Hashable {
+public nonisolated enum MatrixRTCFrameEncryptionState: Sendable, Hashable {
     case ok, missingKey, decryptionFailed, encryptionFailed, internalError
 }
 
-public nonisolated enum MatrixRtcEndReason: Sendable, Hashable {
+public nonisolated enum MatrixRTCEndReason: Sendable, Hashable {
     case left
     case connectionClosed(message: String)
 }
 
-public nonisolated enum MatrixRtcCallEvent: Sendable, Hashable {
+public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
     case participantJoined(memberID: String, userID: String)
     case participantLeft(memberID: String)
-    case streamStarted(memberID: String, kind: MatrixRtcStreamKind)
-    case streamStopped(memberID: String, kind: MatrixRtcStreamKind)
-    case streamMuted(memberID: String, kind: MatrixRtcStreamKind)
-    case streamUnmuted(memberID: String, kind: MatrixRtcStreamKind)
-    case activeSpeakers([MatrixRtcSpeakingMember])
+    case streamStarted(memberID: String, kind: MatrixRTCStreamKind)
+    case streamStopped(memberID: String, kind: MatrixRTCStreamKind)
+    case streamMuted(memberID: String, kind: MatrixRTCStreamKind)
+    case streamUnmuted(memberID: String, kind: MatrixRTCStreamKind)
+    case activeSpeakers([MatrixRTCSpeakingMember])
     case keyImported(memberID: String, keyIndex: UInt8)
     case keyDiscarded(memberID: String, reason: String)
-    case frameEncryptionState(memberID: String, state: MatrixRtcFrameEncryptionState)
+    case frameEncryptionState(memberID: String, state: MatrixRTCFrameEncryptionState)
     case handRaised(memberID: String, raisedAt: Date)
     case handLowered(memberID: String)
     case reaction(memberID: String, emoji: String, name: String)
     case mediaConnectionDegraded(Bool)
-    case ended(MatrixRtcEndReason)
+    case ended(MatrixRTCEndReason)
 }
 
 /// Cumulative receive counters for one stream; sample twice and diff.
-public nonisolated struct MatrixRtcReceiveStats: Sendable, Hashable {
+public nonisolated struct MatrixRTCReceiveStats: Sendable, Hashable {
     public let packetsReceived: UInt64
     public let packetsLost: Int64
     public let bytesReceived: UInt64
@@ -174,7 +174,7 @@ public nonisolated struct MatrixRtcReceiveStats: Sendable, Hashable {
     }
 }
 
-public nonisolated struct MatrixRtcAudioLevel: Sendable, Hashable {
+public nonisolated struct MatrixRTCAudioLevel: Sendable, Hashable {
     /// RMS of the decoded (or captured) PCM, 0...1.
     public let level: Float
     public let frameCount: UInt64
@@ -183,7 +183,7 @@ public nonisolated struct MatrixRtcAudioLevel: Sendable, Hashable {
 }
 
 /// What is arriving (or being captured) on a video stream: upright size and measured frame rate.
-public nonisolated struct MatrixRtcVideoInfo: Sendable, Hashable {
+public nonisolated struct MatrixRTCVideoInfo: Sendable, Hashable {
     public let width: Int
     public let height: Int
     public let framesPerSecond: Int
@@ -200,7 +200,7 @@ public nonisolated struct MatrixRtcVideoInfo: Sendable, Hashable {
 }
 
 /// What a tile actually draws, so the SFU sends only the layer that fits.
-public nonisolated struct MatrixRtcVideoConstraints: Sendable, Hashable {
+public nonisolated struct MatrixRTCVideoConstraints: Sendable, Hashable {
     /// Whether we are subscribed at all. The core draws a firm line between the two ways of not
     /// wanting a picture, and so do we: `isVisible == false` pauses a stream that is about to come
     /// back, and resumes instantly; `isEnabled == false` releases it as fully as the transport
@@ -219,7 +219,7 @@ public nonisolated struct MatrixRtcVideoConstraints: Sendable, Hashable {
     }
 }
 
-public nonisolated struct MatrixRtcOpenIDToken: Sendable {
+public nonisolated struct MatrixRTCOpenIDToken: Sendable {
     public let accessToken: String
     public let tokenType: String
     public let matrixServerName: String
@@ -233,7 +233,7 @@ public nonisolated struct MatrixRtcOpenIDToken: Sendable {
     }
 }
 
-public nonisolated enum MatrixRtcError: Error, Sendable {
+public nonisolated enum MatrixRTCError: Error, Sendable {
     case notStarted
     case alreadyJoined(roomID: String)
     case notJoined

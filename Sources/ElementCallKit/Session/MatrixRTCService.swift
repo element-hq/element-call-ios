@@ -14,12 +14,12 @@ import Synchronization
 ///
 /// Never rebuilt: it accumulates memberships and keys across calls.
 @MainActor
-public final class MatrixRtcService {
+public final class MatrixRTCService {
     private let transport: ElementCallMatrixTransport
     private var manager: RtcSessionManagerHandle?
     private var keyFeeder: SessionKeyFeeder?
     private var startTask: Task<RtcSessionManagerHandle, Never>?
-    private var sessions = [String: MatrixRtcSession]()
+    private var sessions = [String: MatrixRTCSession]()
     
     public init(transport: ElementCallMatrixTransport) {
         self.transport = transport
@@ -40,9 +40,9 @@ public final class MatrixRtcService {
             // Logging must be installed by the host before this point; the core is silent otherwise.
             let manager = RtcSessionManagerHandle()
             do {
-                try await manager.setCommandSender(callback: MatrixRtcCommandSender(transport: transport))
+                try await manager.setCommandSender(callback: MatrixRTCCommandSender(transport: transport))
             } catch {
-                MatrixRtcLog.error("Failed setting the command sender: \(error)")
+                MatrixRTCLog.error("Failed setting the command sender: \(error)")
             }
             return manager
         }
@@ -53,7 +53,7 @@ public final class MatrixRtcService {
         let keyFeeder = SessionKeyFeeder(manager: manager, transport: transport)
         keyFeeder.start()
         self.keyFeeder = keyFeeder
-        MatrixRtcLog.info("Core started for \(transport.userID)")
+        MatrixRTCLog.info("Core started for \(transport.userID)")
         return manager
     }
     
@@ -64,29 +64,29 @@ public final class MatrixRtcService {
     
     /// Joins the slot: feeds room members and encryption first, joins, then subscribes and feeds memberships.
     public func joinSession(roomID: String,
-                            slotID: String = MatrixRtcConstants.roomCallSlotID,
-                            application: String = MatrixRtcConstants.callApplication,
-                            transport liveKit: MatrixRtcTransport,
-                            compat: MatrixRtcElementCallCompat,
-                            notify: MatrixRtcNotify?) async throws -> MatrixRtcSession {
+                            slotID: String = MatrixRTCConstants.roomCallSlotID,
+                            application: String = MatrixRTCConstants.callApplication,
+                            transport liveKit: MatrixRTCTransport,
+                            compat: MatrixRTCElementCallCompat,
+                            notify: MatrixRTCNotify?) async throws -> MatrixRTCSession {
         if let existing = sessions[roomID] {
-            throw MatrixRtcError.alreadyJoined(roomID: existing.roomID)
+            throw MatrixRTCError.alreadyJoined(roomID: existing.roomID)
         }
         let manager = await start()
         
         // Nothing enforces this on the way in, and a malformed slot id looks healthy from our side
         // while a conformant peer refuses the membership on sight.
         if !slotID.hasPrefix("\(application)#") {
-            MatrixRtcLog.warning("Slot id '\(slotID)' does not start with '\(application)#'; conformant peers will refuse the membership")
+            MatrixRTCLog.warning("Slot id '\(slotID)' does not start with '\(application)#'; conformant peers will refuse the membership")
         }
         
-        MatrixRtcLog.info("Joining \(roomID)/\(slotID) with Element Call compatibility \(compat)")
+        MatrixRTCLog.info("Joining \(roomID)/\(slotID) with Element Call compatibility \(compat)")
         
         do {
             try await transport.willJoinRoom(roomID: roomID)
         } catch {
-            MatrixRtcLog.error("The transport could not prepare \(roomID): \(error)")
-            throw MatrixRtcError.transport("\(error)")
+            MatrixRTCLog.error("The transport could not prepare \(roomID): \(error)")
+            throw MatrixRTCError.transport("\(error)")
         }
         
         // Weak box so the feeder can report counts before the session object exists.
@@ -117,12 +117,12 @@ public final class MatrixRtcService {
         } catch {
             feeder.stop()
             await transport.didLeaveRoom(roomID: roomID)
-            MatrixRtcLog.error("Join failed for \(roomID)/\(slotID): \(error)")
-            throw MatrixRtcError.ffi("\(error)")
+            MatrixRTCLog.error("Join failed for \(roomID)/\(slotID): \(error)")
+            throw MatrixRTCError.ffi("\(error)")
         }
-        MatrixRtcLog.info("Joined \(roomID)/\(slotID) as \(memberID)")
+        MatrixRTCLog.info("Joined \(roomID)/\(slotID) as \(memberID)")
         
-        let session = MatrixRtcSession(roomID: roomID,
+        let session = MatrixRTCSession(roomID: roomID,
                                        slotID: slotID,
                                        localMemberID: memberID,
                                        manager: manager,
@@ -134,7 +134,7 @@ public final class MatrixRtcService {
         return session
     }
     
-    /// Forgets a session once it has left; call after `MatrixRtcSession.leave()`.
+    /// Forgets a session once it has left; call after `MatrixRTCSession.leave()`.
     public func release(roomID: String) async {
         sessions[roomID] = nil
         await transport.didLeaveRoom(roomID: roomID)
@@ -148,10 +148,10 @@ public final class MatrixRtcService {
 
 /// Bridges the feeder's background count reports onto the main-actor session.
 private final nonisolated class MemberCountSink: Sendable {
-    private let session: Mutex<MatrixRtcSession?> = .init(nil)
+    private let session: Mutex<MatrixRTCSession?> = .init(nil)
     private let pending: Mutex<Int?> = .init(nil)
     
-    func attach(_ session: MatrixRtcSession) {
+    func attach(_ session: MatrixRTCSession) {
         self.session.withLock { $0 = session }
         if let count = pending.withLock({ $0 }) {
             report(count)

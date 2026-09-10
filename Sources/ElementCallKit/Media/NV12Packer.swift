@@ -17,7 +17,7 @@ final nonisolated class NV12Packer: @unchecked Sendable {
     private var poolSize = (0, 0)
     private var formatDescription: CMVideoFormatDescription?
     
-    func makeSampleBuffer(from frame: MatrixRtcVideoFrame) -> CMSampleBuffer? {
+    func makeSampleBuffer(from frame: MatrixRTCVideoFrame) -> CMSampleBuffer? {
         guard let pixelBuffer = makePixelBuffer(width: frame.width, height: frame.height) else { return nil }
         
         CVPixelBufferLockBaseAddress(pixelBuffer, [])

@@ -34,7 +34,7 @@ public final class SampleBufferVideoView: UIView {
     
     private let displayLayer = AVSampleBufferDisplayLayer()
     private let renderer: SampleBufferRenderer
-    private var orientation: (rotation: MatrixRtcVideoRotation, isMirrored: Bool) = (.deg0, false)
+    private var orientation: (rotation: MatrixRTCVideoRotation, isMirrored: Bool) = (.deg0, false)
     private var lastAspect: CGFloat = 0
     
     override public init(frame: CGRect) {
@@ -76,7 +76,7 @@ public final class SampleBufferVideoView: UIView {
     
     // MARK: - Private
     
-    private func frameShown(rotation: MatrixRtcVideoRotation, isMirrored: Bool, aspect: CGFloat) {
+    private func frameShown(rotation: MatrixRTCVideoRotation, isMirrored: Bool, aspect: CGFloat) {
         if !hasDrawnContent {
             hasDrawnContent = true
             onFirstFrame?()
@@ -114,7 +114,7 @@ public final class SampleBufferVideoView: UIView {
 /// to call from any thread; everything else about the layer stays on the view.
 private final nonisolated class SampleBufferRenderer: @unchecked Sendable {
     let slot = VideoFrameSlot()
-    var onFrameShown: (@Sendable (MatrixRtcVideoRotation, Bool, CGFloat) -> Void)?
+    var onFrameShown: (@Sendable (MatrixRTCVideoRotation, Bool, CGFloat) -> Void)?
     
     private let layer: AVSampleBufferDisplayLayer
     private let packer = NV12Packer()
@@ -138,7 +138,7 @@ private final nonisolated class SampleBufferRenderer: @unchecked Sendable {
         guard let frame = slot.take() else { return }
         
         if layer.status == .failed {
-            MatrixRtcLog.warning("Sample buffer layer failed: \(layer.error.map { "\($0)" } ?? "unknown"), flushing")
+            MatrixRTCLog.warning("Sample buffer layer failed: \(layer.error.map { "\($0)" } ?? "unknown"), flushing")
             layer.flush()
         }
         // Latest frame wins: a busy layer simply skips this one.

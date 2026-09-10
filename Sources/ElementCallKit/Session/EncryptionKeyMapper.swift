@@ -11,14 +11,14 @@ import MatrixRtc
 /// Turns an MSC4143 media-key to-device message into the record the core expects.
 nonisolated enum EncryptionKeyMapper {
     /// - Returns: nil when the message is untrusted or unusable.
-    static func map(_ message: MatrixRtcToDeviceMessage) -> FfiReceivedEncryptionKey? {
+    static func map(_ message: MatrixRTCToDeviceMessage) -> FfiReceivedEncryptionKey? {
         // A cleartext to-device message has no attested sender: anyone could inject a media key.
         guard message.wasEncrypted else {
-            MatrixRtcLog.warning("Dropping a cleartext encryption key")
+            MatrixRTCLog.warning("Dropping a cleartext encryption key")
             return nil
         }
         guard let senderDeviceID = message.senderDeviceID else {
-            MatrixRtcLog.warning("Dropping an encryption key with no sender device")
+            MatrixRTCLog.warning("Dropping an encryption key with no sender device")
             return nil
         }
         guard let data = message.contentJSON.data(using: .utf8),
@@ -29,7 +29,7 @@ nonisolated enum EncryptionKeyMapper {
               let mediaKey = content["media_key"] as? [String: Any],
               let keyB64 = mediaKey["key"] as? String,
               let keyIndex = mediaKey["index"] as? Int, let index = UInt8(exactly: keyIndex) else {
-            MatrixRtcLog.warning("Cannot parse encryption key content")
+            MatrixRTCLog.warning("Cannot parse encryption key content")
             return nil
         }
         

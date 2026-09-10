@@ -57,8 +57,8 @@ public final class ElementCallController {
     /// The last failure worth telling the user about; the screen shows it once and clears it.
     public var errorMessage: String?
     
-    public private(set) var session: MatrixRtcSession?
-    public private(set) var call: MatrixRtcCall?
+    public private(set) var session: MatrixRTCSession?
+    public private(set) var call: MatrixRTCCall?
     
     /// The system window for a minimized call, audio ones included — an audio call shows the
     /// avatar placeholder. Internal because the host drives it through ``requestMinimize()`` and
@@ -92,7 +92,7 @@ public final class ElementCallController {
     public let style: ElementCallStyle
     public let options: any ElementCallOptions
     
-    private let rtcService: MatrixRtcService
+    private let rtcService: MatrixRTCService
     private let transport: any ElementCallMatrixTransport
     private let system: any ElementCallSystemProviding
     private let logger: (any ElementCallLogging)?
@@ -101,7 +101,7 @@ public final class ElementCallController {
     private var routeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     
-    init(rtcService: MatrixRtcService,
+    init(rtcService: MatrixRTCService,
          transport: any ElementCallMatrixTransport,
          system: any ElementCallSystemProviding,
          options: any ElementCallOptions,
@@ -286,7 +286,7 @@ public final class ElementCallController {
         }
     }
     
-    private func bindPictureInPictureIfEnabled(_ call: MatrixRtcCall) {
+    private func bindPictureInPictureIfEnabled(_ call: MatrixRTCCall) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
         pictureInPicture.bind(call: call) { [weak self] in self?.spotlightMemberID }
@@ -344,7 +344,7 @@ public final class ElementCallController {
         guard let (session, transport) = await joinSession(for: callData, room: room) else { return }
         
         connection = .connectingMedia
-        let call: MatrixRtcCall
+        let call: MatrixRTCCall
         do {
             call = try await session.connectMedia(transport: transport)
         } catch {
@@ -365,7 +365,7 @@ public final class ElementCallController {
     
     /// Claims the system call, finds a transport and joins the session, which puts our membership out.
     private func joinSession(for callData: ElementCallData,
-                             room: any ElementCallRoomContext) async -> (MatrixRtcSession, MatrixRtcTransport)? {
+                             room: any ElementCallRoomContext) async -> (MatrixRTCSession, MatrixRTCTransport)? {
         // Claim the system call *before* our membership goes out: the incoming-call watcher reads
         // our own membership as "answered elsewhere" and would end the ringing call under us.
         // For an outgoing call this requests the start action; the system activates the audio session
@@ -377,7 +377,7 @@ public final class ElementCallController {
         }
         await system.startCall(roomID: room.roomID, displayName: room.displayName, isVideo: !callData.isAudioCall)
         
-        let transports: [MatrixRtcTransport]
+        let transports: [MatrixRTCTransport]
         do {
             transports = try await transport.rtcTransports(roomID: room.roomID)
         } catch {
@@ -400,7 +400,7 @@ public final class ElementCallController {
         let compat = options.elementCallCompatibility
         log(.info, "joining with Element Call compatibility \(compat)")
         
-        let session: MatrixRtcSession
+        let session: MatrixRTCSession
         do {
             session = try await rtcService.joinSession(roomID: room.roomID,
                                                        transport: mediaTransport,
@@ -419,8 +419,8 @@ public final class ElementCallController {
     }
     
     /// Microphone, then camera for a video call. The call counts as connected once the microphone is up.
-    private func publishMedia(on call: MatrixRtcCall,
-                              session: MatrixRtcSession,
+    private func publishMedia(on call: MatrixRTCCall,
+                              session: MatrixRTCSession,
                               callData: ElementCallData,
                               room: any ElementCallRoomContext) async {
         #if targetEnvironment(simulator)
@@ -464,7 +464,7 @@ public final class ElementCallController {
         system.reportConnected(roomID: room.roomID)
     }
     
-    private func handle(_ event: MatrixRtcCallEvent) {
+    private func handle(_ event: MatrixRTCCallEvent) {
         switch event {
         case .activeSpeakers(let speakers):
             updateSpotlight(speakers: speakers.map(\.memberID))
@@ -501,14 +501,14 @@ public final class ElementCallController {
     
     /// Only when *starting* a call; joining one someone else started happens quietly. A direct chat
     /// rings, a group call is an invitation rather than a summons.
-    private func notify(for callData: ElementCallData, room: any ElementCallRoomContext) -> MatrixRtcNotify? {
+    private func notify(for callData: ElementCallData, room: any ElementCallRoomContext) -> MatrixRTCNotify? {
         guard callData.isStartingCall else { return nil }
-        return MatrixRtcNotify(kind: room.isDirect ? .ring : .notification,
+        return MatrixRTCNotify(kind: room.isDirect ? .ring : .notification,
                                intent: callData.isAudioCall ? .audio : .video)
     }
     
     private static func describe(_ error: Error) -> String {
-        if case MatrixRtcError.media(let message) = error {
+        if case MatrixRTCError.media(let message) = error {
             return message
         }
         return "\(error)"
@@ -541,7 +541,7 @@ public final class ElementCallController {
     
     /// Tears down what a join produced after the call was ended under it. Leaving is idempotent, so a
     /// session that already left costs nothing to leave again.
-    private func abandon(session: MatrixRtcSession, call: MatrixRtcCall? = nil, roomID: String) async {
+    private func abandon(session: MatrixRTCSession, call: MatrixRTCCall? = nil, roomID: String) async {
         log(.info, "join of \(roomID) was cancelled, releasing what it set up")
         await call?.disconnect()
         await session.leave()

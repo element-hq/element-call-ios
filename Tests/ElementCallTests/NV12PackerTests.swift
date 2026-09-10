@@ -20,7 +20,7 @@ struct NV12PackerTests {
         let u = Data((0..<6).map { UInt8(100 + $0) })
         let v = Data((0..<6).map { UInt8(200 + $0) })
         let planes = I420Repacker.Planes(width: width, height: height, y: y, u: u, v: v)
-        let frame = MatrixRtcVideoFrame(planes: planes, rotation: .deg90, isMirrored: true)
+        let frame = MatrixRTCVideoFrame(planes: planes, rotation: .deg90, isMirrored: true)
         
         let sampleBuffer = try #require(NV12Packer().makeSampleBuffer(from: frame))
         let pixelBuffer = try #require(CMSampleBufferGetImageBuffer(sampleBuffer))

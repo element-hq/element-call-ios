@@ -19,7 +19,7 @@ struct VideoFrameSlotTests {
         let slot = VideoFrameSlot()
         let count = Mutex(0)
         slot.setOnFrame { count.withLock { $0 += 1 } }
-        let frame = MatrixRtcVideoFrame(planes: .init(width: 2, height: 2, y: Data(count: 4), u: Data(count: 1), v: Data(count: 1)),
+        let frame = MatrixRTCVideoFrame(planes: .init(width: 2, height: 2, y: Data(count: 4), u: Data(count: 1), v: Data(count: 1)),
                                         rotation: .deg0,
                                         isMirrored: false)
         

@@ -40,7 +40,7 @@ import Foundation
 /// State arrives as deltas (`update_state` from sync, `send_event` for timeline-borne state) while the
 /// core wants the full state on every tick. Room state is replace-only, a leave being a present `{}`
 /// event, so the latest event per state key *is* the full state and the map below re-emits it whole.
-actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
+actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     nonisolated let roomID: String
     
     private enum Phase: Equatable {
@@ -48,7 +48,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     }
     
     private struct PendingRequest {
-        let continuation: CheckedContinuation<Result<Data, MatrixRtcRoomBridgeError>, Never>
+        let continuation: CheckedContinuation<Result<Data, MatrixRTCRoomBridgeError>, Never>
         let timeout: Task<Void, Never>
     }
     
@@ -66,14 +66,14 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     private var channel: (any WidgetDriverChannel)?
     private var phase: Phase = .idle
-    private var negotiationWaiters = [CheckedContinuation<Result<Void, MatrixRtcRoomBridgeError>, Never>]()
+    private var negotiationWaiters = [CheckedContinuation<Result<Void, MatrixRTCRoomBridgeError>, Never>]()
     private var negotiationTimeout: Task<Void, Never>?
     private var pending = [String: PendingRequest]()
     
     /// Event type → state key → latest event: the current state of every type we receive.
-    private var state = [String: [String: MatrixRtcRoomStateEvent]]()
-    private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[MatrixRtcRoomStateEvent]>.Continuation)]()
-    private var toDeviceSubscribers = [UUID: AsyncStream<MatrixRtcToDeviceMessage>.Continuation]()
+    private var state = [String: [String: MatrixRTCRoomStateEvent]]()
+    private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation)]()
+    private var toDeviceSubscribers = [UUID: AsyncStream<MatrixRTCToDeviceMessage>.Continuation]()
     private let logger: (any ElementCallLogging)?
     
     /// - Parameters:
@@ -103,7 +103,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     // MARK: - Lifecycle
     
-    func start() async -> Result<Void, MatrixRtcRoomBridgeError> {
+    func start() async -> Result<Void, MatrixRTCRoomBridgeError> {
         guard phase == .idle, let channel else { return .failure(.notRunning) }
         phase = .negotiating
         log(.info, "starting for \(roomID)")
@@ -145,7 +145,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     // MARK: - Sends
     
-    func sendDelayedEvent(eventType: String, stateKey: String?, contentJSON: String, delayMs: UInt64) async -> Result<String, MatrixRtcRoomBridgeError> {
+    func sendDelayedEvent(eventType: String, stateKey: String?, contentJSON: String, delayMs: UInt64) async -> Result<String, MatrixRTCRoomBridgeError> {
         guard let content = Self.parseObject(contentJSON) else { return .failure(.invalidResponse("content is not a JSON object")) }
         var data: [String: Any] = ["type": eventType, "content": content, "delay": delayMs]
         if let stateKey {
@@ -159,7 +159,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         }
     }
     
-    func updateDelayedEvent(delayID: String, action: MatrixRtcDelayedEventAction) async -> Result<Void, MatrixRtcRoomBridgeError> {
+    func updateDelayedEvent(delayID: String, action: MatrixRTCDelayedEventAction) async -> Result<Void, MatrixRTCRoomBridgeError> {
         let wireAction = switch action {
         case .cancel: "cancel"
         case .restart: "restart"
@@ -167,7 +167,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         return await request(action: "org.matrix.msc4157.update_delayed_event", data: ["delay_id": delayID, "action": wireAction]).map { _ in }
     }
     
-    func sendRoomEvent(eventType: String, contentJSON: String) async -> Result<String, MatrixRtcRoomBridgeError> {
+    func sendRoomEvent(eventType: String, contentJSON: String) async -> Result<String, MatrixRTCRoomBridgeError> {
         guard let content = Self.parseObject(contentJSON) else { return .failure(.invalidResponse("content is not a JSON object")) }
         return await request(action: "send_event", data: ["type": eventType, "content": content]).flatMap { response in
             guard let eventID = response["event_id"] as? String else {
@@ -180,7 +180,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     /// MSC4515. The driver forwards this to `Client::discover_rtc_transports`, which reads the
     /// discovery endpoint and falls back to the well-known `rtc_foci`, with caching, so none of that
     /// has to be reimplemented here.
-    func rtcTransports() async -> Result<[MatrixRtcTransport], MatrixRtcRoomBridgeError> {
+    func rtcTransports() async -> Result<[MatrixRTCTransport], MatrixRTCRoomBridgeError> {
         await request(action: "org.matrix.msc4515.get_rtc_transports", data: [:]).flatMap { response in
             guard let transports = response["rtc_transports"] as? [[String: Any]] else {
                 return .failure(.invalidResponse("no rtc_transports in the get_rtc_transports response"))
@@ -191,7 +191,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     /// Both the discovery endpoint and the well-known describe a transport the same way, so this is
     /// the shape either source produces.
-    static func parseTransports(_ transports: [[String: Any]]) -> [MatrixRtcTransport] {
+    static func parseTransports(_ transports: [[String: Any]]) -> [MatrixRTCTransport] {
         transports.compactMap { transport in
             guard let type = transport["type"] as? String else { return nil }
             if type == "livekit" {
@@ -205,7 +205,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         }
     }
     
-    func sendToDeviceMessage(eventType: String, messages: [String: [String: String]]) async -> Result<[String: [String]], MatrixRtcRoomBridgeError> {
+    func sendToDeviceMessage(eventType: String, messages: [String: [String: String]]) async -> Result<[String: [String]], MatrixRTCRoomBridgeError> {
         var wireMessages = [String: [String: Any]]()
         for (userID, devices) in messages {
             for (deviceID, contentJSON) in devices {
@@ -220,8 +220,8 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     // MARK: - Feeds
     
-    nonisolated func stateEvents(eventType: String) -> AsyncStream<[MatrixRtcRoomStateEvent]> {
-        let (stream, continuation) = AsyncStream<[MatrixRtcRoomStateEvent]>.makeStream()
+    nonisolated func stateEvents(eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]> {
+        let (stream, continuation) = AsyncStream<[MatrixRTCRoomStateEvent]>.makeStream()
         let id = UUID()
         Task { await self.addStateSubscriber(id: id, eventType: eventType, continuation: continuation) }
         continuation.onTermination = { _ in
@@ -230,8 +230,8 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         return stream
     }
     
-    nonisolated func toDeviceMessages() -> AsyncStream<MatrixRtcToDeviceMessage> {
-        let (stream, continuation) = AsyncStream<MatrixRtcToDeviceMessage>.makeStream()
+    nonisolated func toDeviceMessages() -> AsyncStream<MatrixRTCToDeviceMessage> {
+        let (stream, continuation) = AsyncStream<MatrixRTCToDeviceMessage>.makeStream()
         let id = UUID()
         Task { await self.addToDeviceSubscriber(id: id, continuation: continuation) }
         continuation.onTermination = { _ in
@@ -240,7 +240,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         return stream
     }
     
-    private func addStateSubscriber(id: UUID, eventType: String, continuation: AsyncStream<[MatrixRtcRoomStateEvent]>.Continuation) {
+    private func addStateSubscriber(id: UUID, eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation) {
         guard phase != .stopped else {
             continuation.finish()
             return
@@ -255,7 +255,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         stateSubscribers[id] = nil
     }
     
-    private func addToDeviceSubscriber(id: UUID, continuation: AsyncStream<MatrixRtcToDeviceMessage>.Continuation) {
+    private func addToDeviceSubscriber(id: UUID, continuation: AsyncStream<MatrixRTCToDeviceMessage>.Continuation) {
         guard phase != .stopped else {
             continuation.finish()
             return
@@ -269,7 +269,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     
     // MARK: - Requests
     
-    private func request(action: String, data: [String: Any]) async -> Result<[String: Any], MatrixRtcRoomBridgeError> {
+    private func request(action: String, data: [String: Any]) async -> Result<[String: Any], MatrixRTCRoomBridgeError> {
         guard phase == .ready, let channel else { return .failure(.notRunning) }
         let requestID = UUID().uuidString
         guard let message = Self.serialize(["api": "fromWidget",
@@ -281,7 +281,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         }
         log(.debug, "→ \(action) \(requestID)")
         
-        let reply: Result<Data, MatrixRtcRoomBridgeError> = await withCheckedContinuation { continuation in
+        let reply: Result<Data, MatrixRTCRoomBridgeError> = await withCheckedContinuation { continuation in
             let timeout = Task { [weak self, requestTimeout] in
                 try? await Task.sleep(for: requestTimeout)
                 await self?.resume(requestID, with: .failure(.timedOut))
@@ -301,7 +301,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         }
     }
     
-    private func resume(_ requestID: String, with result: Result<Data, MatrixRtcRoomBridgeError>) {
+    private func resume(_ requestID: String, with result: Result<Data, MatrixRTCRoomBridgeError>) {
         guard let request = pending.removeValue(forKey: requestID) else { return }
         request.timeout.cancel()
         request.continuation.resume(returning: result)
@@ -401,7 +401,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         waiters.forEach { $0.resume(returning: .success(())) }
     }
     
-    private func failNegotiation(with error: MatrixRtcRoomBridgeError) {
+    private func failNegotiation(with error: MatrixRTCRoomBridgeError) {
         guard phase == .negotiating else { return }
         log(.error, "negotiation failed for \(roomID): \(error)")
         tearDown()
@@ -424,7 +424,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
             return nil // The same change through both routes.
         }
         let timestamp = (event["origin_server_ts"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
-        state[eventType, default: [:]][stateKey] = MatrixRtcRoomStateEvent(eventID: eventID,
+        state[eventType, default: [:]][stateKey] = MatrixRTCRoomStateEvent(eventID: eventID,
                                                                            eventType: eventType,
                                                                            stateKey: stateKey,
                                                                            sender: sender,
@@ -463,7 +463,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
             // Field names only, never values: which shape of key message the peer speaks.
             log(.info, "\(eventType) from \(sender) names no device (fields: \(content.keys.sorted())), inferred \(deviceID ?? "none")")
         }
-        let message = MatrixRtcToDeviceMessage(eventType: eventType,
+        let message = MatrixRTCToDeviceMessage(eventType: eventType,
                                                attestedSenderID: sender,
                                                senderDeviceID: deviceID,
                                                isSenderCrossSigned: wasEncrypted,
@@ -489,7 +489,7 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
     /// key messages do not always name their device, while the core refuses a key whose device it
     /// cannot match to the membership.
     private func membershipDeviceID(of userID: String) -> String? {
-        let memberships = (state[MatrixRtcEventTypes.legacyStateMember] ?? [:]).values.filter { $0.sender == userID && $0.contentJSON != "{}" }
+        let memberships = (state[MatrixRTCEventTypes.legacyStateMember] ?? [:]).values.filter { $0.sender == userID && $0.contentJSON != "{}" }
         var deviceIDs = Set<String>()
         for membership in memberships {
             if let content = Self.parseObject(membership.contentJSON) {

@@ -30,8 +30,8 @@ extension WidgetDriverHandle: WidgetDriverChannel { }
 /// The machine stores whatever `acquireCapabilities` returns, so the strings answered to the
 /// `capabilities` request and the value returned here describe the same set.
 final nonisolated class WidgetCapabilityGrant: WidgetCapabilitiesProvider, Sendable {
-    static let stateEventTypes = [MatrixRtcEventTypes.legacyStateMember]
-    static let toDeviceEventTypes = [MatrixRtcEventTypes.encryptionKey, MatrixRtcEventTypes.legacyEncryptionKey]
+    static let stateEventTypes = [MatrixRTCEventTypes.legacyStateMember]
+    static let toDeviceEventTypes = [MatrixRTCEventTypes.encryptionKey, MatrixRTCEventTypes.legacyEncryptionKey]
     static let roomEventTypes = ["org.matrix.msc4075.call.notify",
                                  "org.matrix.msc4310.rtc.notification",
                                  "m.rtc.notification",

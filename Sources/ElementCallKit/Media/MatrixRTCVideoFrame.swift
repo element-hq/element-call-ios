@@ -8,7 +8,7 @@
 import Foundation
 import MatrixRtc
 
-public nonisolated enum MatrixRtcVideoRotation: Int, Sendable {
+public nonisolated enum MatrixRTCVideoRotation: Int, Sendable {
     case deg0 = 0, deg90 = 90, deg180 = 180, deg270 = 270
     
     init(_ rotation: FfiVideoRotation) {
@@ -26,7 +26,7 @@ public nonisolated enum MatrixRtcVideoRotation: Int, Sendable {
 /// Remote planes are the core's own memory and stay valid exactly as long as this object is alive:
 /// ARC is the reference count, so hold the frame while reading and drop it when done. Rotation is
 /// *not* applied to the pixels; the renderer turns the picture upright.
-public final nonisolated class MatrixRtcVideoFrame: @unchecked Sendable {
+public final nonisolated class MatrixRTCVideoFrame: @unchecked Sendable {
     public struct Plane {
         public let pointer: UnsafeRawPointer
         public let stride: Int
@@ -36,7 +36,7 @@ public final nonisolated class MatrixRtcVideoFrame: @unchecked Sendable {
     
     public let width: Int
     public let height: Int
-    public let rotation: MatrixRtcVideoRotation
+    public let rotation: MatrixRTCVideoRotation
     public let timestampUs: Int64
     /// The self view mirrors the front camera; remote frames never are.
     public let isMirrored: Bool
@@ -57,7 +57,7 @@ public final nonisolated class MatrixRtcVideoFrame: @unchecked Sendable {
         isMirrored = false
     }
     
-    init(planes: I420Repacker.Planes, rotation: MatrixRtcVideoRotation, isMirrored: Bool) {
+    init(planes: I420Repacker.Planes, rotation: MatrixRTCVideoRotation, isMirrored: Bool) {
         storage = .local(planes)
         width = planes.width
         height = planes.height

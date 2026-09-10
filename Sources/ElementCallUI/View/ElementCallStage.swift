@@ -28,7 +28,7 @@ struct ElementCallStage: View {
     let layout: ElementCallLayout
     let memberCount: Int
     let pictureInPictureSourceView: UIView
-    let callProvider: () -> MatrixRtcCall?
+    let callProvider: () -> MatrixRTCCall?
     /// How far above the safe area the floating controls reach.
     let controlsClearance: CGFloat
     let onAction: (ElementCallScreenViewAction) -> Void
@@ -180,7 +180,7 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
     static let bob = tile("Bob", isMuted: true)
     static let group = [local, bob, tile("Carol", isSpeaking: true), tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
     
-    static func noCall() -> MatrixRtcCall? {
+    static func noCall() -> MatrixRTCCall? {
         nil
     }
     

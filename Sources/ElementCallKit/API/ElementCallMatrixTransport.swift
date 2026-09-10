@@ -9,7 +9,7 @@ import Foundation
 
 /// A to-device message delivered by the homeserver. Only encrypted messages are trusted, and the sender
 /// is the cryptographically attested one, never the one claimed in the content.
-public nonisolated struct MatrixRtcToDeviceMessage: Sendable {
+public nonisolated struct MatrixRTCToDeviceMessage: Sendable {
     public let eventType: String
     public let attestedSenderID: String
     public let senderDeviceID: String?
@@ -27,7 +27,7 @@ public nonisolated struct MatrixRtcToDeviceMessage: Sendable {
     }
 }
 
-public nonisolated struct MatrixRtcRoomStateEvent: Sendable, Hashable {
+public nonisolated struct MatrixRTCRoomStateEvent: Sendable, Hashable {
     public let eventID: String?
     public let eventType: String
     public let stateKey: String
@@ -45,12 +45,12 @@ public nonisolated struct MatrixRtcRoomStateEvent: Sendable, Hashable {
     }
 }
 
-public nonisolated enum MatrixRtcDelayedEventAction: Sendable {
+public nonisolated enum MatrixRTCDelayedEventAction: Sendable {
     case cancel, restart
 }
 
 /// How the host reports a failed send; the core reacts differently to each.
-public nonisolated enum MatrixRtcTransportError: Error, Sendable, Equatable {
+public nonisolated enum MatrixRTCTransportError: Error, Sendable, Equatable {
     /// A permanent refusal (e.g. the homeserver doesn't implement delayed events): the core retires
     /// the feature for the session instead of retrying it.
     case notSupported(String)
@@ -84,7 +84,7 @@ public nonisolated protocol ElementCallMatrixTransport: AnyObject, Sendable {
     /// Asked before the room is prepared, since the answer is what a join needs, so a host routing
     /// through a driver has to be able to open one on demand rather than waiting for
     /// ``willJoinRoom(roomID:)``.
-    func rtcTransports(roomID: String) async throws -> [MatrixRtcTransport]
+    func rtcTransports(roomID: String) async throws -> [MatrixRTCTransport]
     
     // MARK: Sends (the core decides *what*, these decide *how*)
     
@@ -96,7 +96,7 @@ public nonisolated protocol ElementCallMatrixTransport: AnyObject, Sendable {
     func sendDelayedEvent(roomID: String, eventType: String, contentJSON: String, delayMs: UInt64) async throws -> String
     /// - Returns: the delay ID.
     func sendDelayedStateEvent(roomID: String, eventType: String, stateKey: String, contentJSON: String, delayMs: UInt64) async throws -> String
-    func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRtcDelayedEventAction) async throws
+    func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRTCDelayedEventAction) async throws
     /// Must be encrypted. `messages` is user ID → device ID → content JSON.
     /// - Returns: the recipients that were **not** served, user ID → device IDs.
     func sendToDeviceMessage(eventType: String, messages: [String: [String: String]]) async throws -> [String: [String]]
@@ -104,15 +104,15 @@ public nonisolated protocol ElementCallMatrixTransport: AnyObject, Sendable {
     func sendRoomEvent(roomID: String, eventType: String, contentJSON: String) async throws -> String
     func redactEvent(roomID: String, eventID: String, reason: String?) async throws
     
-    func requestOpenIDToken() async throws -> MatrixRtcOpenIDToken
+    func requestOpenIDToken() async throws -> MatrixRTCOpenIDToken
     
     // MARK: Feeds
     
     /// Every to-device message of the given types for as long as the stream is iterated. Must be
     /// subscribed for the whole Matrix session: to-device delivery cannot be caught up on.
-    func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRtcToDeviceMessage>
+    func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRTCToDeviceMessage>
     /// The full current list of state events of that type, immediately and on every change.
-    func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRtcRoomStateEvent]>
+    func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]>
     /// The user IDs currently joined to the room, immediately and on every change. Never emits an empty list.
     func joinedMemberIDs(roomID: String) -> AsyncStream<[String]>
     func isRoomEncrypted(roomID: String) async -> Bool

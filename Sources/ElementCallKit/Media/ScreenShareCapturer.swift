@@ -41,10 +41,10 @@ final nonisolated class ScreenShareCapturer: @unchecked Sendable {
         // the two it does expose are worth having in the error.
         guard recorder.isAvailable else {
             state.withLock { $0.isCapturing = false }
-            throw MatrixRtcError.media("Screen recording is unavailable (restricted, or another app is recording)")
+            throw MatrixRTCError.media("Screen recording is unavailable (restricted, or another app is recording)")
         }
         if recorder.isRecording {
-            MatrixRtcLog.warning("Screen recorder still reports an active recording before capture starts")
+            MatrixRTCLog.warning("Screen recorder still reports an active recording before capture starts")
         }
         recorder.isMicrophoneEnabled = false
         // ReplayKit calls back on its own queues. The sample handler is a method reference: a
@@ -57,9 +57,9 @@ final nonisolated class ScreenShareCapturer: @unchecked Sendable {
             recorder.startCapture(handler: handleCapture, completionHandler: { @Sendable error in
                 resume.perform {
                     if let error {
-                        continuation.resume(throwing: MatrixRtcError.media("Screen capture failed to start: \(error)"))
+                        continuation.resume(throwing: MatrixRTCError.media("Screen capture failed to start: \(error)"))
                     } else {
-                        MatrixRtcLog.info("Screen capture started")
+                        MatrixRTCLog.info("Screen capture started")
                         continuation.resume()
                     }
                 }
@@ -80,17 +80,17 @@ final nonisolated class ScreenShareCapturer: @unchecked Sendable {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             RPScreenRecorder.shared().stopCapture { @Sendable error in
                 if let error {
-                    MatrixRtcLog.warning("Screen capture stop error: \(error)")
+                    MatrixRTCLog.warning("Screen capture stop error: \(error)")
                 }
                 resume.perform { continuation.resume() }
             }
         }
-        MatrixRtcLog.info("Screen capture stopped")
+        MatrixRTCLog.info("Screen capture stopped")
     }
     
     private func handleCapture(_ sampleBuffer: CMSampleBuffer, _ type: RPSampleBufferType, _ error: Error?) {
         if let error {
-            MatrixRtcLog.warning("Screen capture error: \(error)")
+            MatrixRTCLog.warning("Screen capture error: \(error)")
         }
         guard type == .video else { return }
         handle(sampleBuffer)
@@ -109,7 +109,7 @@ final nonisolated class ScreenShareCapturer: @unchecked Sendable {
             try track.captureVideo(frame: planes.ffiFrame(rotation: .deg0, timestampUs: Int64(timestamp * 1_000_000)))
         } catch {
             // A frame in flight while the share is being unpublished lands here; expected once per stop.
-            MatrixRtcLog.debug("Screen share captureVideo failed: \(error)")
+            MatrixRTCLog.debug("Screen share captureVideo failed: \(error)")
         }
     }
 }

@@ -69,7 +69,7 @@ enum ElementCallPreviewFixtures {
         return state
     }
     
-    static func noCall() -> MatrixRtcCall? {
+    static func noCall() -> MatrixRTCCall? {
         nil
     }
 }

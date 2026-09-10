@@ -51,7 +51,7 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     private let lock = NSLock()
     private var textures: (y: MTLTexture, u: MTLTexture, v: MTLTexture)?
     private var textureSize = (0, 0)
-    private var lastFrame: MatrixRtcVideoFrame?
+    private var lastFrame: MatrixRTCVideoFrame?
     private var isReleased = false
     
     init?(slot: VideoFrameSlot) {
@@ -118,7 +118,7 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     
     // MARK: - Private
     
-    private func upload(_ frame: MatrixRtcVideoFrame) {
+    private func upload(_ frame: MatrixRTCVideoFrame) {
         if textures == nil || textureSize != (frame.width, frame.height) {
             textures = makeTextures(width: frame.width, height: frame.height)
             textureSize = (frame.width, frame.height)
@@ -145,7 +145,7 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     /// Rotate upright, mirror if asked, then scale to fill the drawable while keeping the aspect ratio.
     /// The frame's rotation is how far it must turn **clockwise** to be upright (WebRTC semantics);
     /// Metal's y axis points up, so that is a negative angle here.
-    private func transform(for frame: MatrixRtcVideoFrame, drawableSize: CGSize) -> simd_float4x4 {
+    private func transform(for frame: MatrixRTCVideoFrame, drawableSize: CGSize) -> simd_float4x4 {
         let width = Float(frame.width)
         let height = Float(frame.height)
         let angle = -Float(frame.rotation.rawValue) * .pi / 180

@@ -26,7 +26,7 @@ enum ElementCallTileAppearance {
 struct ElementCallTileView: View {
     @Environment(\.elementCallStyle) private var style
     let tile: ElementCallTile
-    let callProvider: () -> MatrixRtcCall?
+    let callProvider: () -> MatrixRTCCall?
     var isSpotlight = false
     var appearance: ElementCallTileAppearance = .card
     var memberCount = 0
@@ -47,7 +47,7 @@ struct ElementCallTileView: View {
             style.theme.bgSubtleSecondary
             
             if tile.hasVideo || tile.isScreenSharing, !isVideoSuspended {
-                let kind: MatrixRtcStreamKind = tile.isScreenSharing && isSpotlight ? .screenShare : .camera
+                let kind: MatrixRTCStreamKind = tile.isScreenSharing && isSpotlight ? .screenShare : .camera
                 ElementCallVideoView(memberID: tile.memberID,
                                      kind: kind,
                                      isLocal: tile.isLocal,
@@ -206,9 +206,9 @@ struct ElementCallTileView: View {
 /// (after a linger). The local tile draws the camera directly.
 struct ElementCallVideoView: View {
     let memberID: String
-    let kind: MatrixRtcStreamKind
+    let kind: MatrixRTCStreamKind
     let isLocal: Bool
-    let callProvider: () -> MatrixRtcCall?
+    let callProvider: () -> MatrixRTCCall?
     
     @State private var slot = VideoFrameSlot()
     

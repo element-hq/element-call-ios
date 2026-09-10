@@ -158,8 +158,12 @@ that way.
   has a *regular* vertical size class, so a size-class branch would leave its controls at the bottom
   while the stage laid its tiles out for a side rail.
 - Follow the [Swift API Design Guidelines]: `ID` not `Id`, `URL` not `Url`.
-- `MatrixRtc*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
-  own API. Nothing may be called `MatrixRtc`, which is the bindings' own module.
+- `MatrixRTC*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
+  own API. Note the casing: the initialism is uniform, per the API design guidelines below. The
+  bindings' own module is `MatrixRtc`, spelled exactly that way, and `import MatrixRtc` plus the
+  `MatrixRtc.`-qualified uses in `VideoFrameSlot.swift` are references to *it* rather than to us —
+  a bulk re-casing must leave those alone, along with the bindings' `MatrixRtcFFI` and
+  `MatrixRtcFfiError`. Nothing of ours may be called `MatrixRtc`.
 - File headers come from `.swiftpm/xcode/xcshareddata/IDETemplateMacros.plist`. One copyright line.
 - Previews for every main state, `PreviewProvider` not `#Preview`, conforming to `TestablePreview` so
   the snapshot cases generate.

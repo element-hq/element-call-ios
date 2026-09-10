@@ -18,7 +18,7 @@ struct ElementCallView: View {
     @Bindable var context: ElementCallScreenContext
     let pictureInPictureSourceView: UIView
     /// Read at render time: the call exists only once media is connected.
-    let callProvider: () -> MatrixRtcCall?
+    let callProvider: () -> MatrixRTCCall?
     
     var body: some View {
         // Orientation is read as the shape of the space we were given, not from the device or the

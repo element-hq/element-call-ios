@@ -17,7 +17,7 @@ import MatrixRustSDK
 /// every send. The feeds hop onto the main actor inside their streams.
 ///
 /// What the released bindings do not expose yet, delayed events, the room-state feed, to-device
-/// messaging and room event IDs, goes through a per-room ``MatrixRtcRoomBridgeProtocol``, opened in
+/// messaging and room event IDs, goes through a per-room ``MatrixRTCRoomBridgeProtocol``, opened in
 /// ``willJoinRoom(roomID:)`` and closed in ``didLeaveRoom(roomID:)``. See `Widget/` for what retires
 /// that, and note that MSC4515 transport discovery already came off the stopgap list.
 @MainActor
@@ -66,19 +66,19 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
     /// remote tile was black with `missingKey` in its stats. Audio survived because it is keyed the
     /// same way but far more forgiving of a late key.
     private struct LiveBridge {
-        let bridge: any MatrixRtcRoomBridgeProtocol
+        let bridge: any MatrixRTCRoomBridgeProtocol
         let toDeviceForwarder: Task<Void, Never>
     }
     
     /// The only place a bridge is created, so everything a bridge needs is wired in one spot.
     /// Opened on demand rather than only in `willJoinRoom`, because transport discovery is asked
     /// before the room is prepared and routes through the driver.
-    private func openBridge(roomID: String) async throws -> any MatrixRtcRoomBridgeProtocol {
+    private func openBridge(roomID: String) async throws -> any MatrixRTCRoomBridgeProtocol {
         if let live = liveBridges[roomID] {
             return live.bridge
         }
         guard let bridge = try WidgetDriverFactory.makeBridge(room: room(roomID), roomID: roomID, logger: logger) else {
-            throw MatrixRtcTransportError.failed("Cannot open a Matrix bridge for \(roomID)")
+            throw MatrixRTCTransportError.failed("Cannot open a Matrix bridge for \(roomID)")
         }
         if case .failure(let error) = await bridge.start() {
             throw error.transportError
@@ -95,7 +95,7 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
     
     // MARK: - Discovery
     
-    public nonisolated func rtcTransports(roomID: String) async throws -> [MatrixRtcTransport] {
+    public nonisolated func rtcTransports(roomID: String) async throws -> [MatrixRTCTransport] {
         try await onMain { transport in
             // Homeserver-wide, but MSC4515 is served per room by the driver, so a bridge has to
             // exist. Cached under the room, and `willJoinRoom` will find it already open.
@@ -120,7 +120,7 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
     /// Sticky events (MSC4354) need bindings the released SDK lacks, so only the state-event
     /// compatibility mode can be joined, and that never sends one.
     public nonisolated func sendStickyEvent(roomID: String, eventType: String, contentJSON: String, durationMs: UInt64) async throws -> String {
-        throw MatrixRtcTransportError.notSupported("Sticky events are not available with the released SDK")
+        throw MatrixRTCTransportError.notSupported("Sticky events are not available with the released SDK")
     }
     
     public nonisolated func sendDelayedEvent(roomID: String, eventType: String, contentJSON: String, delayMs: UInt64) async throws -> String {
@@ -131,19 +131,19 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
         try await bridge(roomID).sendDelayedEvent(eventType: eventType, stateKey: stateKey, contentJSON: contentJSON, delayMs: delayMs).mapTransportError()
     }
     
-    public nonisolated func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRtcDelayedEventAction) async throws {
+    public nonisolated func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRTCDelayedEventAction) async throws {
         try await bridge(roomID).updateDelayedEvent(delayID: delayID, action: action).mapTransportError()
     }
     
     /// The core does not say which room the keys are for, and the bridge does not need it either: it
     /// encrypts whenever its room is encrypted. Only one call runs at a time.
     public nonisolated func sendToDeviceMessage(eventType: String, messages: [String: [String: String]]) async throws -> [String: [String]] {
-        let bridge = try await onMain { transport -> any MatrixRtcRoomBridgeProtocol in
+        let bridge = try await onMain { transport -> any MatrixRTCRoomBridgeProtocol in
             if transport.liveBridges.count > 1 {
                 transport.logger?.log(.warning, "\(transport.liveBridges.count) live bridges, sending to-device through the first")
             }
             guard let bridge = transport.liveBridges.values.first?.bridge else {
-                throw MatrixRtcTransportError.failed("No live call to send to-device messages through")
+                throw MatrixRTCTransportError.failed("No live call to send to-device messages through")
             }
             return bridge
         }
@@ -172,7 +172,7 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
         }
     }
     
-    public nonisolated func requestOpenIDToken() async throws -> MatrixRtcOpenIDToken {
+    public nonisolated func requestOpenIDToken() async throws -> MatrixRTCOpenIDToken {
         let token = try await onMain { transport -> OpenIdToken in
             do {
                 return try await transport.client.requestOpenidToken()
@@ -180,7 +180,7 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
                 throw error.transportError
             }
         }
-        return MatrixRtcOpenIDToken(accessToken: token.accessToken,
+        return MatrixRTCOpenIDToken(accessToken: token.accessToken,
                                     tokenType: token.tokenType,
                                     matrixServerName: token.matrixServerName,
                                     expiresIn: TimeInterval(token.expiresInSeconds))
@@ -188,11 +188,11 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
     
     // MARK: - Feeds
     
-    public nonisolated func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRtcToDeviceMessage> {
+    public nonisolated func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRTCToDeviceMessage> {
         toDeviceRelay.subscribe(eventTypes: eventTypes)
     }
     
-    public nonisolated func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRtcRoomStateEvent]> {
+    public nonisolated func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]> {
         AsyncStream { continuation in
             let task = Task {
                 guard let bridge = await liveBridge(roomID) else {
@@ -281,20 +281,20 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
         try await Task { @MainActor in try await body(self) }.value
     }
     
-    private nonisolated func liveBridge(_ roomID: String) async -> (any MatrixRtcRoomBridgeProtocol)? {
+    private nonisolated func liveBridge(_ roomID: String) async -> (any MatrixRTCRoomBridgeProtocol)? {
         await Task { @MainActor in liveBridges[roomID]?.bridge }.value
     }
     
-    private nonisolated func bridge(_ roomID: String) async throws -> any MatrixRtcRoomBridgeProtocol {
+    private nonisolated func bridge(_ roomID: String) async throws -> any MatrixRTCRoomBridgeProtocol {
         guard let bridge = await liveBridge(roomID) else {
-            throw MatrixRtcTransportError.failed("No live bridge for \(roomID)")
+            throw MatrixRTCTransportError.failed("No live bridge for \(roomID)")
         }
         return bridge
     }
     
     private func room(_ roomID: String) throws -> Room {
         guard let room = try? client.getRoom(roomId: roomID) else {
-            throw MatrixRtcTransportError.failed("Not joined to \(roomID)")
+            throw MatrixRTCTransportError.failed("Not joined to \(roomID)")
         }
         return room
     }
@@ -303,7 +303,7 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransport {
     private func sdkCall<T>(_ description: String, in roomID: String, _ body: (Room) async throws -> T) async throws -> T {
         do {
             return try await body(room(roomID))
-        } catch let error as MatrixRtcTransportError {
+        } catch let error as MatrixRTCTransportError {
             throw error
         } catch {
             logger?.log(.error, "\(description) failed in \(roomID): \(error)")

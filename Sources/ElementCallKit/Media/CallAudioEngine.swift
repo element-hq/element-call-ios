@@ -61,7 +61,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
         configurationObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange,
                                                                        object: engine,
                                                                        queue: nil) { [weak self] _ in
-            MatrixRtcLog.info("Audio engine configuration changed, restarting")
+            MatrixRTCLog.info("Audio engine configuration changed, restarting")
             self?.restart()
         }
     }
@@ -133,7 +133,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
             guard let self, isRunning else { return }
             engine.stop()
             isRunning = false
-            MatrixRtcLog.info("Audio engine stopped")
+            MatrixRTCLog.info("Audio engine stopped")
         }
     }
     
@@ -158,7 +158,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
             sourceNodes.removeAll()
             renderBlocks.removeAll()
             inputReceiver = nil
-            MatrixRtcLog.info("Audio engine shut down")
+            MatrixRTCLog.info("Audio engine shut down")
         }
     }
     
@@ -174,7 +174,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
                 try engine.inputNode.setVoiceProcessingEnabled(true)
             } catch {
                 // The simulator has no voice processing; a call without AEC still works.
-                MatrixRtcLog.warning("Voice processing unavailable: \(error)")
+                MatrixRTCLog.warning("Voice processing unavailable: \(error)")
             }
             isVoiceProcessingConfigured = true
         }
@@ -196,7 +196,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
         do {
             try engine.start()
         } catch {
-            MatrixRtcLog.error("Failed starting the audio engine: \(error)")
+            MatrixRTCLog.error("Failed starting the audio engine: \(error)")
             return
         }
         isRunning = true
@@ -204,7 +204,7 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
         // change lands here with a different one.
         let format = engine.inputNode.outputFormat(forBus: 0)
         inputFormat.store(InputStreamFormat(format))
-        MatrixRtcLog.info("Audio engine started, input \(format)")
+        MatrixRTCLog.info("Audio engine started, input \(format)")
     }
     
     private func restart() {

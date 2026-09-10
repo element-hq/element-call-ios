@@ -18,17 +18,17 @@ import Synchronization
 public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransport {
     public let userID: String
     public let deviceID: String
-    public let transports: [MatrixRtcTransport]
+    public let transports: [MatrixRTCTransport]
     
     public init(userID: String = "@alice:example.org",
                 deviceID: String = "FAKEDEVICE",
-                transports: [MatrixRtcTransport] = [.liveKit(serviceURL: URL(string: "https://sfu.example.org")!)]) {
+                transports: [MatrixRTCTransport] = [.liveKit(serviceURL: URL(string: "https://sfu.example.org")!)]) {
         self.userID = userID
         self.deviceID = deviceID
         self.transports = transports
     }
     
-    public func rtcTransports(roomID: String) async throws -> [MatrixRtcTransport] {
+    public func rtcTransports(roomID: String) async throws -> [MatrixRTCTransport] {
         transports
     }
     
@@ -48,7 +48,7 @@ public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransp
         "delay"
     }
     
-    public func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRtcDelayedEventAction) async throws { }
+    public func updateDelayedEvent(roomID: String, delayID: String, action: MatrixRTCDelayedEventAction) async throws { }
     
     public func sendToDeviceMessage(eventType: String, messages: [String: [String: String]]) async throws -> [String: [String]] {
         [:]
@@ -60,15 +60,15 @@ public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransp
     
     public func redactEvent(roomID: String, eventID: String, reason: String?) async throws { }
     
-    public func requestOpenIDToken() async throws -> MatrixRtcOpenIDToken {
+    public func requestOpenIDToken() async throws -> MatrixRTCOpenIDToken {
         .init(accessToken: "", tokenType: "Bearer", matrixServerName: "example.org", expiresIn: 3600)
     }
     
-    public func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRtcToDeviceMessage> {
+    public func toDeviceMessages(eventTypes: [String]) -> AsyncStream<MatrixRTCToDeviceMessage> {
         AsyncStream { $0.finish() }
     }
     
-    public func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRtcRoomStateEvent]> {
+    public func roomStateEvents(roomID: String, eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]> {
         AsyncStream { $0.finish() }
     }
     
@@ -179,7 +179,7 @@ public extension ElementCallController {
                      isAudioCall: Bool = false,
                      style: ElementCallStyle = .stock) -> ElementCallController {
         let transport = ElementCallFakeTransport()
-        let controller = ElementCallController(rtcService: MatrixRtcService(transport: transport),
+        let controller = ElementCallController(rtcService: MatrixRTCService(transport: transport),
                                                transport: transport,
                                                system: ElementCallFakeSystem(),
                                                options: ElementCallDefaultOptions(areTileStatsAvailable: true),

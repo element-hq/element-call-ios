@@ -20,18 +20,18 @@ public final nonisolated class VideoFrameSlot: Sendable, Identifiable {
         let call: @Sendable () -> Void
     }
     
-    private let latest = Mutex<MatrixRtcVideoFrame?>(nil)
+    private let latest = Mutex<MatrixRTCVideoFrame?>(nil)
     private let onFrame = Mutex<FrameHandler?>(nil)
     
     public init() { }
     
-    public func offer(_ frame: MatrixRtcVideoFrame) {
+    public func offer(_ frame: MatrixRTCVideoFrame) {
         latest.withLock { $0 = frame }
         onFrame.withLock { $0 }?.call()
     }
     
     /// Takes the pending frame, leaving the slot empty.
-    public func take() -> MatrixRtcVideoFrame? {
+    public func take() -> MatrixRTCVideoFrame? {
         latest.withLock { frame in
             defer { frame = nil }
             return frame
@@ -62,7 +62,7 @@ final nonisolated class RemoteVideoSource: @unchecked Sendable {
     /// Called when the last tile has gone and the linger elapsed: nobody is drawing this stream.
     private let onIdle: @Sendable () -> Void
     /// The upright size and frame rate of the decoded frames, about once a second.
-    var onVideoInfo: (@Sendable (MatrixRtcVideoInfo) -> Void)?
+    var onVideoInfo: (@Sendable (MatrixRTCVideoInfo) -> Void)?
     private let meter = VideoFrameMeter()
     private let state = Mutex<State>(.init())
     
@@ -126,7 +126,7 @@ final nonisolated class RemoteVideoSource: @unchecked Sendable {
         }
     }
     
-    private func reportAspect(of frame: MatrixRtcVideoFrame) {
+    private func reportAspect(of frame: MatrixRTCVideoFrame) {
         if let info = meter.record(frame) {
             onVideoInfo?(info)
         }
@@ -136,13 +136,13 @@ final nonisolated class RemoteVideoSource: @unchecked Sendable {
         let open = open
         return Task.detached(priority: .userInitiated) { [weak self] in
             guard let stream = open() else {
-                MatrixRtcLog.warning("No video stream to open")
+                MatrixRTCLog.warning("No video stream to open")
                 return
             }
             defer { stream.close() }
             while !Task.isCancelled, let ref = await stream.next() {
                 guard let self else { return }
-                let frame = MatrixRtcVideoFrame(ref: ref)
+                let frame = MatrixRTCVideoFrame(ref: ref)
                 reportAspect(of: frame)
                 let slots = state.withLock { Array($0.slots.values) }
                 // Every slot holds its own reference; the frame is freed once the last one drops it.

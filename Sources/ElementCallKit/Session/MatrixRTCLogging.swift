@@ -9,13 +9,13 @@ import Foundation
 import MatrixRtc
 import Synchronization
 
-public nonisolated enum MatrixRtcLogLevel: Sendable {
+public nonisolated enum MatrixRTCLogLevel: Sendable {
     case error, warning, info, debug, verbose
 }
 
 /// A log record emitted by the Rust core. Delivered on a dedicated Rust thread, never the main actor.
-public nonisolated struct MatrixRtcLogRecord: Sendable {
-    public let level: MatrixRtcLogLevel
+public nonisolated struct MatrixRTCLogRecord: Sendable {
+    public let level: MatrixRTCLogLevel
     /// Module path of the emitting code, e.g. `matrix_rtc_core::session`.
     public let target: String
     public let message: String
@@ -39,7 +39,7 @@ public nonisolated struct MatrixRtcLogRecord: Sendable {
 /// The core installs a process-wide subscriber on first use and refuses a second one, so this
 /// must run once, before anything else touches the FFI — `RtcSessionManagerHandle` included.
 /// Without it the core is completely silent, errors included.
-public nonisolated enum MatrixRtcLogging {
+public nonisolated enum MatrixRTCLogging {
     /// Leaves the per-frame media/livekit flood out while keeping SFU connection and ICE progress
     /// (reported by `livekit` at info) readable.
     public static let defaultFilter = "matrix_rtc_media=debug,matrix_rtc_livekit=debug,livekit=info,libwebrtc=warn,webrtc_sys=warn"
@@ -50,7 +50,7 @@ public nonisolated enum MatrixRtcLogging {
     /// - Returns: `false` if the core refused the subscriber (already installed by an earlier call).
     @discardableResult
     public static func install(filter: String = defaultFilter,
-                               handler: @escaping @Sendable (MatrixRtcLogRecord) -> Void) -> Bool {
+                               handler: @escaping @Sendable (MatrixRTCLogRecord) -> Void) -> Bool {
         isInstalled.withLock { isInstalled in
             guard !isInstalled else { return true }
             
@@ -74,9 +74,9 @@ public nonisolated enum MatrixRtcLogging {
     }
     
     private final class Sink: RtcLogSink, Sendable {
-        private let handler: @Sendable (MatrixRtcLogRecord) -> Void
+        private let handler: @Sendable (MatrixRTCLogRecord) -> Void
         
-        init(handler: @escaping @Sendable (MatrixRtcLogRecord) -> Void) {
+        init(handler: @escaping @Sendable (MatrixRTCLogRecord) -> Void) {
             self.handler = handler
         }
         
@@ -92,7 +92,7 @@ public nonisolated enum MatrixRtcLogging {
     }
 }
 
-private nonisolated extension MatrixRtcLogLevel {
+private nonisolated extension MatrixRTCLogLevel {
     init(_ level: RtcLogLevel) {
         switch level {
         case .error: self = .error

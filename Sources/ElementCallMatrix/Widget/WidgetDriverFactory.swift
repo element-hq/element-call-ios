@@ -17,7 +17,7 @@ import MatrixRustSDK
 enum WidgetDriverFactory {
     static func makeBridge(room: Room,
                            roomID: String,
-                           logger: (any ElementCallLogging)?) -> (any MatrixRtcRoomBridgeProtocol)? {
+                           logger: (any ElementCallLogging)?) -> (any MatrixRTCRoomBridgeProtocol)? {
         let widgetID = UUID().uuidString
         // Negotiation starts at `run()` rather than on a `content_loaded` that no web view will send;
         // the URL only has to parse, nothing loads it.

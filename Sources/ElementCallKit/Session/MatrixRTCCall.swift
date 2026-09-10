@@ -12,18 +12,18 @@ import Synchronization
 import UIKit
 
 /// The media half of a session: publishes the microphone, camera and screen, plays every remote
-/// member and hands out video frames for tiles. Owned by `MatrixRtcSession`.
+/// member and hands out video frames for tiles. Owned by `MatrixRTCSession`.
 @MainActor
 @Observable
-public final class MatrixRtcCall {
+public final class MatrixRTCCall {
     public let localMemberID: String
     
     /// The transport's roster (not the membership projection; the two can legitimately differ).
-    public private(set) var participants: [MatrixRtcParticipant] = []
-    public private(set) var audioLevels: [String: MatrixRtcAudioLevel] = [:]
-    public private(set) var receiveStats: [String: MatrixRtcReceiveStats] = [:]
+    public private(set) var participants: [MatrixRTCParticipant] = []
+    public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
+    public private(set) var receiveStats: [String: MatrixRTCReceiveStats] = [:]
     public private(set) var activeSpeakerIDs: Set<String> = []
-    public private(set) var frameEncryption: [String: MatrixRtcFrameEncryptionState] = [:]
+    public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
     public private(set) var isMicrophoneMuted = false
     public private(set) var isAudioTestToneEnabled = false
     public private(set) var isCameraEnabled = false
@@ -36,8 +36,8 @@ public final class MatrixRtcCall {
     public private(set) var hasEnded = false
     
     /// Every core event, after the call itself reacted to it.
-    public let events: AsyncStream<MatrixRtcCallEvent>
-    private let eventsContinuation: AsyncStream<MatrixRtcCallEvent>.Continuation
+    public let events: AsyncStream<MatrixRTCCallEvent>
+    private let eventsContinuation: AsyncStream<MatrixRTCCallEvent>.Continuation
     
     private let mediaSession: MediaSession
     private let audioEngine = CallAudioEngine()
@@ -68,7 +68,7 @@ public final class MatrixRtcCall {
     private var cameraTrack: FfiLocalTrack?
     private var playbackSinks = [String: AudioPlaybackSink]()
     private var videoSources = [VideoStreamKey: RemoteVideoSource]()
-    private var appliedConstraints = [VideoStreamKey: MatrixRtcVideoConstraints]()
+    private var appliedConstraints = [VideoStreamKey: MatrixRTCVideoConstraints]()
     /// Members whose video is released rather than merely paused. Held as member IDs because that
     /// is what the stage knows: a tile it has paged far away wants neither camera nor screen share.
     private var releasedVideoMembers = Set<String>()
@@ -76,23 +76,23 @@ public final class MatrixRtcCall {
     
     private struct VideoStreamKey: Hashable {
         let memberID: String
-        let kind: MatrixRtcStreamKind
+        let kind: MatrixRTCStreamKind
     }
     
     /// Size and frame rate of the streams being drawn (or captured), refreshed about once a second.
-    private var videoInfos = [VideoStreamKey: MatrixRtcVideoInfo]()
+    private var videoInfos = [VideoStreamKey: MatrixRTCVideoInfo]()
     
-    public func videoInfo(memberID: String, kind: MatrixRtcStreamKind = .camera) -> MatrixRtcVideoInfo? {
+    public func videoInfo(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoInfo? {
         videoInfos[VideoStreamKey(memberID: memberID, kind: kind)]
     }
     
     /// Upright aspect ratio of a stream seen so far, so a surface can be sized before its first frame.
-    public func videoAspect(memberID: String, kind: MatrixRtcStreamKind = .camera) -> CGFloat? {
+    public func videoAspect(memberID: String, kind: MatrixRTCStreamKind = .camera) -> CGFloat? {
         videoInfo(memberID: memberID, kind: kind)?.aspect
     }
     
     /// What was last asked of the SFU for a stream.
-    public func requestedVideoConstraints(memberID: String, kind: MatrixRtcStreamKind = .camera) -> MatrixRtcVideoConstraints? {
+    public func requestedVideoConstraints(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoConstraints? {
         appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
     }
     
@@ -140,14 +140,14 @@ public final class MatrixRtcCall {
                                                                               video: nil,
                                                                               simulcast: false))
         } catch {
-            throw MatrixRtcError.media("Failed to publish the microphone: \(error)")
+            throw MatrixRTCError.media("Failed to publish the microphone: \(error)")
         }
         microphoneTrack = track
         microphone.setTestToneEnabled(isAudioTestToneEnabled)
         microphone.start(track: track)
         // The transport only learns about a mute once there is a track.
         await setMicrophoneMuted(isMicrophoneMuted)
-        MatrixRtcLog.info("Publishing microphone as \(localMemberID)")
+        MatrixRTCLog.info("Publishing microphone as \(localMemberID)")
     }
     
     /// Stops handing frames over **and** tells the transport, so peers see a deliberate mute rather
@@ -183,7 +183,7 @@ public final class MatrixRtcCall {
                                                                                                                   height: CameraCapturer.captureHeight),
                                                                                       simulcast: true))
                 } catch {
-                    throw MatrixRtcError.media("Failed to publish the camera: \(error)")
+                    throw MatrixRTCError.media("Failed to publish the camera: \(error)")
                 }
                 cameraTrack = track
             }
@@ -196,7 +196,7 @@ public final class MatrixRtcCall {
             camera.stop()
         }
         isCameraEnabled = enabled
-        MatrixRtcLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
+        MatrixRTCLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
     }
     
     public func switchCamera() throws {
@@ -210,18 +210,18 @@ public final class MatrixRtcCall {
     
     /// What a single-tile surface (Picture in Picture) should show: the spotlight member's screen share
     /// or camera, else the first remote member with video, else our own camera.
-    public func pictureInPictureCandidate(spotlightMemberID: String?) -> (memberID: String, kind: MatrixRtcStreamKind)? {
+    public func pictureInPictureCandidate(spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
         Self.pictureInPictureCandidate(participants: participants,
                                        localMemberID: localMemberID,
                                        isLocalCameraAvailable: isCameraEnabled && !isCameraInterrupted,
                                        spotlightMemberID: spotlightMemberID)
     }
     
-    public nonisolated static func pictureInPictureCandidate(participants: [MatrixRtcParticipant],
+    public nonisolated static func pictureInPictureCandidate(participants: [MatrixRTCParticipant],
                                                              localMemberID: String,
                                                              isLocalCameraAvailable: Bool,
-                                                             spotlightMemberID: String?) -> (memberID: String, kind: MatrixRtcStreamKind)? {
-        func candidate(for participant: MatrixRtcParticipant) -> (memberID: String, kind: MatrixRtcStreamKind)? {
+                                                             spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
+        func candidate(for participant: MatrixRTCParticipant) -> (memberID: String, kind: MatrixRTCStreamKind)? {
             if participant.isPublishing(.screenShare) {
                 return (participant.memberID, .screenShare)
             }
@@ -250,7 +250,7 @@ public final class MatrixRtcCall {
         Self.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: spotlightMemberID)
     }
     
-    public nonisolated static func pictureInPicturePlaceholderMemberID(participants: [MatrixRtcParticipant],
+    public nonisolated static func pictureInPicturePlaceholderMemberID(participants: [MatrixRTCParticipant],
                                                                        spotlightMemberID: String?) -> String? {
         // The spotlight can be us — it is only excluded when picking a stream — and showing the
         // user their own avatar in the window tells them nothing about who they are talking to.
@@ -286,7 +286,7 @@ public final class MatrixRtcCall {
                                                                                                               height: UInt32(ScreenShareCapturer.maxLongEdge * 9 / 16)),
                                                                                   simulcast: true))
             } catch {
-                throw MatrixRtcError.media("Failed to publish the screen share: \(error)")
+                throw MatrixRTCError.media("Failed to publish the screen share: \(error)")
             }
             do {
                 try await screenShare.start(track: track)
@@ -300,17 +300,17 @@ public final class MatrixRtcCall {
             do {
                 try await mediaSession.unpublish(kind: .screenShare)
             } catch {
-                MatrixRtcLog.warning("Could not unpublish the screen share: \(error)")
+                MatrixRTCLog.warning("Could not unpublish the screen share: \(error)")
             }
         }
         isScreenSharing = enabled
-        MatrixRtcLog.info("Screen share \(enabled ? "started" : "stopped") for \(localMemberID)")
+        MatrixRTCLog.info("Screen share \(enabled ? "started" : "stopped") for \(localMemberID)")
     }
     
     // MARK: - Remote video
     
     /// Attaches a tile's slot to the member's stream, opening the decoder on first attach.
-    public func attachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRtcStreamKind = .camera) {
+    public func attachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         let key = VideoStreamKey(memberID: memberID, kind: kind)
         let source = videoSources[key] ?? {
             let mediaSession = mediaSession
@@ -339,7 +339,7 @@ public final class MatrixRtcCall {
         }
     }
     
-    public func detachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRtcStreamKind = .camera) {
+    public func detachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         videoSources[VideoStreamKey(memberID: memberID, kind: kind)]?.detach(slot)
         reportDrawnSize(nil, slot: slot, memberID: memberID, kind: kind)
     }
@@ -349,7 +349,7 @@ public final class MatrixRtcCall {
     private var drawnSizes = [VideoStreamKey: [UUID: CGSize]]()
     
     /// A surface reports how big it draws a stream (nil when it stops drawing it).
-    public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRtcStreamKind = .camera) {
+    public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         guard memberID != localMemberID else { return }
         // A surface that is still laid out but released (Picture in Picture keeps one alive) must
         // not re-subscribe the stream behind the stage's back.
@@ -367,11 +367,11 @@ public final class MatrixRtcCall {
     
     /// Say how big the tile really is; the SFU then sends the layer that fits. De-duplicated: layout
     /// recomputes on every pass and most land on the same numbers.
-    public func setVideoConstraints(_ constraints: MatrixRtcVideoConstraints, memberID: String, kind: MatrixRtcStreamKind = .camera) {
+    public func setVideoConstraints(_ constraints: MatrixRTCVideoConstraints, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         // Our own streams are not subscribed from the SFU; and layout jitters by a pixel between
         // passes, which is not news worth a round trip: snap to a 16 px grid.
         guard memberID != localMemberID else { return }
-        let constraints = MatrixRtcVideoConstraints(isEnabled: constraints.isEnabled,
+        let constraints = MatrixRTCVideoConstraints(isEnabled: constraints.isEnabled,
                                                     isVisible: constraints.isEnabled && constraints.isVisible,
                                                     pixelSize: constraints.pixelSize.map { size in
                                                         CGSize(width: (size.width / 16).rounded() * 16, height: (size.height / 16).rounded() * 16)
@@ -379,7 +379,7 @@ public final class MatrixRtcCall {
         let key = VideoStreamKey(memberID: memberID, kind: kind)
         guard appliedConstraints[key] != constraints else { return }
         appliedConstraints[key] = constraints
-        MatrixRtcLog.info("Constraints for \(memberID) (\(kind)): enabled=\(constraints.isEnabled) visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
+        MatrixRTCLog.info("Constraints for \(memberID) (\(kind)): enabled=\(constraints.isEnabled) visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
         
         let detail: FfiVideoDetail = if constraints.isVisible, let size = constraints.pixelSize {
             .dimensions(width: UInt32(size.width), height: UInt32(size.height))
@@ -409,7 +409,7 @@ public final class MatrixRtcCall {
         releasedVideoMembers = released
         for memberID in changed {
             let isEnabled = !released.contains(memberID)
-            for kind in [MatrixRtcStreamKind.camera, .screenShare] {
+            for kind in [MatrixRTCStreamKind.camera, .screenShare] {
                 let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
                 // Restoring stops at paused, never straight to visible: the tile is a page away, and
                 // it is its own attach that says it is being drawn again and at what size.
@@ -443,7 +443,7 @@ public final class MatrixRtcCall {
         do {
             try await mediaSession.disconnect()
         } catch {
-            MatrixRtcLog.warning("Failed to disconnect the media session: \(error)")
+            MatrixRTCLog.warning("Failed to disconnect the media session: \(error)")
         }
         eventsContinuation.finish()
     }
@@ -456,15 +456,15 @@ public final class MatrixRtcCall {
     
     private func pumpEvents() async {
         while !Task.isCancelled, let ffiEvent = await mediaSession.nextEvent() {
-            let event = MatrixRtcCallEvent(ffiEvent)
+            let event = MatrixRTCCallEvent(ffiEvent)
             handle(event)
             eventsContinuation.yield(event)
             refreshParticipants()
         }
-        MatrixRtcLog.debug("Media event pump stopped")
+        MatrixRTCLog.debug("Media event pump stopped")
     }
     
-    private func handle(_ event: MatrixRtcCallEvent) {
+    private func handle(_ event: MatrixRTCCallEvent) {
         switch event {
         case .streamStarted(let memberID, .microphone) where memberID != localMemberID:
             playAudio(of: memberID)
@@ -475,17 +475,17 @@ public final class MatrixRtcCall {
             activeSpeakerIDs = Set(speakers.map(\.memberID))
         case .frameEncryptionState(let memberID, let state):
             if frameEncryption[memberID] != state {
-                MatrixRtcLog.warning("Frame encryption \(state) for \(memberID) (was \(frameEncryption[memberID].map { "\($0)" } ?? "unknown"))")
+                MatrixRTCLog.warning("Frame encryption \(state) for \(memberID) (was \(frameEncryption[memberID].map { "\($0)" } ?? "unknown"))")
             }
             frameEncryption[memberID] = state
         case .keyDiscarded(let memberID, let reason):
-            MatrixRtcLog.warning("Key for \(memberID) discarded: \(reason)")
+            MatrixRTCLog.warning("Key for \(memberID) discarded: \(reason)")
         case .keyImported(let memberID, let keyIndex):
-            MatrixRtcLog.info("Key index \(keyIndex) imported for \(memberID)")
+            MatrixRTCLog.info("Key index \(keyIndex) imported for \(memberID)")
         case .mediaConnectionDegraded(let degraded):
             isMediaDegraded = degraded
         case .ended(let reason):
-            MatrixRtcLog.info("Media session ended: \(reason)")
+            MatrixRTCLog.info("Media session ended: \(reason)")
             hasEnded = true
             playbackSinks.values.forEach { $0.stop() }
             playbackSinks.removeAll()
@@ -499,7 +499,7 @@ public final class MatrixRtcCall {
     private func playAudio(of memberID: String) {
         guard memberID != localMemberID, playbackSinks[memberID] == nil else { return }
         guard let stream = mediaSession.audioStream(memberId: memberID, kind: .microphone) else {
-            MatrixRtcLog.warning("Cannot open the audio stream for \(memberID)")
+            MatrixRTCLog.warning("Cannot open the audio stream for \(memberID)")
             return
         }
         let sink = AudioPlaybackSink(memberID: memberID, engine: audioEngine) { [weak self] memberID, level in
@@ -507,7 +507,7 @@ public final class MatrixRtcCall {
         }
         playbackSinks[memberID] = sink
         sink.start(stream: stream)
-        MatrixRtcLog.info("Playing audio of \(memberID)")
+        MatrixRTCLog.info("Playing audio of \(memberID)")
     }
     
     private func stopPlayback(of memberID: String) {
@@ -520,9 +520,9 @@ public final class MatrixRtcCall {
     }
     
     private func refreshParticipants() {
-        let refreshed = mediaSession.participants().map(MatrixRtcParticipant.init)
+        let refreshed = mediaSession.participants().map(MatrixRTCParticipant.init)
         if Set(refreshed.map(\.memberID)) != Set(participants.map(\.memberID)) {
-            MatrixRtcLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
+            MatrixRTCLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
         }
         participants = refreshed
     }
@@ -535,10 +535,10 @@ public final class MatrixRtcCall {
     /// would rebuild every tile over a hundred times a second. Levels are collected here and
     /// published in one batch per sample period, which is all a meter needs.
     private static let audioLevelSamplePeriod: Duration = .milliseconds(100)
-    @ObservationIgnored private var pendingAudioLevels: [String: MatrixRtcAudioLevel] = [:]
+    @ObservationIgnored private var pendingAudioLevels: [String: MatrixRTCAudioLevel] = [:]
     @ObservationIgnored private var audioLevelFlush: Task<Void, Never>?
     
-    private func setAudioLevel(_ level: MatrixRtcAudioLevel, for memberID: String?) {
+    private func setAudioLevel(_ level: MatrixRTCAudioLevel, for memberID: String?) {
         guard let memberID else { return }
         pendingAudioLevels[memberID] = level
         guard audioLevelFlush == nil else { return }
@@ -574,7 +574,7 @@ public final class MatrixRtcCall {
     private func pollReceiveStats() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
-            var stats = [String: MatrixRtcReceiveStats]()
+            var stats = [String: MatrixRTCReceiveStats]()
             for participant in participants where !participant.isLocal {
                 if let audio = await mediaSession.receiveStats(memberId: participant.memberID, kind: .microphone) {
                     stats[participant.memberID] = .init(audio)
@@ -584,11 +584,11 @@ public final class MatrixRtcCall {
         }
     }
     
-    private func setTransportMuted(_ kind: MatrixRtcStreamKind, muted: Bool) async {
+    private func setTransportMuted(_ kind: MatrixRTCStreamKind, muted: Bool) async {
         do {
             try await mediaSession.setLocalMuted(kind: kind.ffi, muted: muted)
         } catch {
-            MatrixRtcLog.warning("Could not tell the transport \(kind) is \(muted ? "muted" : "unmuted"): \(error)")
+            MatrixRTCLog.warning("Could not tell the transport \(kind) is \(muted ? "muted" : "unmuted"): \(error)")
         }
     }
 }
@@ -605,7 +605,7 @@ public final nonisolated class LocalVideoFanOut: Sendable {
         slots.withLock { $0[slot.id] = nil }; slot.clear()
     }
     
-    func offer(_ frame: MatrixRtcVideoFrame) {
+    func offer(_ frame: MatrixRTCVideoFrame) {
         for slot in slots.withLock({ Array($0.values) }) {
             slot.offer(frame)
         }

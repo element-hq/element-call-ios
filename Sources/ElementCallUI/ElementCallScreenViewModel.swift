@@ -31,7 +31,7 @@ public final class ElementCallScreenContext {
     /// Builds a context around a state written by hand, with nothing behind it.
     ///
     /// This is the seam that makes a connected call renderable without one. The live view model
-    /// needs a `MatrixRtcCall` to produce tiles, and that class wraps handles from the Rust core and
+    /// needs a `MatrixRTCCall` to produce tiles, and that class wraps handles from the Rust core and
     /// cannot be constructed in a test. The view state it projects into is a plain struct, so a
     /// preview skips the projection and writes the answer. Tiles claiming video draw their avatar,
     /// because there is no call to pull frames from, which is what a snapshot wants anyway.
@@ -56,7 +56,7 @@ public final class ElementCallScreenViewModel {
     public let context: ElementCallScreenContext
     
     /// The call whose frames the tiles draw; nil until media is connected.
-    public var call: MatrixRtcCall? {
+    public var call: MatrixRTCCall? {
         controller.call
     }
     
@@ -209,11 +209,11 @@ public final class ElementCallScreenViewModel {
         context.viewState = state
     }
     
-    private static func describe(_ stats: MatrixRtcReceiveStats?,
+    private static func describe(_ stats: MatrixRTCReceiveStats?,
                                  hasMicrophone: Bool,
-                                 encryption: MatrixRtcFrameEncryptionState?,
-                                 video: MatrixRtcVideoInfo?,
-                                 requested: MatrixRtcVideoConstraints?) -> String {
+                                 encryption: MatrixRTCFrameEncryptionState?,
+                                 video: MatrixRTCVideoInfo?,
+                                 requested: MatrixRTCVideoConstraints?) -> String {
         var lines = [String]()
         // The badge says muted for this too; here "they muted" and "we were never given their
         // audio" are different answers, and the far end hears them fine in the second case.

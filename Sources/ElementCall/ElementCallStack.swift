@@ -22,7 +22,7 @@ public final class ElementCallStack {
     /// from it.
     public let controller: ElementCallController
     
-    private let rtcService: MatrixRtcService
+    private let rtcService: MatrixRTCService
     private let logger: (any ElementCallLogging)?
     
     public init(transport: any ElementCallMatrixTransport,
@@ -30,7 +30,7 @@ public final class ElementCallStack {
                 options: any ElementCallOptions = ElementCallDefaultOptions(),
                 style: ElementCallStyle = .stock,
                 logger: (any ElementCallLogging)? = nil) {
-        let rtcService = MatrixRtcService(transport: transport)
+        let rtcService = MatrixRTCService(transport: transport)
         self.rtcService = rtcService
         self.logger = logger
         controller = ElementCallController(rtcService: rtcService,

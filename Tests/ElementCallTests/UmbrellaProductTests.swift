@@ -16,7 +16,7 @@ struct UmbrellaProductTests {
     @Test
     func reachesEveryModuleThroughOneImport() {
         // ElementCallKit
-        #expect(MatrixRtcStreamKind.camera != .screenShare)
+        #expect(MatrixRTCStreamKind.camera != .screenShare)
         // ElementCall
         #expect(ElementCallDefaultOptions().isPictureInPictureEnabled)
         // ElementCallUI

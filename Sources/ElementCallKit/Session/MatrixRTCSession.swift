@@ -16,17 +16,17 @@ import Observation
 /// subscription → cancel feeds → leave.
 @MainActor
 @Observable
-public final class MatrixRtcSession {
+public final class MatrixRTCSession {
     public let roomID: String
     public let slotID: String
     /// Minted by the core at join time; what every event, roster entry and key report is keyed by.
     public let localMemberID: String
     
     /// Identities from the core's membership projection (who is in the call).
-    public private(set) var members: [MatrixRtcMembership] = []
+    public private(set) var members: [MatrixRTCMembership] = []
     /// The core's own count, right whenever read; the projection above can lag in some compat modes.
     public private(set) var memberCount = 0
-    public private(set) var call: MatrixRtcCall?
+    public private(set) var call: MatrixRTCCall?
     
     private let manager: RtcSessionManagerHandle
     private let transport: ElementCallMatrixTransport
@@ -60,7 +60,7 @@ public final class MatrixRtcSession {
         do {
             membershipSubscription = try await manager.subscribeMembershipSnapshots(roomId: roomID, slotId: slotID)
         } catch {
-            MatrixRtcLog.warning("Cannot subscribe to memberships for \(roomID)/\(slotID): \(error)")
+            MatrixRTCLog.warning("Cannot subscribe to memberships for \(roomID)/\(slotID): \(error)")
         }
         
         if let membershipSubscription {
@@ -69,29 +69,29 @@ public final class MatrixRtcSession {
                 while !Task.isCancelled {
                     do {
                         if let snapshot = try membershipSubscription.nextSnapshot() {
-                            let members = snapshot.map(MatrixRtcMembership.init)
+                            let members = snapshot.map(MatrixRTCMembership.init)
                             self?.updateMembers(members)
                         }
                     } catch {
-                        MatrixRtcLog.warning("Membership subscription for \(self?.roomID ?? "?") ended: \(error)")
+                        MatrixRTCLog.warning("Membership subscription for \(self?.roomID ?? "?") ended: \(error)")
                         break
                     }
                     try? await Task.sleep(for: .seconds(1))
                 }
             }
         } else {
-            MatrixRtcLog.warning("No membership subscription for \(roomID)/\(slotID), the roster will not update")
+            MatrixRTCLog.warning("No membership subscription for \(roomID)/\(slotID), the roster will not update")
         }
         
         feeder.startMemberships()
     }
     
     /// Attaches media. The core knows which membership this session joined as, so no member ID is passed.
-    public func connectMedia(transport liveKit: MatrixRtcTransport) async throws -> MatrixRtcCall {
+    public func connectMedia(transport liveKit: MatrixRTCTransport) async throws -> MatrixRTCCall {
         if let call {
             return call
         }
-        guard case .liveKit(let serviceURL) = liveKit else { throw MatrixRtcError.noLiveKitTransport }
+        guard case .liveKit(let serviceURL) = liveKit else { throw MatrixRTCError.noLiveKitTransport }
         
         let mediaSession: MediaSession
         do {
@@ -103,21 +103,21 @@ public final class MatrixRtcSession {
                                                                                     livekitServiceUrl: serviceURL.absoluteString),
                                                          tokenProvider: OpenIDTokenProviderAdapter(transport: transport))
         } catch {
-            MatrixRtcLog.warning("Failed to connect media for \(roomID)/\(slotID): \(error)")
-            throw MatrixRtcError.media("\(error)")
+            MatrixRTCLog.warning("Failed to connect media for \(roomID)/\(slotID): \(error)")
+            throw MatrixRTCError.media("\(error)")
         }
         
-        let call = MatrixRtcCall(localMemberID: localMemberID, mediaSession: mediaSession)
+        let call = MatrixRTCCall(localMemberID: localMemberID, mediaSession: mediaSession)
         self.call = call
         await call.start()
-        MatrixRtcLog.info("Media connected for \(roomID)/\(slotID) as \(localMemberID)")
+        MatrixRTCLog.info("Media connected for \(roomID)/\(slotID) as \(localMemberID)")
         return call
     }
     
     /// Idempotent: hanging up and tearing the screen down both leave, and the core rejects a second attempt.
-    public func leave(reason: MatrixRtcLeaveReason? = nil) async {
+    public func leave(reason: MatrixRTCLeaveReason? = nil) async {
         guard !hasLeft else {
-            MatrixRtcLog.debug("Already left \(roomID)/\(slotID)")
+            MatrixRTCLog.debug("Already left \(roomID)/\(slotID)")
             return
         }
         hasLeft = true
@@ -132,15 +132,15 @@ public final class MatrixRtcSession {
         do {
             let leaveReason = reason.map { FfiLeaveReason(code: $0.code, reason: $0.reason) }
             try await manager.leave(roomId: roomID, slotId: slotID, params: FfiLeaveSessionParams(leaveReason: leaveReason))
-            MatrixRtcLog.info("Left \(roomID)/\(slotID)")
+            MatrixRTCLog.info("Left \(roomID)/\(slotID)")
         } catch {
-            MatrixRtcLog.warning("Failed to leave \(roomID)/\(slotID): \(error)")
+            MatrixRTCLog.warning("Failed to leave \(roomID)/\(slotID): \(error)")
         }
     }
     
-    private func updateMembers(_ members: [MatrixRtcMembership]) {
+    private func updateMembers(_ members: [MatrixRTCMembership]) {
         if members.map(\.memberID) != self.members.map(\.memberID) {
-            MatrixRtcLog.info("\(members.count) member(s) in \(roomID)/\(slotID): \(members.map(\.memberID))")
+            MatrixRTCLog.info("\(members.count) member(s) in \(roomID)/\(slotID): \(members.map(\.memberID))")
         }
         self.members = members
     }
