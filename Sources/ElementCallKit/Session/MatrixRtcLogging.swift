@@ -16,8 +16,22 @@ public nonisolated enum MatrixRtcLogLevel: Sendable {
 /// A log record emitted by the Rust core. Delivered on a dedicated Rust thread, never the main actor.
 public nonisolated struct MatrixRtcLogRecord: Sendable {
     public let level: MatrixRtcLogLevel
+    /// Module path of the emitting code, e.g. `matrix_rtc_core::session`.
     public let target: String
     public let message: String
+    /// Where in the Rust source the record came from, when the core knows.
+    ///
+    /// Forwarded because a host that has no position of its own to attribute a line to will make
+    /// one up: element-x-ios was passing `target` as the file and getting the line number of its
+    /// own bridge, so a line read `matrix_rtc_core::session:20` where `20` pointed into
+    /// `MatrixRTCLogBridge.swift`.
+    public let file: String?
+    public let line: UInt32?
+    /// Milliseconds since the Unix epoch, captured when the record was *emitted*. Delivery is
+    /// asynchronous, so a host stamping its own receive time is stamping the wrong moment.
+    public let timestampMs: UInt64
+    /// The Rust thread the record was emitted on.
+    public let thread: String
 }
 
 /// Routes the Rust core's tracing output into the host app's logger.
@@ -46,7 +60,14 @@ public nonisolated enum MatrixRtcLogging {
                 isInstalled = true
                 return true
             } catch {
-                handler(.init(level: .error, target: "matrix_rtc_ffi", message: "Failed installing the log sink: \(error)"))
+                // Ours, not the core's, so there is no Rust position to carry.
+                handler(.init(level: .error,
+                              target: "matrix_rtc_ffi",
+                              message: "Failed installing the log sink: \(error)",
+                              file: nil,
+                              line: nil,
+                              timestampMs: UInt64(Date().timeIntervalSince1970 * 1000),
+                              thread: Thread.current.description))
                 return false
             }
         }
@@ -60,7 +81,13 @@ public nonisolated enum MatrixRtcLogging {
         }
         
         func log(record: RtcLogRecord) {
-            handler(.init(level: .init(record.level), target: record.target, message: record.message))
+            handler(.init(level: .init(record.level),
+                          target: record.target,
+                          message: record.message,
+                          file: record.file,
+                          line: record.line,
+                          timestampMs: record.timestampMs,
+                          thread: record.thread))
         }
     }
 }

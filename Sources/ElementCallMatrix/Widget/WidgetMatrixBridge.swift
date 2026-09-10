@@ -95,8 +95,10 @@ actor WidgetMatrixBridge: MatrixRtcRoomBridgeProtocol {
         self.runDriver = runDriver
     }
     
-    private func log(_ level: ElementCallLogLevel, _ message: String) {
-        logger?.log(level, "WidgetBridge: " + message)
+    /// Forwards the caller's position rather than its own, or every line in this file would be
+    /// attributed to the line below.
+    private func log(_ level: ElementCallLogLevel, _ message: String, file: String = #fileID, line: Int = #line) {
+        logger?.log(level, "WidgetBridge: " + message, file: file, line: line)
     }
     
     // MARK: - Lifecycle
