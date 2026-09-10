@@ -47,11 +47,19 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
     
     /// Boxed rather than stored bare for the reason given in AGENTS.md: a function value copied in
     /// and out of storage reabstracts on every copy, and these are re-read on every restart.
-    private struct InputSinkReceiver {
+    ///
+    /// `@unchecked` because AVFAudio's block typealiases are not `@Sendable`, and the attribute
+    /// cannot be applied to a typealias, so there is no way to state what is actually true here:
+    /// the only thing either box ever carries is `MicrophoneTap.receiverBlock` or
+    /// `AudioPlaybackRenderer.renderBlock`, and each of those captures exactly one object, itself
+    /// `@unchecked Sendable` and hand-synchronised for the render thread. Re-declaring Apple's
+    /// signatures with `@Sendable` would make it checked, at the cost of duplicating them in six
+    /// places that would silently drift. Keep one stored property each, or that reasoning lapses.
+    private struct InputSinkReceiver: @unchecked Sendable {
         let block: AVAudioSinkNodeReceiverBlock
     }
     
-    private struct SourceRenderBlock {
+    private struct SourceRenderBlock: @unchecked Sendable {
         let block: AVAudioSourceNodeRenderBlock
     }
     
