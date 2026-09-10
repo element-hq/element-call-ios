@@ -14,24 +14,55 @@ import Synchronization
 /// Under CallKit the engine must only start once the provider activated the audio session
 /// (`didActivate`), never before — starting early yields silence or `-10868`.
 final nonisolated class CallAudioEngine: @unchecked Sendable {
+    /// Every `AVAudioEngine` mutation happens here, in order, and nothing else does.
+    ///
+    /// This used to be an `NSLock`, and the difference matters. The engine takes its own recursive
+    /// mutex and then the render graph's, so any thread holding a lock across an engine call while
+    /// the render thread wants the same lock closes a cycle. A serial queue gives the same mutual
+    /// exclusion over the state below with nothing the real-time thread can ever block on, and it
+    /// keeps graph reconfiguration off the main thread at hang-up.
+    ///
+    /// **Never `sync` onto this queue, and never from inside it.**
+    /// `AVAudioEngineConfigurationChange` is posted *synchronously* by `attach` and `connect`, so
+    /// this queue can be mid-attach at the moment a restart is enqueued.
+    private let queue = DispatchQueue(label: "io.element.elementcall.audio-engine", qos: .userInitiated)
+    
     private let engine = AVAudioEngine()
-    private let lock = NSLock()
+    
+    /// The hardware input format, published as a value for the render path to read.
+    ///
+    /// Asking the engine for this is a mutex acquisition, and the microphone sink block used to do
+    /// exactly that on the real-time thread — which deadlocked hang-up against `detach`. Readers
+    /// take the snapshot; only this class asks the engine.
+    let inputFormat = InputFormatSnapshot()
+    
+    // Everything below is confined to `queue`.
     private var isVoiceProcessingConfigured = false
+    private var inputReceiver: InputSinkReceiver?
     private var sinkNode: AVAudioSinkNode?
+    private var renderBlocks = [String: SourceRenderBlock]()
     private var sourceNodes = [String: AVAudioSourceNode]()
     private var isRunning = false
     private var configurationObserver: NSObjectProtocol?
     
-    var onConfigurationChange: (@Sendable () -> Void)?
+    /// Boxed rather than stored bare for the reason given in AGENTS.md: a function value copied in
+    /// and out of storage reabstracts on every copy, and these are re-read on every restart.
+    private struct InputSinkReceiver {
+        let block: AVAudioSinkNodeReceiverBlock
+    }
+    
+    private struct SourceRenderBlock {
+        let block: AVAudioSourceNodeRenderBlock
+    }
     
     init() {
-        // Posted synchronously on whichever thread reconfigured the graph — which may be a thread
-        // currently holding `lock` (attaching a node) — so the restart must hop off it first.
+        // Posted synchronously on whichever thread reconfigured the graph — which may be `queue`
+        // itself, mid-attach — so the restart must be enqueued rather than run here.
         configurationObserver = NotificationCenter.default.addObserver(forName: .AVAudioEngineConfigurationChange,
                                                                        object: engine,
                                                                        queue: nil) { [weak self] _ in
             MatrixRtcLog.info("Audio engine configuration changed, restarting")
-            DispatchQueue.global(qos: .userInitiated).async { self?.restartAfterConfigurationChange() }
+            self?.restart()
         }
     }
     
@@ -39,90 +70,180 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
         if let configurationObserver {
             NotificationCenter.default.removeObserver(configurationObserver)
         }
-    }
-    
-    /// The hardware input format, only meaningful while the session is active.
-    var inputFormat: AVAudioFormat {
-        engine.inputNode.outputFormat(forBus: 0)
+        // Safe to touch the engine off the queue only because every block enqueued below upgrades a
+        // weak self: none can be running while this is, and none still queued will do anything. If
+        // a future change captures self strongly in one of them, deinit becomes unreachable and
+        // this stops being true. A running engine that outlives the owner of its render blocks
+        // renders from freed memory.
+        engine.stop()
     }
     
     /// Installs the microphone sink. `receiver` runs on the real-time thread: copy and return.
     func installInputSink(_ receiver: @escaping AVAudioSinkNodeReceiverBlock) {
-        lock.withLock {
+        let boxed = InputSinkReceiver(block: receiver)
+        queue.async { [weak self] in
+            guard let self else { return }
+            inputReceiver = boxed
+            attachInputSink()
+        }
+    }
+    
+    /// Detaching the sink was missing entirely: `MicrophoneCapturer.stop()` cancelled its drainer
+    /// and left the node firing into a ring nobody read for the rest of the process's life, which
+    /// is why the render thread was still contending for the engine's mutex during teardown.
+    func removeInputSink() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            inputReceiver = nil
             if let sinkNode {
                 engine.detach(sinkNode)
+                self.sinkNode = nil
             }
-            let node = AVAudioSinkNode(receiverBlock: receiver)
-            engine.attach(node)
-            // The sink takes the input node's own format; converting happens off the render thread.
-            engine.connect(engine.inputNode, to: node, format: nil)
-            sinkNode = node
         }
     }
     
     func addSourceNode(for memberID: String, render: @escaping AVAudioSourceNodeRenderBlock) {
-        lock.withLock {
-            if let existing = sourceNodes[memberID] {
-                engine.detach(existing)
-            }
-            let node = AVAudioSourceNode(format: AudioFormat.float32, renderBlock: render)
-            engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: AudioFormat.float32)
-            sourceNodes[memberID] = node
+        let boxed = SourceRenderBlock(block: render)
+        queue.async { [weak self] in
+            guard let self else { return }
+            renderBlocks[memberID] = boxed
+            attachSourceNode(for: memberID)
         }
     }
     
     func removeSourceNode(for memberID: String) {
-        lock.withLock {
+        queue.async { [weak self] in
+            guard let self else { return }
+            renderBlocks[memberID] = nil
             guard let node = sourceNodes.removeValue(forKey: memberID) else { return }
-            engine.disconnectNodeInput(node)
+            // `detach` disconnects. The explicit `disconnectNodeInput` that used to sit here was a
+            // no-op anyway: a source node has no input bus.
             engine.detach(node)
         }
     }
     
     /// Call from CallKit's `didActivate` (or directly on the simulator, where CallKit never activates).
-    func start() throws {
-        try lock.withLock {
-            guard !isRunning else { return }
-            // Voice processing (AEC/AGC/NS) must be enabled before prepare(), and only once the
-            // session is active or the input format reads as 0 Hz.
-            if !isVoiceProcessingConfigured {
-                do {
-                    try engine.inputNode.setVoiceProcessingEnabled(true)
-                } catch {
-                    // The simulator has no voice processing; a call without AEC still works.
-                    MatrixRtcLog.warning("Voice processing unavailable: \(error)")
-                }
-                isVoiceProcessingConfigured = true
-            }
-            // Keep the output path alive even with no remote member yet, so the mixer format is fixed.
-            engine.connect(engine.mainMixerNode, to: engine.outputNode, format: nil)
-            engine.prepare()
-            try engine.start()
-            isRunning = true
-            MatrixRtcLog.info("Audio engine started, input \(engine.inputNode.outputFormat(forBus: 0))")
-        }
+    func start() {
+        queue.async { [weak self] in self?.startNow() }
     }
     
     /// Call from CallKit's `didDeactivate`; the session itself is CallKit's to deactivate.
     func stop() {
-        lock.withLock {
-            guard isRunning else { return }
+        queue.async { [weak self] in
+            guard let self, isRunning else { return }
             engine.stop()
             isRunning = false
             MatrixRtcLog.info("Audio engine stopped")
         }
     }
     
-    private func restartAfterConfigurationChange() {
-        let wasRunning = lock.withLock { isRunning }
-        guard wasRunning else { return }
-        lock.withLock { isRunning = false }
-        onConfigurationChange?()
-        do {
-            try start()
-        } catch {
-            MatrixRtcLog.error("Failed restarting the audio engine after a configuration change: \(error)")
+    /// Tears the whole graph down in one hop, for hang-up.
+    ///
+    /// Detaching ten remote members one call at a time is ten graph reconfigurations, each able to
+    /// post its own configuration-change notification while the previous one is still settling.
+    func shutdown() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            if isRunning {
+                engine.stop()
+                isRunning = false
+            }
+            if let sinkNode {
+                engine.detach(sinkNode)
+                self.sinkNode = nil
+            }
+            for node in sourceNodes.values {
+                engine.detach(node)
+            }
+            sourceNodes.removeAll()
+            renderBlocks.removeAll()
+            inputReceiver = nil
+            MatrixRtcLog.info("Audio engine shut down")
         }
+    }
+    
+    // MARK: - Private
+    
+    private func startNow() {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard !isRunning else { return }
+        if !isVoiceProcessingConfigured {
+            // Voice processing (AEC/AGC/NS) must be enabled before prepare(), and only once the
+            // session is active or the input format reads as 0 Hz.
+            do {
+                try engine.inputNode.setVoiceProcessingEnabled(true)
+            } catch {
+                // The simulator has no voice processing; a call without AEC still works.
+                MatrixRtcLog.warning("Voice processing unavailable: \(error)")
+            }
+            isVoiceProcessingConfigured = true
+        }
+        // Keep the output path alive even with no remote member yet, so the mixer format is fixed.
+        engine.connect(engine.mainMixerNode, to: engine.outputNode, format: nil)
+        
+        // Rebuilt from the stored blocks on every start, not just the first. A configuration change
+        // leaves the nodes attached but their connections gone and hands the input node a new
+        // format, so a restart that only called `engine.start()` would come back deaf. This is what
+        // the old `onConfigurationChange` hook was for — nothing ever assigned it, so the reinstall
+        // simply never happened. Doing it here leaves no window in which the graph is up but the
+        // sink is not.
+        attachInputSink()
+        for memberID in renderBlocks.keys {
+            attachSourceNode(for: memberID)
+        }
+        
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            MatrixRtcLog.error("Failed starting the audio engine: \(error)")
+            return
+        }
+        isRunning = true
+        // The hardware format is only real once the engine is running, and a restart after a route
+        // change lands here with a different one.
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        inputFormat.store(InputStreamFormat(format))
+        MatrixRtcLog.info("Audio engine started, input \(format)")
+    }
+    
+    private func restart() {
+        queue.async { [weak self] in
+            guard let self, isRunning else { return }
+            engine.stop()
+            isRunning = false
+            // One hop, so two notifications in quick succession cannot interleave a stop with a
+            // start and leave the engine down.
+            startNow()
+        }
+    }
+    
+    private func attachInputSink() {
+        dispatchPrecondition(condition: .onQueue(queue))
+        if let sinkNode {
+            engine.detach(sinkNode)
+            self.sinkNode = nil
+        }
+        guard let inputReceiver else { return }
+        // Published before the node goes live: the block reads the format on its very first
+        // callback, and the engine may already be running.
+        inputFormat.store(InputStreamFormat(engine.inputNode.outputFormat(forBus: 0)))
+        let node = AVAudioSinkNode(receiverBlock: inputReceiver.block)
+        engine.attach(node)
+        // The sink takes the input node's own format; converting happens off the render thread.
+        engine.connect(engine.inputNode, to: node, format: nil)
+        sinkNode = node
+    }
+    
+    private func attachSourceNode(for memberID: String) {
+        dispatchPrecondition(condition: .onQueue(queue))
+        if let existing = sourceNodes.removeValue(forKey: memberID) {
+            engine.detach(existing)
+        }
+        guard let render = renderBlocks[memberID] else { return }
+        let node = AVAudioSourceNode(format: AudioFormat.float32, renderBlock: render.block)
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: AudioFormat.float32)
+        sourceNodes[memberID] = node
     }
 }
