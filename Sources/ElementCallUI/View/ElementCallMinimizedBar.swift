@@ -12,9 +12,13 @@ import SwiftUI
 /// The ongoing call, shrunk to a bar at the top of the app. Tapping it restores the full screen.
 ///
 /// The host places this itself, because only the host knows where the top of its own chrome is. It
-/// is offered for a call with no video to show, and for a video call whose Picture in Picture window
-/// could not open, both of which arrive as
+/// is offered whenever the system window is not available, which arrives as
 /// ``ElementCallControllerAction/pictureInPictureUnavailable``.
+///
+/// That is no longer about whether anyone has video — an audio call minimizes to the window too,
+/// showing the avatar placeholder. What is left is the cases that were never about video: a host
+/// that turned the window off, a device that cannot show one, and a screen share, which gives up
+/// Picture in Picture for its duration.
 public struct ElementCallMinimizedBar: View {
     private let controller: ElementCallController
     private let onTap: () -> Void

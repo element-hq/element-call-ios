@@ -13,7 +13,7 @@ import Foundation
 ///
 /// Read every time rather than captured, so a host backing these with live settings sees the change.
 public nonisolated protocol ElementCallOptions: Sendable {
-    /// Whether a minimized video call may open a Picture in Picture window. A host without the
+    /// Whether a minimized call may open a Picture in Picture window. A host without the
     /// background mode entitlement should answer false, and calls minimize to the bar instead.
     var isPictureInPictureEnabled: Bool { get }
     /// How membership is published. Pinned by the host because it has to match the other clients in
@@ -21,6 +21,20 @@ public nonisolated protocol ElementCallOptions: Sendable {
     var elementCallCompatibility: MatrixRtcElementCallCompat { get }
     /// Whether the developer stats overlay can be toggled on a tile.
     var areTileStatsAvailable: Bool { get }
+    /// Whether *leaving the app* during an audio-only call may open the window by itself. A video
+    /// call always may.
+    ///
+    /// Separate from ``isPictureInPictureEnabled``, which governs minimizing on purpose. The
+    /// default is false because CallKit's island already represents a backgrounded audio call, and
+    /// a window appearing on every app switch is intrusive when there is only an avatar to show.
+    var isAutomaticPictureInPictureForAudioCallsEnabled: Bool { get }
+}
+
+public nonisolated extension ElementCallOptions {
+    /// Defaulted so that adding this did not break every host's existing conformance.
+    var isAutomaticPictureInPictureForAudioCallsEnabled: Bool {
+        false
+    }
 }
 
 /// Defaults for a host that has no opinion.
@@ -28,13 +42,16 @@ public nonisolated struct ElementCallDefaultOptions: ElementCallOptions {
     public var isPictureInPictureEnabled: Bool
     public var elementCallCompatibility: MatrixRtcElementCallCompat
     public var areTileStatsAvailable: Bool
+    public var isAutomaticPictureInPictureForAudioCallsEnabled: Bool
     
     public init(isPictureInPictureEnabled: Bool = true,
                 elementCallCompatibility: MatrixRtcElementCallCompat = .stateEvents,
-                areTileStatsAvailable: Bool = false) {
+                areTileStatsAvailable: Bool = false,
+                isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false) {
         self.isPictureInPictureEnabled = isPictureInPictureEnabled
         self.elementCallCompatibility = elementCallCompatibility
         self.areTileStatsAvailable = areTileStatsAvailable
+        self.isAutomaticPictureInPictureForAudioCallsEnabled = isAutomaticPictureInPictureForAudioCallsEnabled
     }
 }
 

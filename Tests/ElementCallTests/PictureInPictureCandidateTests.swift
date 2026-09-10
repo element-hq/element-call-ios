@@ -34,6 +34,29 @@ struct PictureInPictureCandidateTests {
         #expect(MatrixRtcCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: false, spotlightMemberID: nil) == nil)
     }
     
+    @Test
+    func placeholderNamesTheSpotlightWhenItIsSomebodyElse() {
+        let participants = [participant("bob"), participant("carol")]
+        #expect(MatrixRtcCall.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: "carol") == "carol")
+    }
+    
+    /// Showing the user their own avatar tells them nothing about who they are talking to, and the
+    /// spotlight is often us in a call where nobody has video.
+    @Test
+    func placeholderSkipsTheSpotlightWhenItIsUs() {
+        let participants = [participant(me, isLocal: true), participant("bob")]
+        #expect(MatrixRtcCall.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: me) == "bob")
+    }
+    
+    @Test
+    func placeholderFallsBackToTheFirstRemoteMemberAndIsNilWhenAlone() {
+        let participants = [participant(me, isLocal: true), participant("bob"), participant("carol")]
+        #expect(MatrixRtcCall.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: nil) == "bob")
+        // A spotlight naming nobody in the call must not be shown either.
+        #expect(MatrixRtcCall.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: "dave") == "bob")
+        #expect(MatrixRtcCall.pictureInPicturePlaceholderMemberID(participants: [participant(me, isLocal: true)], spotlightMemberID: nil) == nil)
+    }
+    
     private func participant(_ memberID: String, isLocal: Bool = false, camera: Bool = false, screenShare: Bool = false) -> MatrixRtcParticipant {
         var streams: [MatrixRtcStreamState] = [.init(kind: .microphone, isMuted: false)]
         if camera {
