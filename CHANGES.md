@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.3 - 2026-09-11
+
 **`compound-design-tokens` is now a range starting at 11.0.0**, where it was pinned exactly at
 10.2.4. Nothing in the public surface changes, but a host whose Compound still resolves tokens below
 11.0.0 will no longer resolve against this package at all — update Compound first.
@@ -18,6 +22,16 @@ version will actually read it.
 The exact pin was the problem. Two `exact` requirements on one package have no solution, so once
 `compound-ios` moved to tokens 11.0.0 the integration failed at resolution, before anything compiled.
 The range means a host bumping Compound ahead of a release here no longer has to wait for one.
+
+
+
+### What's Changed
+
+🧱 Build
+* Import Compound as a range to avoid resolution problems on exi by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/21
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.2...0.1.0-rc.3
 
 ## 0.1.0-rc.2 - 2026-09-11
 
