@@ -88,6 +88,13 @@ struct ElementCallView: View {
             Text(alert.message)
         }
         .statusBarHidden(fullscreenTile != nil && !context.isFullscreenChromeVisible)
+        .onChange(of: context.viewState.isMaximized) { _, isMaximized in
+            // Minimizing ends full screen rather than suspending it. The window continues whatever
+            // the ordinary arrangement gives it, and coming back is the stage: one state fewer to
+            // reason about, and no way to return to a screen whose chrome you had left hidden.
+            guard !isMaximized else { return }
+            setFullscreen(nil)
+        }
         .onChange(of: context.viewState.tiles) { _, tiles in
             // The person you were watching can leave. The arrangement falls back on its own, but the
             // screen would go on believing it was full screen: top bar hidden, chrome hidden, and
