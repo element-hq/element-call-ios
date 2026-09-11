@@ -139,7 +139,7 @@ jobs:
           key: build-${{ env.CACHE_VERSION }}-${{ env.XCODE_APP }}-${{ hashFiles('Package.resolved') }}
 
       - name: Install tools
-        run: brew install sourcery swiftformat swiftlint
+        run: brew install sourcery swiftformat swiftlint xcodegen
 
       # The package must never reach for the host application's world. SwiftLint carries the rules
       # that enforce it, at error severity, so this failing is the boundary breaking rather than a
@@ -185,16 +185,40 @@ jobs:
             -resultBundlePath Logs/ElementCallTests.xcresult \
             | xcbeautify --renderer github-actions
 
+      # The one thing the package's own tests cannot reach. Everything about a gesture except
+      # whether the touch arrives is covered in-process; a double tap declared correctly that
+      # something above the tile claims first looks identical to a working one from inside, and only
+      # a real touch tells them apart. The harness it drives is a sample app over the port fakes, so
+      # this needs no server and no camera.
+      #
+      # In this job rather than one of its own, so it reuses the simulator created above and the
+      # build cache, and so the pinned device stays duplicated in two workflow files and not three.
+      - name: Generate the example project
+        working-directory: Example
+        run: xcodegen generate
+
+      - name: Run UI tests
+        run: |
+          set -o pipefail && xcodebuild test \
+            -project Example/ElementCallExample.xcodeproj \
+            -scheme ElementCallExample \
+            -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -resultBundlePath Logs/ElementCallExampleUITests.xcresult \
+            | xcbeautify --renderer github-actions
+
       - name: Zip artifacts
         if: failure()
-        run: zip -r Logs/ElementCallTests.xcresult.zip Logs/ElementCallTests.xcresult/
+        run: |
+          for bundle in Logs/*.xcresult; do
+            [ -e "$bundle" ] && zip -r "$bundle.zip" "$bundle/"
+          done
 
       - name: Archive artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
           name: test-results
-          path: Logs/ElementCallTests.xcresult.zip
+          path: Logs/*.xcresult.zip
           retention-days: 1
           if-no-files-found: ignore
 

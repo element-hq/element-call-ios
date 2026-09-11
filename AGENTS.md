@@ -73,7 +73,73 @@ harness reads them and fails loudly when the simulator does not match. **The wor
 them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
 `SIMULATOR_RUNTIME` are duplicated literals in both workflow files, so changing the pinned device is
 three edits, not one. `release.yml` is deliberately not a fourth: it runs on Linux and gates on the
-`Tests` run for the commit rather than testing anything itself.
+`Tests` run for the commit rather than testing anything itself, and the example harness below is not
+a fourth either: it is a step in the same `Tests` job and reuses the simulator that job creates.
+
+### The example harness and the UI tests
+
+`Example/` is a sample app over the port fakes, and the UI tests that drive it. It exists for one
+reason: **a gesture is the one thing the package's own tests cannot reach.** Everything else runs
+in-process, but a double tap that is declared correctly and never arrives, because something above
+the tile claimed the touch first, looks identical to a working one from inside. Only a real touch
+tells them apart, and only XCUITest can send one, which needs an application and so a project.
+
+```bash
+brew install xcodegen                       # once per machine
+cd Example && xcodegen generate && cd ..
+xcodebuild test -project Example/ElementCallExample.xcodeproj \
+  -scheme ElementCallExample \
+  -destination "id=$SIMULATOR_UDID"
+```
+
+- **The project is generated, not committed.** `Example/project.yml` is what gets reviewed and
+  `Example/*.xcodeproj` is ignored, for the same reason `GeneratedPreviewTests.swift` is regenerated
+  in CI: nobody reads a pbxproj and everybody conflicts on one. The app target needs the same
+  `-ObjC` the package's test bundle does, for the same reason.
+- **No server, no camera, no call.** The app builds its screen from `ElementCallPreviewFixtures`
+  through `ElementCallHarnessScreen`, which is the seam the previews have always used, made public.
+  `ElementCallController.fake(...)` cannot serve here: it never joins, so it produces no tiles and
+  the screen would be a spinner. Which arrangement the app opens on comes from `-arrangement` in the
+  launch arguments, so a test starts where it means to.
+- **Put a test here only if it needs a real touch.** Arrangement belongs in
+  `ElementCallStageLayoutTests`, appearance in the snapshots, and geometry in a unit test: a UI test
+  is twenty seconds against their twenty milliseconds. What earns its place is gesture arbitration —
+  the strip's paging drag against a tile's pan, and the `Button` inside a tile.
+- **No frame is ever drawn**, so nothing about the picture itself is testable here. Fitting, zoom
+  and pan are pinned by `VideoPresentationTests` instead, which asserts on the vertex transform and
+  is exact where a screenshot would only be close.
+
+#### Running it by hand, and watching a move frame by frame
+
+Open `Example/ElementCallExample.xcodeproj` and run it, or from the command line:
+
+```bash
+xcrun simctl install "$SIMULATOR_UDID" \
+  "$(find ~/Library/Developer/Xcode/DerivedData -name ElementCallExample.app -path '*Debug-iphonesimulator*' | head -1)"
+xcrun simctl launch "$SIMULATOR_UDID" io.element.call.example.ElementCallExample -arrangement pagedStrip
+```
+
+**This is the answer to "do I have to join a real call to see it?"** — you do not, for anything the
+layout does. Which is most of what goes wrong: the arrangements, the chrome, and every animation
+between them are the same code in the harness as in a host.
+
+An animation is worth *seeing*, and the snapshots cannot: they are end states. Record the simulator
+across a run and make a contact sheet of the moment:
+
+```bash
+xcrun simctl io "$SIMULATOR_UDID" recordVideo -f /tmp/run.mp4 &
+xcodebuild test-without-building -project Example/ElementCallExample.xcodeproj \
+  -scheme ElementCallExample -destination "id=$SIMULATOR_UDID" \
+  -only-testing:ElementCallExampleUITests/TileFullscreenUITests/testDoubleTappingAgainComesBackToTheStage
+kill -INT %1
+ffmpeg -ss 9.4 -t 1.2 -i /tmp/run.mp4 -vf "fps=25,scale=260:-1,tile=6x5" -frames:v 1 /tmp/move.png
+```
+
+`build-for-testing` first, then `test-without-building`, or the recording is mostly a build. This is
+how the z-order of the growing tile was checked: a tile going full screen has to be **above** the
+ones it replaces, because they are leaving and a leaving view keeps its z position for as long as
+its transition runs. At the strip's own zero the spotlight faded out on top of it all the way up.
+`ElementCallStageLayout.fullscreenZIndex` and the test that pins it are what stop that returning.
 
 ### Re-recording snapshots
 
@@ -168,7 +234,10 @@ that way.
 - Previews for every main state, `PreviewProvider` not `#Preview`, conforming to `TestablePreview` so
   the snapshot cases generate.
 - Accessibility identifiers on the call UI are **public API**: an external interop rig pins against
-  them. A rename is a breaking change and its test will tell you so.
+  them, and the UI tests in `Example/` now do too. A rename is a breaking change and its test will
+  tell you so. Note that `control(for:)` derives a control's identifier from its *icon*, so a button
+  borrowing another's glyph must set its own identifier explicitly or the two collide — which
+  `AccessibilityIdentifierTests.distinctness` does not catch, since it only walks icons.
 
 [Swift API Design Guidelines]: https://www.swift.org/documentation/api-design-guidelines/
 
