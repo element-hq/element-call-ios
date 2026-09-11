@@ -165,6 +165,26 @@ final class TileFullscreenUITests: XCTestCase {
         XCTAssertTrue(tile("dan").waitForExistence(timeout: 2), "back on the stage")
     }
     
+    /// The chrome's visibility lives on the context rather than in a view's own state, so a
+    /// rotation cannot forget it. Worth a test because that is an easy thing to lose later: put it
+    /// in an @State on the screen and this breaks with nothing else to show for it.
+    func testTheChromeSurvivesARotation() {
+        launch("group")
+        let bob = tile("bob")
+        XCTAssertTrue(bob.waitForExistence(timeout: 10))
+        
+        bob.doubleTap()
+        bob.tap()
+        XCTAssertTrue(exitButtonAppears(), "chrome up")
+        
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        
+        XCTAssertTrue(exitButton.waitForExistence(timeout: 3), "still up after rotating")
+        XCTAssertTrue(hangUpButton.exists, "controls with it")
+        XCTAssertFalse(tile("dan").exists, "and still full screen")
+    }
+    
     // MARK: - Gestures that must not collide
     
     /// A pinch is two fingers moving apart; the strip's paging drag is one finger moving sideways.
