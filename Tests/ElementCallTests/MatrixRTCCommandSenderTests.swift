@@ -12,7 +12,7 @@ import Testing
 
 /// Pins the outbound bridge: each callback maps to exactly one transport call, cancel and restart
 /// are never swapped, failures are classified, and every to-device recipient gets a verdict.
-struct MatrixRTCCommandSenderTests {
+nonisolated struct MatrixRTCCommandSenderTests {
     @Test
     func cancelAndRestartAreNotSwapped() async throws {
         let transport = RecordingTransport()

@@ -8,7 +8,7 @@
 @testable import ElementCallKit
 import Testing
 
-struct PCMRingBufferTests {
+nonisolated struct PCMRingBufferTests {
     @Test
     func readsBackWhatWasWrittenAndZeroFillsTheRest() {
         let ring = PCMRingBuffer(capacity: 8)

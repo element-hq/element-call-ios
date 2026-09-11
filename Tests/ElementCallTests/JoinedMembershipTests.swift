@@ -11,7 +11,7 @@ import Testing
 /// The joined-membership feed decides who receives media keys, so forwarding too little is worse
 /// than forwarding too often.
 @Suite("Joined membership forwarding")
-struct JoinedMembershipTests {
+nonisolated struct JoinedMembershipTests {
     private let alice = "@alice:example.com"
     private let bob = "@bob:example.com"
     private let carol = "@carol:example.com"

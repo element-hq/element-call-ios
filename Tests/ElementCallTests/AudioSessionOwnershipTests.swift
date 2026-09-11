@@ -8,7 +8,7 @@
 @testable import ElementCallKit
 import Testing
 
-struct AudioSessionOwnershipTests {
+nonisolated struct AudioSessionOwnershipTests {
     /// Thin, and deliberately so: the predicate decides whether a call has any audio at all on the
     /// runtimes with no CallKit, and inverting it is silent — the session simply never activates
     /// and every tile stays mute. The suite runs on the simulator, which is one of those runtimes,

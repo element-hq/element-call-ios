@@ -9,7 +9,7 @@ import AVFoundation
 @testable import ElementCallKit
 import Testing
 
-struct AudioPlaybackRendererTests {
+nonisolated struct AudioPlaybackRendererTests {
     /// As with ``MicrophoneTapTests``, the initialiser is the assertion: a renderer is built from a
     /// ring and a prefill and cannot reach the engine or the sink.
     private func makeRenderer(prefill: Int = 4, ringCapacity: Int = 16384) -> (AudioPlaybackRenderer, PCMRingBuffer) {

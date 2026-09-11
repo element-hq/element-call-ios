@@ -11,9 +11,11 @@ import AVFoundation
 ///
 /// Only the first buffer is populated: the render paths under test read channel 0 and stride past
 /// the rest, which is exactly the behaviour worth pinning.
-func withAudioBufferList<Result>(_ samples: [Float],
-                                 channelCount: Int = 1,
-                                 body: (UnsafePointer<AudioBufferList>) -> Result) -> Result {
+/// `nonisolated` because the module default is `MainActor` and the render paths this feeds are
+/// deliberately off it -- an isolated helper would drag their suites back onto the main actor.
+nonisolated func withAudioBufferList<Result>(_ samples: [Float],
+                                             channelCount: Int = 1,
+                                             body: (UnsafePointer<AudioBufferList>) -> Result) -> Result {
     var samples = samples
     return samples.withUnsafeMutableBufferPointer { buffer in
         var list = AudioBufferList(mNumberBuffers: 1,

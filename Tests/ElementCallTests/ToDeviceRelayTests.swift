@@ -18,7 +18,7 @@ import Testing
 /// Serialized for the same reason as `WidgetMatrixBridgeTests`: real deadlines, and parallel
 /// execution on a hosted runner starves them.
 @Suite(.timeLimit(.minutes(1)), .serialized)
-struct MatrixRTCTransportAdapterTests {
+nonisolated struct MatrixRTCTransportAdapterTests {
     @Test
     func permanentRefusalsRetireTheFeature() {
         #expect(MatrixRTCRoomBridgeError.matrixAPI(errcode: "M_UNRECOGNIZED", httpStatus: 404, message: "Unrecognized request").transportError

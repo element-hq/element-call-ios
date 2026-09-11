@@ -8,7 +8,7 @@
 import ElementCall
 import Testing
 
-struct LogPositionTests {
+nonisolated struct LogPositionTests {
     @Test
     func recordsCarryTheCallSite() {
         let logger = ElementCallFakeLogger()
@@ -43,7 +43,7 @@ struct LogPositionTests {
     }
     
     /// Shaped like the private wrappers in `ElementCallController` and `WidgetMatrixBridge`.
-    private struct Wrapper {
+    private nonisolated struct Wrapper {
         let logger: any ElementCallLogging
         
         func emit(_ message: String, file: String = #fileID, line: Int = #line) {

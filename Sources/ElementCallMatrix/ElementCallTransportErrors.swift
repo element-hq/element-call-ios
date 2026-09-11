@@ -14,7 +14,11 @@ import MatrixRustSDK
 // feature for the whole session; `failed` makes it retry. Get them the wrong way round and a call
 // either silently stops using delayed events, or hammers a homeserver that will never say yes.
 
-extension MatrixRTCRoomBridgeError {
+// Both extensions are `nonisolated` because the module default is `MainActor` and these are pure
+// switches over values with no reason to need it. It also lets the tests that exercise them run off
+// the main actor, which is what stopped them being billed for time the snapshot tests spent holding
+// it -- a two-line comparison below was reported taking 68 seconds on CI, all of it queueing.
+nonisolated extension MatrixRTCRoomBridgeError {
     /// A permanent refusal retires the feature; anything else is retried.
     ///
     /// A 404 with `M_UNRECOGNIZED` means the homeserver does not implement the endpoint. matrix.org
@@ -46,7 +50,7 @@ extension Result where Failure == MatrixRTCRoomBridgeError {
     }
 }
 
-extension Error {
+nonisolated extension Error {
     /// The same classification for failures that come straight off the SDK rather than the bridge.
     var transportError: MatrixRTCTransportError {
         if let clientError = self as? ClientError, case .MatrixApi(let kind, _, let message, _) = clientError {

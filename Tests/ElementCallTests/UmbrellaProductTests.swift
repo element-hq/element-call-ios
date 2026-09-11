@@ -12,7 +12,7 @@ import ElementCallAll
 import Testing
 
 /// The umbrella is a compile-time promise, so these are compile-time assertions that happen to run.
-struct UmbrellaProductTests {
+nonisolated struct UmbrellaProductTests {
     @Test
     func reachesEveryModuleThroughOneImport() {
         // ElementCallKit

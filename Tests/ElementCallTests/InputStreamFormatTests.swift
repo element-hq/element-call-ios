@@ -8,7 +8,7 @@
 @testable import ElementCallKit
 import Testing
 
-struct InputStreamFormatTests {
+nonisolated struct InputStreamFormatTests {
     @Test(arguments: [8000.0, 16000.0, 24000.0, 44100.0, 48000.0], [1, 2, 4])
     func packingRoundTrips(sampleRate: Double, channelCount: Int) {
         for isInterleaved in [true, false] {
