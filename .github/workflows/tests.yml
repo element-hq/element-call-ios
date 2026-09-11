@@ -89,6 +89,9 @@ jobs:
       SIMULATOR_NAME: iPhone SE (3rd generation)
       SIMULATOR_RUNTIME: com.apple.CoreSimulator.SimRuntime.iOS-26-5
       SIMULATOR_LABEL: ElementCall Snapshots
+      # Bump to discard the build cache below. The only lever if a restored build ever looks
+      # wrong, and cheaper to reach for than reasoning about whether it is.
+      CACHE_VERSION: '1'
 
     steps:
       # Snapshot references live in Git LFS, and without them every snapshot test fails on a
@@ -99,6 +102,41 @@ jobs:
 
       - name: Configure Xcode
         run: sudo xcode-select -s "$XCODE_APP"
+
+      # Only Git LFS was cached, so every run re-downloaded the media xcframeworks and recompiled
+      # every dependency -- swift-syntax above all, which snapshot-testing's macros pull in and
+      # which is the slowest thing in the build. Measured on a green run: 5m32s building against
+      # 24s of tests, in a 6m23s job. The tests were never what made this slow.
+      #
+      # Xcode's default DerivedData location, deliberately, rather than relocating it with
+      # -derivedDataPath or -clonedSourcePackagesDirPath. Both of those break this package: against
+      # a directory that does not exist yet -- which is every cache miss -- the first xcodebuild
+      # invocation fails scheme discovery outright with "does not contain a scheme named
+      # ElementCall-Package", and a second one then finds no test bundle to run. Caching where
+      # Xcode already puts things needs no flags and cannot break the uncached path.
+      #
+      # Keyed on Package.resolved and nothing else. Keying on a hash of the sources would look more
+      # correct and would be much worse: this directory is a few gigabytes, a repository gets 10 GB
+      # of cache with least-recently-used eviction, so a fresh entry per push would exhaust the
+      # quota within a handful of commits and evict the Git LFS cache above along with it. Keyed
+      # this way there is one entry per dependency set, written the first time it is seen.
+      #
+      # That means it goes stale, since a cache hit does not write. It is still worth having: what
+      # it carries is the dependencies, which change only when Package.resolved does. Our own five
+      # modules are small and rebuild anyway.
+      #
+      # Whether this is a net win is not yet established, and the entry is big enough that it might
+      # not be: 3.6 GB, split evenly between the package checkouts -- 1.4 GB of that the media
+      # xcframeworks -- and the build products, which are mostly the static libwebrtc. Neither half
+      # is prunable without losing the thing being cached. Locally the same build goes from 90s
+      # cold to 25s warm, but a hosted runner has to move those gigabytes over the network first,
+      # and macOS runners are slow at it. If the job does not get faster, delete this step rather
+      # than tuning it.
+      - name: Cache build products
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: build-${{ env.CACHE_VERSION }}-${{ env.XCODE_APP }}-${{ hashFiles('Package.resolved') }}
 
       - name: Install tools
         run: brew install sourcery swiftformat swiftlint
