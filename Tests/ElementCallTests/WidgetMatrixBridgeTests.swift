@@ -14,6 +14,15 @@ import Testing
 
 /// The widget-driver stopgap's wire handling, against a fake driver pipe.
 ///
+/// `nonisolated` and serialized, for two different reasons.
+///
+/// `nonisolated` because the test target's module default is `MainActor`, and this suite was being
+/// starved by it: `PreviewTests` holds the main actor for a minute and a half doing blocking
+/// snapshot work, and because the suite is serialized its *first* test absorbed the whole wait --
+/// 95 seconds against a one-minute limit, while the other seventeen ran in a millisecond each once
+/// the actor freed up. The bridge is an `actor` and the fake channel is already nonisolated, so
+/// nothing here wanted the main actor in the first place.
+///
 /// Serialized on purpose. Every test here drives a bridge through a handshake with real deadlines
 /// on both sides, and run in parallel on a three-core hosted runner they starve each other: the
 /// suite finishes in 0.07s locally and took forty-odd seconds per test on CI, which is not
@@ -21,7 +30,7 @@ import Testing
 /// deadlines stop being a lottery. It also costs nothing -- the whole suite is faster than one of
 /// its timeouts.
 @Suite(.timeLimit(.minutes(1)), .serialized)
-struct WidgetMatrixBridgeTests {
+nonisolated struct WidgetMatrixBridgeTests {
     private let widgetID = "widget"
     private let channel = FakeWidgetChannel()
     
@@ -539,7 +548,7 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
     }
 }
 
-private extension Result {
+private nonisolated extension Result {
     var failure: Failure? {
         if case .failure(let error) = self {
             return error
