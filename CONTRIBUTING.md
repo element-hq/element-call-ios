@@ -64,6 +64,11 @@ Release notes are generated from pull request labels, so every pull request need
 becomes the changelog entry, so write it as a sentence describing the change rather than referring to
 an issue number.
 
+Use **`pr-task`** for a change no host could observe — CI plumbing, test-only churn, a repository
+chore. It is excluded from the notes rather than categorised, so the pull request gets no changelog
+line at all. It is the only label that does that, so an absent entry is always a decision someone
+made rather than a label someone forgot.
+
 Nothing enforces this: no workflow fails over a missing label, so a reviewer noticing is the only
 thing keeping an entry out of the catch-all *Others* heading. It is recoverable — the notes are
 generated when a release is cut, not when a pull request merges, so labelling a merged pull request
