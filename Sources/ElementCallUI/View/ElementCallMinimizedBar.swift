@@ -100,8 +100,7 @@ struct ElementCallMinimizedBar_Previews: PreviewProvider, TestablePreview {
     static func bar(_ roomName: String, isMicrophoneMuted: Bool = false) -> some View {
         ElementCallMinimizedBarContent(roomName: roomName,
                                        connectedAt: nil,
-                                       isMicrophoneMuted: isMicrophoneMuted,
-                                       onTap: { })
+                                       isMicrophoneMuted: isMicrophoneMuted) { }
             .padding()
             .background(ElementCallStyle.stock.theme.bgCanvasDefault)
             .environment(\.colorScheme, .dark)
