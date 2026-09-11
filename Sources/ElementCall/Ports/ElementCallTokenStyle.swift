@@ -20,8 +20,10 @@ import SwiftUI
 // design system of its own gets for free.
 
 public nonisolated struct ElementCallTokenTheme: ElementCallTheme {
-    // Built per read rather than stored: CompoundColorTokens is a non-Sendable class, and the
-    // tokens are a bag of `Color` values, so there is nothing here worth caching.
+    // Built per read rather than stored: the tokens are a bag of `Color` values, so there is
+    // nothing here worth caching. It also had to be this way under compound-design-tokens 10.x,
+    // where CompoundColorTokens was not Sendable; it is Sendable from 11.0.0, so that half of the
+    // reason has gone and only the first half still holds.
     private var colors: CompoundColorTokens {
         CompoundColorTokens()
     }

@@ -46,8 +46,14 @@ let package = Package(
         // colours live on a shared instance a host re-brands at runtime: a second copy linked in
         // here would never see that override, and a re-branded host would get a stock call screen.
         // The host still supplies the real colours through ElementCallTheme; these are the default.
-        .package(url: "https://github.com/element-hq/compound-design-tokens", exact: "10.2.4"),
-        // A range, deliberately, where everything else here is pinned exactly.
+        //
+        // A range, for the same reason the SDK below is one: the host links these tokens too, through
+        // Compound, so an exact pin here forces the host's Compound onto our version. It was exact at
+        // 10.2.4 until compound-ios moved to 11.0.0, and element-x-ios then could not resolve at all —
+        // two exact requirements on one package have no solution, and the failure lands before anything
+        // compiles. The upper bound is absurd on purpose; CI builds whatever Package.resolved holds.
+        .package(url: "https://github.com/element-hq/compound-design-tokens", "11.0.0" ..< "100.0.0"),
+        // A range as well, and this is where that reasoning was first worked out.
         //
         // A library that pins the SDK exactly forces every consumer onto that version, so resolution
         // fails the moment a host bumps the SDK before this package cuts a release. That is the
