@@ -410,7 +410,17 @@ public final class MatrixRTCCall {
         for memberID in changed {
             let isEnabled = !released.contains(memberID)
             for kind in [MatrixRTCStreamKind.camera, .screenShare] {
-                let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
+                let key = VideoStreamKey(memberID: memberID, kind: kind)
+                // A surface going away reports a nil size, and `reportDrawnSize` drops that report
+                // when the member is already released. Releasing and unmounting happen in one pass
+                // and in no defined order, so whenever the release lands first the departing
+                // surface's size would stay here for the rest of the call and go on inflating the
+                // maximum for whoever draws the stream next. One tile at a time while paging; a
+                // whole call at once now that a tile can go full screen.
+                if !isEnabled {
+                    drawnSizes[key] = nil
+                }
+                let applied = appliedConstraints[key]
                 // Restoring stops at paused, never straight to visible: the tile is a page away, and
                 // it is its own attach that says it is being drawn again and at what size.
                 setVideoConstraints(.init(isEnabled: isEnabled, isVisible: false, pixelSize: applied?.pixelSize),
