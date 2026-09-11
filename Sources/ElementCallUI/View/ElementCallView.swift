@@ -34,25 +34,44 @@ struct ElementCallView: View {
                     style.theme.bgCanvasDefault.ignoresSafeArea()
                     
                     VStack(spacing: 12) {
-                        topBar
-                            .padding(.horizontal, 16)
-                            // The rail runs up the trailing edge and is centred, so it reaches into
-                            // the top bar's row: without this the overflow button sits on top of it.
-                            .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
-                        if context.viewState.isScreenSharing {
-                            screenShareBanner
+                        if fullscreenTile == nil {
+                            topBar
+                                .padding(.horizontal, 16)
+                                // The rail runs up the trailing edge and is centred, so it reaches
+                                // into the top bar's row: without this the overflow button sits on
+                                // top of it.
                                 .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
-                                .transition(.move(edge: .top).combined(with: .opacity))
+                            if context.viewState.isScreenSharing {
+                                screenShareBanner
+                                    .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
+                                    .transition(.move(edge: .top).combined(with: .opacity))
+                            }
                         }
                         content
+                            // A fitted picture is centred on what it is given, so full screen gives
+                            // it the screen: centred on the notch-shaped remainder instead, the
+                            // letterbox above and below would not match.
+                            .ignoresSafeArea(.container, edges: fullscreenTile == nil ? [] : .all)
                     }
                     .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
                     
-                    controls(isLandscape: isLandscape)
+                    if let fullscreenTile {
+                        if context.isFullscreenChromeVisible {
+                            ElementCallFullscreenChrome(tile: fullscreenTile,
+                                                        context: context,
+                                                        isLandscape: isLandscape,
+                                                        onExit: { setFullscreen(nil) },
+                                                        onAction: { context.send(viewAction: $0) })
+                                .transition(.opacity)
+                        }
+                    } else {
+                        ElementCallFloatingControls(context: context, isLandscape: isLandscape)
+                    }
                 } else {
                     Color.clear
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: context.isFullscreenChromeVisible)
             .frame(width: geometry.size.width, height: geometry.size.height)
         }
         .environment(\.colorScheme, .dark)
@@ -68,9 +87,39 @@ struct ElementCallView: View {
         } message: { alert in
             Text(alert.message)
         }
-        .statusBarHidden(false)
+        .statusBarHidden(fullscreenTile != nil && !context.isFullscreenChromeVisible)
+        .onChange(of: context.viewState.isMaximized) { _, isMaximized in
+            // Minimizing ends full screen rather than suspending it. The window continues whatever
+            // the ordinary arrangement gives it, and coming back is the stage: one state fewer to
+            // reason about, and no way to return to a screen whose chrome you had left hidden.
+            guard !isMaximized else { return }
+            setFullscreen(nil)
+        }
+        .onChange(of: context.viewState.tiles) { _, tiles in
+            // The person you were watching can leave. The arrangement falls back on its own, but the
+            // screen would go on believing it was full screen: top bar hidden, chrome hidden, and
+            // nothing left on screen that brings either back.
+            guard let memberID = context.fullscreenMemberID,
+                  !tiles.contains(where: { $0.memberID == memberID }) else { return }
+            setFullscreen(nil)
+        }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+    
+    /// The tile full screen right now, if it is still in the call.
+    private var fullscreenTile: ElementCallTile? {
+        guard let memberID = context.fullscreenMemberID else { return nil }
+        return context.viewState.tiles.first { $0.memberID == memberID }
+    }
+    
+    /// Entering always starts with the chrome down, so the first thing a full-screen tile shows is
+    /// the picture; leaving puts it back down for next time.
+    private func setFullscreen(_ memberID: String?) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            context.fullscreenMemberID = memberID
+            context.isFullscreenChromeVisible = false
+        }
     }
     
     // MARK: - Top bar
@@ -159,29 +208,9 @@ struct ElementCallView: View {
     
     // MARK: - Content
     
-    /// The floating controls sit this far in from the edge they are on. Their thickness is the same
-    /// either way round, so the stage reserves one clearance and does not care which edge it is.
-    private static let controlsEdgePadding: CGFloat = 12
-    static let controlsClearance: CGFloat = ElementCallControlsView.thickness + controlsEdgePadding
-    
-    /// Pinned to the bottom in portrait and to the trailing edge in landscape, over the stage
-    /// either way: the stage has already kept its cards out from under them.
-    @ViewBuilder
-    private func controls(isLandscape: Bool) -> some View {
-        if isLandscape {
-            HStack(spacing: 0) {
-                Spacer()
-                ElementCallControlsView(context: context, axis: .vertical)
-                    .padding(.trailing, Self.controlsEdgePadding)
-            }
-        } else {
-            VStack(spacing: 0) {
-                Spacer()
-                ElementCallControlsView(context: context, axis: .horizontal)
-                    .padding(.bottom, Self.controlsEdgePadding)
-            }
-        }
-    }
+    /// How far the floating controls reach in from the edge they are on. The placement itself lives
+    /// on ``ElementCallFloatingControls``, which the full-screen chrome shares.
+    static let controlsClearance = ElementCallFloatingControls.clearance
     
     @ViewBuilder
     private var content: some View {
@@ -194,11 +223,22 @@ struct ElementCallView: View {
         } else {
             ElementCallStage(tiles: state.tiles,
                              spotlightMemberID: state.spotlightMemberID,
+                             fullscreenMemberID: fullscreenTile?.memberID,
                              layout: state.layout,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
-                             controlsClearance: Self.controlsClearance) { action in
+                             controlsClearance: Self.controlsClearance,
+                             onToggleFullscreen: { memberID in
+                                 // The same tile again is the way back out, which is what makes one
+                                 // gesture do both halves of it.
+                                 setFullscreen(context.fullscreenMemberID == memberID ? nil : memberID)
+                             },
+                             onToggleChrome: {
+                                 withAnimation(.easeInOut(duration: 0.2)) {
+                                     context.isFullscreenChromeVisible.toggle()
+                                 }
+                             }) { action in
                 context.send(viewAction: action)
             }
         }
@@ -215,6 +255,18 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
         ElementCallView(context: .preview(state: state),
                         pictureInPictureSourceView: UIView(),
                         callProvider: ElementCallPreviewFixtures.noCall)
+    }
+    
+    /// Full screen is written onto the context rather than reached by tapping, which is the same
+    /// seam the rest of these previews use: there is no call here to tap anything on.
+    static func fullscreen(isChromeVisible: Bool) -> some View {
+        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
+                                                                                                   spotlight: ElementCallPreviewFixtures.carol.memberID))
+        context.fullscreenMemberID = ElementCallPreviewFixtures.carol.memberID
+        context.isFullscreenChromeVisible = isChromeVisible
+        return ElementCallView(context: context,
+                               pictureInPictureSourceView: UIView(),
+                               callProvider: ElementCallPreviewFixtures.noCall)
     }
     
     static var previews: some View {
@@ -234,5 +286,9 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
                                                     isMicrophoneMuted: true,
                                                     isScreenSharing: true))
             .previewDisplayName("Muted and sharing")
+        fullscreen(isChromeVisible: false)
+            .previewDisplayName("Full screen")
+        fullscreen(isChromeVisible: true)
+            .previewDisplayName("Full screen with chrome")
     }
 }
