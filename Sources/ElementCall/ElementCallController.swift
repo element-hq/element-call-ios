@@ -423,11 +423,18 @@ public final class ElementCallController {
                               session: MatrixRTCSession,
                               callData: ElementCallData,
                               room: any ElementCallRoomContext) async {
-        #if targetEnvironment(simulator)
-        // CallKit never activates the session on the simulator.
-        try? CallAudioSessionConfigurator.activate()
-        isAudioSessionActive = true
-        #endif
+        // Where nothing else owns the session, we do: the simulator, and an iOS app on macOS,
+        // where the host's system-call port is inert because CallKit is unavailable. Runtime
+        // rather than `#if`, because an iOS-on-Mac binary is indistinguishable from an iOS one at
+        // compile time.
+        if CallAudioSessionConfigurator.isSelfActivating {
+            do {
+                try CallAudioSessionConfigurator.activate()
+                isAudioSessionActive = true
+            } catch {
+                log(.error, "could not activate the audio session: \(error)")
+            }
+        }
         // The system usually activated the session while we were still joining.
         startAudioIfReady()
         
@@ -574,9 +581,16 @@ public final class ElementCallController {
         call = nil
         session = nil
         system.endCall(roomID: roomID)
-        #if targetEnvironment(simulator)
-        CallAudioSessionConfigurator.deactivate()
-        #endif
+        // Paired with the activation in publishMedia through the same predicate, so the two
+        // cannot disagree about which platforms they apply to and leave the session up.
+        if CallAudioSessionConfigurator.isSelfActivating {
+            CallAudioSessionConfigurator.deactivate()
+            // Only where we own the session. On device CallKit owns it and reports the
+            // deactivation through `didDeactivate`; clearing the flag here instead would mean a
+            // second call starting before that arrives never sees an activation of its own, and
+            // `startAudioIfReady` would refuse to start audio for a call that is otherwise fine.
+            isAudioSessionActive = false
+        }
         
         if case .failed = connection {
             // Keep the failure visible until the screen is dismissed.
