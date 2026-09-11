@@ -214,8 +214,14 @@ gh api -X POST "repos/${GITHUB_REPOSITORY:-element-hq/element-call-ios}/releases
 # Not `[ -s ]`: the body is never empty, because it always ends with a **Full Changelog** compare
 # link. A release with nothing in it is one with no list items, and it would otherwise write a
 # changelog section containing only that link.
+#
+# Since .github/release.yml excludes pr-task, this now also catches a release whose every merged
+# pull request was labelled pr-task -- so the message names that as a cause. Refusing is still the
+# right answer there: a version whose changelog section would be empty is a version nobody can tell
+# from the one before it, and if such a release is genuinely wanted, a hand-written line under
+# `## Unreleased` is not what this check looks at.
 if ! grep -qE '^\* ' "$NOTES_OUT"; then
-    fail "GitHub generated no changelog entries for $VERSION. Nothing has merged since ${LATEST_TAG:-the start of the history}."
+    fail "GitHub generated no changelog entries for $VERSION. Either nothing has merged since ${LATEST_TAG:-the start of the history}, or everything that has is labelled pr-task and so excluded from the notes."
 fi
 
 echo

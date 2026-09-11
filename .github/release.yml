@@ -1,4 +1,13 @@
 changelog:
+  # Excluded before anything is categorised, so a pr-task pull request lands under no heading at all
+  # -- not even the "*" catch-all under Others. This is the label for work that changes nothing a
+  # host could observe: CI plumbing, test-only churn, a repository chore. It is deliberately the
+  # only way to keep a merged pull request out of the notes, so "no entry" is a labelled decision a
+  # reviewer can see rather than the silent result of leaving the label off.
+  exclude:
+    labels:
+      - pr-task
+
   categories:
     - title: ✨ Features
       labels:

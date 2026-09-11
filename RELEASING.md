@@ -52,6 +52,10 @@ Nothing enforces that label at merge time — the pull request template asks for
 expected to notice. When one slips through, add the label to the *merged* pull request and dry-run
 again. The notes are generated at release time, not at merge time, so a late label still works.
 
+The same lateness works for taking an entry *out*: `pr-task` on a merged pull request excludes it
+from the notes entirely, so a pull request that should never have had a changelog line can be
+relabelled and dry-run again rather than edited out of `CHANGES.md` afterwards.
+
 The dry run changes nothing: no commit, no tag, no release, no push.
 
 ### 3. Create the release branch
@@ -125,6 +129,12 @@ somewhere for the next entry to go.
 
 **For an ordinary change there is nothing to write.** Label the pull request and give it a title that
 reads as a changelog line; the release generates the list from those.
+
+**For a change no host could observe, label it `pr-task`** — CI plumbing, test-only churn, a
+repository chore. `.github/release.yml` excludes that label before categorising, so the pull request
+gets no line under any heading, not even the *Others* catch-all. It is the only way to keep a merged
+pull request out of the notes, and that is the point: an absent entry is then a decision someone
+made and a reviewer could see, rather than what happens when the label is forgotten.
 
 **Write under `## Unreleased` by hand only when a host has to act** — a renamed accessibility
 identifier, a port gaining a requirement, a new build setting. Anything found there at release time is
@@ -294,9 +304,10 @@ downgrade it to a warning rather than skip it. Everything else behaves identical
 One-off, and required before the first release:
 
 ```bash
-# The labels .github/release.yml categorises by, in its order, plus the record-snapshots trigger
-# label that record-snapshots.yml waits for. --force so this is safe to re-run; it also means
-# re-running it resets any colour someone has since changed by hand.
+# The labels .github/release.yml categorises by, in its order, then pr-task, which it excludes
+# rather than categorises, plus the record-snapshots trigger label that record-snapshots.yml waits
+# for. --force so this is safe to re-run; it also means re-running it resets any colour someone has
+# since changed by hand.
 while read -r label colour; do
     gh label create "$label" --color "$colour" --force
 done <<'LABELS'
@@ -309,12 +320,14 @@ pr-build         C5DEF5
 pr-doc           0075CA
 pr-wip           FBCA04
 pr-misc          CFD3D7
+pr-task          EDEDED
 record-snapshots FEF2C0
 LABELS
 ```
 
-The nine `pr-` labels must exist before the first release, because `.github/release.yml` categorises
-by them and a label that does not exist cannot be applied. Keep this list and that file in step.
+The ten `pr-` labels must exist before the first release, because `.github/release.yml` reads them
+— nine to categorise by and `pr-task` to exclude — and a label that does not exist cannot be
+applied. Keep this list and that file in step.
 
 | Secret | Used for |
 | --- | --- |
