@@ -126,20 +126,24 @@ struct ElementCallTileView: View {
                 // read `isSpotlight` alone, so double-tapping someone who was sharing swapped their
                 // screen for their camera, which is the one picture nobody was asking for.
                 let kind: MatrixRTCStreamKind = tile.isScreenSharing && (isSpotlight || isFullscreen) ? .screenShare : .camera
-                ElementCallVideoView(memberID: tile.memberID,
-                                     kind: kind,
-                                     isLocal: tile.isLocal,
-                                     callProvider: callProvider,
-                                     presentation: presentation,
-                                     onContentSizeChange: { contentAspect = $0.height > 0 ? $0.width / $0.height : nil },
-                                     // `hasVideo` is a claim about signalling, not about pixels.
-                                     // When the two disagree the tile would be a black rectangle,
-                                     // so the avatar holds the space until a frame actually lands.
-                                     placeholder: { avatar })
-                    // A tile slot (the spotlight in particular) keeps its view identity when its member
-                    // changes; without an explicit identity the renderer would stay attached to the
-                    // previous member's stream.
-                    .id("\(tile.memberID)/\(kind)")
+                // The crop opens as the tile grows rather than at the moment it is told to: see
+                // ``AnimatableFit``.
+                AnimatableFit(fit: isFullscreen ? 1 : 0) { fit in
+                    ElementCallVideoView(memberID: tile.memberID,
+                                         kind: kind,
+                                         isLocal: tile.isLocal,
+                                         callProvider: callProvider,
+                                         presentation: presentation(fit: fit),
+                                         onContentSizeChange: { contentAspect = $0.height > 0 ? $0.width / $0.height : nil },
+                                         // `hasVideo` is a claim about signalling, not about pixels.
+                                         // When the two disagree the tile would be a black rectangle,
+                                         // so the avatar holds the space until a frame actually lands.
+                                         placeholder: { avatar })
+                        // A tile slot (the spotlight in particular) keeps its view identity when its
+                        // member changes; without an explicit identity the renderer would stay
+                        // attached to the previous member's stream.
+                        .id("\(tile.memberID)/\(kind)")
+                }
             } else {
                 avatar
             }
@@ -169,11 +173,11 @@ struct ElementCallTileView: View {
     private static let maximumZoom: CGFloat = 4
     private static let rubberBand: CGFloat = 1.2
     
-    /// What the renderer is asked for. Only full screen fits: a grid of letterboxed cells is mostly
-    /// black, and a cell is too small to be worth panning around.
-    private var presentation: VideoPresentation {
-        guard isFullscreen else { return .fill }
-        return VideoPresentation(contentMode: .fit, zoom: liveZoom, pan: livePan)
+    /// What the renderer is asked for, at a point on the way between filling and fitting. Only full
+    /// screen zooms and pans: a cell is too small to be worth moving a picture around inside.
+    private func presentation(fit: CGFloat) -> VideoPresentation {
+        guard isFullscreen else { return VideoPresentation(fit: fit) }
+        return VideoPresentation(fit: fit, zoom: liveZoom, pan: livePan)
     }
     
     private var liveZoom: CGFloat {
@@ -339,6 +343,28 @@ struct ElementCallTileView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Color.black.opacity(0.5), in: Capsule())
+    }
+}
+
+/// Hands its content the value an animation is currently passing through.
+///
+/// SwiftUI interpolates what it can see is interpolating, and a value handed across into a
+/// `UIViewRepresentable` is not that: it arrives at its destination in one step. So the crop used to
+/// spring from filled to fitted in a single frame at the *start* of a move the tile then took half a
+/// second to finish, which read as a jolt exactly where the eye was already following something.
+/// Conforming a view to `Animatable` is how you ask for the values in between; its `body` is then
+/// re-evaluated per frame, which is what carries them down to the renderer.
+private struct AnimatableFit<Content: View>: View, Animatable {
+    var fit: CGFloat
+    let content: (CGFloat) -> Content
+    
+    var animatableData: CGFloat {
+        get { fit }
+        set { fit = newValue }
+    }
+    
+    var body: some View {
+        content(fit)
     }
 }
 

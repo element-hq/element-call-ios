@@ -155,7 +155,9 @@ public final class VideoTileUIView: UIView {
     private func reportDrawnSize() {
         let scale = window?.screen.scale ?? UIScreen.main.scale
         var size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
-        if presentation.contentMode == .fit, contentPixelSize.width > 0, contentPixelSize.height > 0 {
+        // Only once it has arrived. Mid-blend the letterbox is still opening, and folding that into
+        // the report would ask the SFU for a different size on every frame of the move for nothing.
+        if presentation.fit > 0.999, contentPixelSize.width > 0, contentPixelSize.height > 0 {
             // Fit letterboxes, and nobody has to send us the bars.
             let factor = min(size.width / contentPixelSize.width, size.height / contentPixelSize.height)
             size = CGSize(width: contentPixelSize.width * factor, height: contentPixelSize.height * factor)

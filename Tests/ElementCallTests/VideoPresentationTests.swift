@@ -55,7 +55,7 @@ nonisolated struct VideoPresentationTests {
     
     @Test("Fit reaches the sides and leaves a bar above and below")
     func fitLetterboxes() {
-        let fitted = box(VideoPresentation(contentMode: .fit))
+        let fitted = box(VideoPresentation(fit: 1))
         #expect(abs(fitted.halfWidth - 1) < 1e-4)
         #expect(fitted.halfHeight < 1)
         // 16:9 in a 1:2 drawable: a quarter of the height is picture.
@@ -66,15 +66,39 @@ nonisolated struct VideoPresentationTests {
     
     @Test("Fill reaches the top and bottom and crops the sides")
     func fillCrops() {
-        let filled = box(VideoPresentation(contentMode: .fill))
+        let filled = box(VideoPresentation())
         #expect(abs(filled.halfHeight - 1) < 1e-4)
         #expect(filled.halfWidth > 1)
     }
     
+    /// Filling and fitting are the ends of one continuum, and a tile crosses it while it is moving.
+    /// Every point on the way has to be a uniform scale, or the picture would distort as it grew
+    /// rather than simply crop less.
+    @Test("Part way between filling and fitting, the picture keeps its shape")
+    func fitBlendsUniformly() {
+        let filled = box(VideoPresentation())
+        let fitted = box(VideoPresentation(fit: 1))
+        let sourceAspect = CGFloat(frame.width) / CGFloat(frame.height)
+        
+        var previousWidth = filled.halfWidth
+        for step in stride(from: CGFloat(0.1), through: 1, by: 0.1) {
+            let blended = box(VideoPresentation(fit: step))
+            // Same shape throughout: only how much of the drawable it covers changes.
+            let drawableAspect = portraitDrawable.width / portraitDrawable.height
+            let shownAspect = CGFloat(blended.halfWidth / blended.halfHeight) * drawableAspect
+            #expect(abs(shownAspect - sourceAspect) < 1e-3, "distorted at \(step): \(shownAspect)")
+            // And it only ever shrinks towards the fitted size, never doubles back.
+            #expect(blended.halfWidth < previousWidth + 1e-4, "not monotonic at \(step)")
+            previousWidth = blended.halfWidth
+            #expect(abs(blended.centre.x) < 1e-4)
+        }
+        #expect(abs(previousWidth - fitted.halfWidth) < 1e-4, "ends where fitting starts")
+    }
+    
     @Test("Zoom scales the picture about its centre")
     func zoomScales() {
-        let fitted = box(VideoPresentation(contentMode: .fit))
-        let zoomed = box(VideoPresentation(contentMode: .fit, zoom: 2))
+        let fitted = box(VideoPresentation(fit: 1))
+        let zoomed = box(VideoPresentation(fit: 1, zoom: 2))
         #expect(abs(zoomed.halfWidth - fitted.halfWidth * 2) < 1e-4)
         #expect(abs(zoomed.halfHeight - fitted.halfHeight * 2) < 1e-4)
         #expect(abs(zoomed.centre.x) < 1e-4)
@@ -84,7 +108,7 @@ nonisolated struct VideoPresentationTests {
     /// gesture layer clamps too, but a stale offset from the frame before a rotation gets here.
     @Test("A pan with no overflow to move into is ignored")
     func panWithoutOverflowIsIgnored() {
-        let panned = box(VideoPresentation(contentMode: .fit, pan: CGSize(width: 0.5, height: 0.5)))
+        let panned = box(VideoPresentation(fit: 1, pan: CGSize(width: 0.5, height: 0.5)))
         #expect(abs(panned.centre.x) < 1e-4)
         #expect(abs(panned.centre.y) < 1e-4)
     }
@@ -93,7 +117,7 @@ nonisolated struct VideoPresentationTests {
     /// each side. Panned to the limit, that side's edge should sit exactly on the drawable's.
     @Test("A pan past the limit stops with the picture's edge on the drawable's")
     func panClampsToTheOverflow() {
-        let panned = box(VideoPresentation(contentMode: .fit, zoom: 2, pan: CGSize(width: 1, height: 0)))
+        let panned = box(VideoPresentation(fit: 1, zoom: 2, pan: CGSize(width: 1, height: 0)))
         #expect(abs(panned.halfWidth - 2) < 1e-4)
         #expect(abs(panned.centre.x - 1) < 1e-4)
         // Left edge flush with the drawable's left edge, nothing black showing.
@@ -103,7 +127,7 @@ nonisolated struct VideoPresentationTests {
     /// A finger dragging down moves the picture down, and NDC's y points the other way.
     @Test("A downward pan moves the picture down the screen")
     func panYFollowsTheFinger() {
-        let panned = box(VideoPresentation(contentMode: .fit, zoom: 8, pan: CGSize(width: 0, height: 0.1)))
+        let panned = box(VideoPresentation(fit: 1, zoom: 8, pan: CGSize(width: 0, height: 0.1)))
         #expect(panned.centre.y < -1e-4)
     }
     
@@ -112,12 +136,12 @@ nonisolated struct VideoPresentationTests {
         // 1600x900 turned a quarter is 900 wide and 1600 tall. Still wider in proportion than the
         // 400x800 drawable, so the sides still bind, but the bars are now a sliver rather than most
         // of the screen: which is the whole of what rotation changes here.
-        let fitted = box(VideoPresentation(contentMode: .fit), rotation: .deg90)
+        let fitted = box(VideoPresentation(fit: 1), rotation: .deg90)
         #expect(abs(fitted.halfWidth - 1) < 1e-4)
         #expect(fitted.halfHeight < 1)
         #expect(abs(fitted.halfHeight - 0.8889) < 1e-3)
         // And it is taller than the same frame upright, which is the point of measuring it upright.
-        #expect(fitted.halfHeight > box(VideoPresentation(contentMode: .fit)).halfHeight)
+        #expect(fitted.halfHeight > box(VideoPresentation(fit: 1)).halfHeight)
     }
     
     /// The pan is applied after the rotation and the mirror, so it is in the space the finger is in
@@ -131,7 +155,7 @@ nonisolated struct VideoPresentationTests {
         (.deg90, true)
     ])
     func panIsInDisplaySpace(rotation: MatrixRTCVideoRotation, isMirrored: Bool) {
-        let panned = box(VideoPresentation(contentMode: .fit, zoom: 8, pan: CGSize(width: 0.05, height: 0)),
+        let panned = box(VideoPresentation(fit: 1, zoom: 8, pan: CGSize(width: 0.05, height: 0)),
                          rotation: rotation,
                          isMirrored: isMirrored)
         #expect(panned.centre.x > 1e-4, "\(rotation) mirrored: \(isMirrored) panned the wrong way")
@@ -139,7 +163,7 @@ nonisolated struct VideoPresentationTests {
     
     @Test("A zero drawable does not divide by zero")
     func degenerateDrawable() {
-        let degenerate = box(VideoPresentation(contentMode: .fit), drawableSize: .zero)
+        let degenerate = box(VideoPresentation(fit: 1), drawableSize: .zero)
         #expect(degenerate.halfWidth.isFinite)
         #expect(degenerate.halfHeight.isFinite)
     }

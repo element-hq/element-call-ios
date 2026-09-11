@@ -80,8 +80,14 @@ enum ElementCallExampleArrangement: String, CaseIterable {
             return Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob, sharer], spotlight: sharer.memberID)
         case .video:
             // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
-            let tiles = ["Alice", "Bob", "Carol", "Dan", "Erin", "Frank"].enumerated().map { index, name in
-                Fixtures.tile(name, isLocal: index == 0, hasVideo: true)
+            // Dan has his camera off, because a stage where every tile is a picture is not the one
+            // anybody is in: an avatar is a plain SwiftUI view that resizes on its own, and it is
+            // worth being able to see the two side by side through the same move.
+            // Dan comes second so he lands on the first page of the strip: a small phone fits only
+            // two tiles to a page, and an avatar you have to swipe to reach is one you will forget
+            // to look at.
+            let tiles = ["Alice", "Dan", "Carol", "Bob", "Erin", "Frank"].enumerated().map { index, name in
+                Fixtures.tile(name, isLocal: index == 0, hasVideo: name != "Dan")
             }
             return Fixtures.connected(tiles: tiles, spotlight: tiles[2].memberID)
         }

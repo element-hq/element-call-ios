@@ -13,17 +13,19 @@ import simd
 /// Distinct from the frame's own rotation and mirroring, which are properties of the picture rather
 /// than choices about it: those come from the sender and the capturer, this comes from the view.
 public nonisolated struct VideoPresentation: Equatable, Sendable {
-    public enum ContentMode: Sendable {
-        /// The whole picture, letterboxed. What a full-screen tile wants: somebody is actually
-        /// looking at what was sent, and cropping a landscape camera to a portrait screen throws
-        /// away the sides of it.
-        case fit
-        /// Covers the surface, overflow clipped. What a small tile wants: a grid of letterboxed
-        /// cells is mostly black.
-        case fill
-    }
-    
-    public var contentMode: ContentMode
+    /// How much of the picture to show: 0 covers the surface and clips the overflow, 1 shows the
+    /// whole of it and leaves bars.
+    ///
+    /// A fraction rather than a choice between the two, because the two are the ends of one
+    /// continuum and a tile crosses it while it is moving. Told to switch, the crop sprang open in a
+    /// single frame at the start of a move the tile then took half a second to finish; told to
+    /// travel, it opens as the tile grows. Every value in between is a uniform scale, so the picture
+    /// is never distorted on the way -- only cropped less and less.
+    ///
+    /// A small tile wants 0: a grid of letterboxed cells is mostly black. A full-screen one wants 1:
+    /// somebody is looking at what was actually sent, and cropping a landscape camera to an upright
+    /// screen throws the sides of it away.
+    public var fit: CGFloat
     /// 1 is the picture exactly as `contentMode` asked for it.
     public var zoom: CGFloat
     /// Display space, y down, as a fraction of the drawable: `(0.1, 0)` shifts the picture right by
@@ -37,8 +39,8 @@ public nonisolated struct VideoPresentation: Equatable, Sendable {
     
     public static let fill = VideoPresentation()
     
-    public init(contentMode: ContentMode = .fill, zoom: CGFloat = 1, pan: CGSize = .zero) {
-        self.contentMode = contentMode
+    public init(fit: CGFloat = 0, zoom: CGFloat = 1, pan: CGSize = .zero) {
+        self.fit = fit
         self.zoom = zoom
         self.pan = pan
     }
@@ -68,12 +70,15 @@ extension VideoPresentation {
         let drawableWidth = Float(max(1, drawableSize.width))
         let drawableHeight = Float(max(1, drawableSize.height))
         
-        // Fill takes the larger factor so the drawable is covered and the overflow is clipped; fit
-        // takes the smaller so the whole picture is there and the remainder stays the clear colour,
-        // which is already black.
+        // Filling takes the larger factor so the drawable is covered and the overflow is clipped;
+        // fitting takes the smaller so the whole picture is there and the remainder stays the clear
+        // colour, which is already black. Between them is a straight blend of the two factors: a
+        // single uniform scale at every point, so the picture keeps its shape all the way across and
+        // only its crop changes.
         let cover = max(drawableWidth / contentWidth, drawableHeight / contentHeight)
         let contain = min(drawableWidth / contentWidth, drawableHeight / contentHeight)
-        let scale = (contentMode == .fill ? cover : contain) * max(0.01, Float(zoom))
+        let fit = min(max(Float(fit), 0), 1)
+        let scale = (cover + (contain - cover) * fit) * max(0.01, Float(zoom))
         
         // Clamped to what the picture actually overhangs. The gesture layer clamps to the same
         // formula, but it learns a rotation or a layer switch one frame after this does: without
