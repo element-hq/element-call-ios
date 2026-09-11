@@ -95,6 +95,13 @@ public final class VideoTileUIView: UIView {
     
     override public func layoutSubviews() {
         super.layoutSubviews()
+        // A resize is a redraw. `isPaused` means the only things that draw are a frame arriving and
+        // the app coming back to the foreground, so a view whose bounds are being animated kept
+        // showing the picture it last drew, stretched by the compositor to whatever shape it had
+        // reached, until the next frame happened to land. The further the aspect ratio travels the
+        // worse it looks, which is why it has gone unnoticed: the moves the stage makes today barely
+        // change a tile's shape.
+        requestDraw()
         let scale = window?.screen.scale ?? UIScreen.main.scale
         let size = CGSize(width: (bounds.width * scale).rounded(), height: (bounds.height * scale).rounded())
         if size != lastReportedSize, size.width > 0 {
