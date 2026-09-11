@@ -26,6 +26,10 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     public static let audioOutput = "\(prefix).audioOutput"
     public static let screenShare = "\(prefix).screenShare"
     public static let minimize = "\(prefix).minimize"
+    /// Leaves the full-screen tile. Spelled out rather than derived from its icon: it borrows the
+    /// collapse glyph, and `control(for:)` maps that to `minimize`, which would leave two different
+    /// buttons answering to one identifier.
+    public static let exitFullscreen = "\(prefix).exitFullscreen"
     public static let more = "\(prefix).more"
     
     // MARK: Structure

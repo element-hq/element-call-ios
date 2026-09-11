@@ -320,4 +320,91 @@ struct ElementCallStageLayoutTests {
         #expect(states.filter { $0 == .paused }.count == 2)
         #expect(states.filter { $0 == .released }.count == 25)
     }
+    
+    // MARK: - Full screen
+    
+    @Test
+    func fullScreenGivesOneTileTheWholeAreaAndHidesTheRest() throws {
+        let tiles = (0..<30).map { Self.tile("member\($0)") }
+        let layout = ElementCallStageLayout.compute(tiles: tiles,
+                                                    spotlightMemberID: tiles[0].memberID,
+                                                    fullscreenMemberID: tiles[7].memberID,
+                                                    layout: .group,
+                                                    currentPage: 0,
+                                                    metrics: metrics)
+        let only = try #require(layout.placements.first)
+        #expect(layout.placements.count == 1)
+        #expect(only.tile.memberID == tiles[7].memberID)
+        #expect(only.appearance == .fullscreen)
+        // The whole area, safe areas and the controls' clearance included: a fitted picture is
+        // centred on what it is given.
+        #expect(only.frame == CGRect(origin: .zero, size: metrics.area))
+        #expect(only.page == nil)
+        #expect(layout.pageCount == 1)
+        // The window continues the picture you were actually watching.
+        #expect(layout.pictureInPictureMemberID == tiles[7].memberID)
+        
+        // The twenty-nine nobody is looking at. Named rather than simply dropped: the stage derives
+        // what it releases from the placements, so a single placement would otherwise release
+        // nobody at the exact moment there is nobody left to watch.
+        #expect(layout.hiddenMemberIDs.count == 29)
+        #expect(!layout.hiddenMemberIDs.contains(tiles[7].memberID))
+        #expect(layout.hiddenMemberIDs.contains(tiles[0].memberID))
+    }
+    
+    /// The tiles full screen replaces do not vanish, they animate out, and a leaving view keeps its
+    /// z position while it does. So the one growing has to be above every z position any other
+    /// arrangement hands out, or something fades away on top of it: which is exactly what the
+    /// spotlight's 1 did to a strip tile's 0.
+    @Test
+    func theFullScreenTileIsAboveEveryTileItReplaces() throws {
+        let tiles = [local, bob, carol] + Self.group
+        let everyOtherZIndex = [ElementCallLayout.group, .oneToOne].flatMap { layout in
+            [metrics, landscape].flatMap { metrics in
+                ElementCallStageLayout.compute(tiles: tiles,
+                                               spotlightMemberID: bob.memberID,
+                                               layout: layout,
+                                               currentPage: 0,
+                                               metrics: metrics).placements.map(\.zIndex)
+            }
+        }
+        let highest = try #require(everyOtherZIndex.max())
+        #expect(ElementCallStageLayout.fullscreenZIndex > highest)
+        
+        let fullScreen = ElementCallStageLayout.compute(tiles: tiles,
+                                                        spotlightMemberID: bob.memberID,
+                                                        fullscreenMemberID: carol.memberID,
+                                                        layout: .group,
+                                                        currentPage: 0,
+                                                        metrics: metrics)
+        #expect(fullScreen.placements.first?.zIndex == ElementCallStageLayout.fullscreenZIndex)
+    }
+    
+    /// The member you were watching can leave. The arrangement has to stand on its own when that
+    /// happens; the screen clears the stale id separately, and this is what makes the gap harmless.
+    @Test
+    func fullScreenOnAMemberWhoHasLeftFallsBackToTheOrdinaryLayout() throws {
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol],
+                                                    spotlightMemberID: bob.memberID,
+                                                    fullscreenMemberID: "@ghost:example.com:DEVICE",
+                                                    layout: .group,
+                                                    currentPage: 0,
+                                                    metrics: metrics)
+        #expect(layout.placements.count == 3)
+        #expect(layout.hiddenMemberIDs.isEmpty)
+        #expect(try placement(bob, in: layout).isSpotlight)
+    }
+    
+    @Test
+    func fullScreenWorksInAOneToOneCallToo() {
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob],
+                                                    spotlightMemberID: nil,
+                                                    fullscreenMemberID: local.memberID,
+                                                    layout: .oneToOne,
+                                                    currentPage: 0,
+                                                    metrics: metrics)
+        #expect(layout.placements.count == 1)
+        #expect(layout.placements.first?.tile.memberID == local.memberID)
+        #expect(layout.hiddenMemberIDs == [bob.memberID])
+    }
 }

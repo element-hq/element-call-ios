@@ -132,6 +132,11 @@ struct ElementCallStageLayout: Equatable {
         }
     }
     
+    /// Clear of every z position the other arrangements hand out: the spotlight's 1 and the
+    /// one-to-one thumbnail's 2. Named so the relationship is something a test can assert rather
+    /// than something the next person has to notice.
+    static let fullscreenZIndex: Double = 3
+    
     var placements: [ElementCallTilePlacement]
     var pageCount: Int
     /// Where the page dots go when there are pages to show.
@@ -140,19 +145,58 @@ struct ElementCallStageLayout: Equatable {
     var pageAxis: Axis = .horizontal
     /// Whose tile hosts the Picture in Picture source view: the picture the window continues.
     var pictureInPictureMemberID: String?
+    /// Members the arrangement leaves out altogether, which today means everyone but the one tile
+    /// filling the screen. The stage releases them: it derives the released set from the placements,
+    /// and a single placement would otherwise compute the empty set and un-release the whole call at
+    /// the very moment nobody is looking at it. **Declared last** because the memberwise initialiser
+    /// follows declaration order and the arrangements below call it with trailing labels.
+    var hiddenMemberIDs: Set<String> = []
     
     static func compute(tiles: [ElementCallTile],
                         spotlightMemberID: String?,
+                        fullscreenMemberID: String? = nil,
                         layout: ElementCallLayout,
                         currentPage: Int,
                         metrics: Metrics) -> ElementCallStageLayout {
         guard !tiles.isEmpty else {
             return ElementCallStageLayout(placements: [], pageCount: 0)
         }
+        // A member who has left is no longer in `tiles`, and the arrangement falls back on its own
+        // rather than showing an empty screen. The screen clears the stale id when it notices.
+        if let fullscreenMemberID, let tile = tiles.first(where: { $0.memberID == fullscreenMemberID }) {
+            return fullscreen(tile: tile, others: tiles.filter { $0.memberID != fullscreenMemberID }, metrics: metrics)
+        }
         if layout == .oneToOne, let local = tiles.first(where: \.isLocal) {
             return oneToOne(local: local, remote: tiles.first { !$0.isLocal }, metrics: metrics)
         }
         return group(tiles: tiles, spotlightMemberID: spotlightMemberID, currentPage: currentPage, metrics: metrics)
+    }
+    
+    // MARK: - Full screen
+    
+    /// One tile and nothing else, edge to edge. The others keep their place in the call but not on
+    /// the stage, so they are named as hidden rather than simply dropped.
+    ///
+    /// The picture fits rather than fills at this size (see ``VideoPresentation``), so the frame is
+    /// the whole area whatever shape the picture turns out to be: the letterbox is the renderer's
+    /// business, and giving the tile an aspect-shaped frame here would make the layout depend on a
+    /// stream it cannot see.
+    ///
+    /// Above everything, hence ``fullscreenZIndex``: the tiles it replaces are *leaving*, and a
+    /// leaving view keeps its z position for as long as its transition runs. At the strip's own
+    /// zero, a tile growing out of the strip had the spotlight's 1 fading out on top of it all the
+    /// way up, which is the one moment in the whole move when something is covering the thing you
+    /// just asked to see.
+    private static func fullscreen(tile: ElementCallTile, others: [ElementCallTile], metrics: Metrics) -> ElementCallStageLayout {
+        ElementCallStageLayout(placements: [ElementCallTilePlacement(tile: tile,
+                                                                     frame: CGRect(origin: .zero, size: metrics.area),
+                                                                     appearance: .fullscreen,
+                                                                     isSpotlight: false,
+                                                                     page: nil,
+                                                                     zIndex: fullscreenZIndex)],
+                               pageCount: 1,
+                               pictureInPictureMemberID: tile.memberID,
+                               hiddenMemberIDs: Set(others.map(\.memberID)))
     }
     
     // MARK: - One-to-one
