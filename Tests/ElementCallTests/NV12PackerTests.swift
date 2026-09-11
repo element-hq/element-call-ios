@@ -11,7 +11,7 @@ import CoreVideo
 import Testing
 
 /// The packer is the inverse of the repacker: I420 → NV12 → I420 must be the identity.
-struct NV12PackerTests {
+nonisolated struct NV12PackerTests {
     @Test
     func roundTripsThroughTheRepacker() throws {
         let width = 6

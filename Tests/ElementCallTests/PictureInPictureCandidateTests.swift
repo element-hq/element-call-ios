@@ -8,7 +8,7 @@
 import ElementCallKit
 import Testing
 
-struct PictureInPictureCandidateTests {
+nonisolated struct PictureInPictureCandidateTests {
     private let me = "@alice:example.org:ME"
     
     @Test

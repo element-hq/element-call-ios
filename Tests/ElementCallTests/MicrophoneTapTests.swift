@@ -9,7 +9,7 @@ import AVFoundation
 @testable import ElementCallKit
 import Testing
 
-struct MicrophoneTapTests {
+nonisolated struct MicrophoneTapTests {
     /// The load-bearing line in this file is the initialiser below: a tap is built from a ring and
     /// a format snapshot and **nothing else**. The render block used to ask `CallAudioEngine` for
     /// the input format from the IO thread, which took `AVAudioEngine`'s mutex there and deadlocked

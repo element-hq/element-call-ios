@@ -11,7 +11,7 @@ import Testing
 
 /// The repacker copies row by row: padded strides must not leak into the picture, and chroma is
 /// half resolution rounded up.
-struct I420RepackerTests {
+nonisolated struct I420RepackerTests {
     @Test
     func repacksPaddedNV12IntoTightPlanes() throws {
         let width = 6

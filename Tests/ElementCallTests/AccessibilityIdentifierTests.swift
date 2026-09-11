@@ -15,7 +15,7 @@ import Testing
 /// The exact strings are asserted on purpose. A rename should fail here and make whoever did it
 /// decide deliberately to break the rig, rather than finding out when the rig goes red.
 @Suite("Accessibility identifiers")
-struct AccessibilityIdentifierTests {
+nonisolated struct AccessibilityIdentifierTests {
     @Test("The published identifiers keep their exact spelling")
     func spelling() {
         #expect(ElementCallAccessibilityIdentifiers.hangUp == "elementCall.hangUp")

@@ -10,7 +10,7 @@ import Foundation
 import Synchronization
 import Testing
 
-struct VideoFrameSlotTests {
+nonisolated struct VideoFrameSlotTests {
     /// The frame callback used to be reabstracted and re-stored on every offer, growing a chain of
     /// thunks that overflowed the stack after a few minutes of video. A hundred thousand offers is
     /// what a five-minute call delivers; invoking and releasing the handler must both stay flat.
