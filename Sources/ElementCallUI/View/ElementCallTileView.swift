@@ -90,6 +90,10 @@ struct ElementCallTileView: View {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(outlineColor, lineWidth: appearance == .thumbnail ? 1 : 3)
         }
+        // Keyed by member so the rig can assert about one participant, wherever the layout has put
+        // them. `.contain` keeps the mute badge and flip button addressable inside it.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(memberID: tile.memberID))
     }
     
     private var avatar: some View {
@@ -117,7 +121,7 @@ struct ElementCallTileView: View {
             HStack(alignment: .bottom, spacing: 4) {
                 badge {
                     style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
-                    Text(tile.isScreenSharing && isSpotlight ? "(Screen share)" : tile.displayName)
+                    Text(tile.isScreenSharing && isSpotlight ? style.strings.screenShareTileName : tile.displayName)
                         .lineLimit(1)
                 }
                 Spacer()
@@ -145,7 +149,7 @@ struct ElementCallTileView: View {
                         .foregroundStyle(style.theme.iconCriticalPrimary)
                         .frame(width: 28, height: 28)
                         .background(Color.black.opacity(0.5), in: Circle())
-                        .accessibilityLabel("Microphone muted")
+                        .accessibilityLabel(style.strings.microphoneMuted)
                 }
             }
             Spacer()
@@ -180,7 +184,7 @@ struct ElementCallTileView: View {
                 .padding(6)
                 .background(Color.black.opacity(0.5), in: Circle())
         }
-        .accessibilityLabel("Switch camera")
+        .accessibilityLabel(style.strings.switchCamera)
     }
     
     /// The thumbnail gets a hairline so it has an edge when both cameras are off and it would

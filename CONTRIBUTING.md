@@ -97,8 +97,10 @@ Three parts of that are not optional, and each fails in a way that does not name
   pins this in a test plan, which a package does not have. The harness asserts it and tells you what
   to pass, rather than letting 42 snapshots fail.
 
-The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`, which the
-workflow reads, so there is one place to change them.
+The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`. The
+harness reads it and fails loudly when the simulator does not match, but **the workflows do not**:
+`tests.yml` and `record-snapshots.yml` each carry the same literals in their `env:` block, so
+changing the pinned device is three edits rather than one. See [AGENTS.md](AGENTS.md).
 
 | Layer | Where |
 | --- | --- |
@@ -108,6 +110,20 @@ workflow reads, so there is one place to change them.
 | Real media call | needs the `demo/backend` docker stack from matrix-rust-rtc, run by hand |
 
 Add previews for every main state of a view, conform them to `TestablePreview`, and use
-`PreviewProvider` rather than the `#Preview` macro so the snapshot cases can be generated. Re-record
-with `RECORD_FAILURES=true` in the environment, or by adding the `record-snapshots` label to a pull
-request.
+`PreviewProvider` rather than the `#Preview` macro so the snapshot cases can be generated.
+
+To re-record, create the marker file the harness looks for and run the tests:
+
+```bash
+touch Tests/ElementCallTests/.record-snapshots   # then the xcodebuild above
+rm Tests/ElementCallTests/.record-snapshots
+```
+
+`RECORD_FAILURES=true` works from Xcode, where a scheme can set it, but **not from the command
+line**: nothing on an `xcodebuild` command line reaches the harness's own environment, so it does
+nothing, silently, and you conclude your change had no visual effect. Adding the `record-snapshots`
+label to a pull request runs the same thing on CI.
+
+**Do not delete `__Snapshots__` to force a re-record.** Only what fails is re-recorded, on purpose:
+PNG encoding is not guaranteed byte-for-byte across Xcode versions, so a wholesale re-record rewrites
+all of them in Git LFS and buries the one image that actually changed.

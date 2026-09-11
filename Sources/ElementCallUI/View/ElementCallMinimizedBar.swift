@@ -23,7 +23,6 @@ public struct ElementCallMinimizedBar: View {
     private let controller: ElementCallController
     private let onTap: () -> Void
     
-    @Environment(\.elementCallStyle) private var style
     @State private var roomName: String
     
     public init(controller: ElementCallController, onTap: @escaping () -> Void) {
@@ -33,20 +32,50 @@ public struct ElementCallMinimizedBar: View {
     }
     
     public var body: some View {
+        ElementCallMinimizedBarContent(roomName: roomName,
+                                       connectedAt: controller.connectedAt,
+                                       isMicrophoneMuted: controller.call?.isMicrophoneMuted == true,
+                                       onTap: onTap)
+            .environment(\.elementCallStyle, controller.style)
+            .onReceive(namePublisher) { roomName = $0 }
+    }
+    
+    /// A room opened moments ago may not have its name yet, so the bar follows it rather than
+    /// capturing whatever was known when the call started.
+    private var namePublisher: AnyPublisher<String, Never> {
+        controller.room?.displayNamePublisher ?? Empty().eraseToAnyPublisher()
+    }
+}
+
+/// What the bar actually draws, over plain values.
+///
+/// Split from ``ElementCallMinimizedBar`` so it can be previewed, and so it appears in the snapshot
+/// suite: the public wrapper takes an `ElementCallController`, whose initialiser is internal, so no
+/// preview could build one and the bar shipped with no visual coverage at all despite being a view
+/// a host positions by hand.
+struct ElementCallMinimizedBarContent: View {
+    let roomName: String
+    let connectedAt: Date?
+    let isMicrophoneMuted: Bool
+    let onTap: () -> Void
+    
+    @Environment(\.elementCallStyle) private var style
+    
+    var body: some View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 style.icons.icon(.videoCall, size: .small, relativeTo: .bodySMSemibold)
                 Text(roomName)
                     .lineLimit(1)
-                if let connectedAt = controller.connectedAt {
+                if let connectedAt {
                     Text(connectedAt, style: .timer)
                         .monospacedDigit()
                 }
                 Spacer()
-                style.icons.icon(controller.call?.isMicrophoneMuted == true ? .micOff : .micOn,
+                style.icons.icon(isMicrophoneMuted ? .micOff : .micOn,
                                  size: .small,
                                  relativeTo: .bodySMSemibold)
-                Text("Return")
+                Text(style.strings.returnToCall)
             }
             .font(style.theme.bodySMSemibold)
             .foregroundStyle(.white)
@@ -57,15 +86,33 @@ public struct ElementCallMinimizedBar: View {
             .padding(.top, 4)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Return to call")
+        .accessibilityLabel(style.strings.returnToCallAccessibilityLabel)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimizedBar)
-        .environment(\.elementCallStyle, controller.style)
-        .onReceive(namePublisher) { roomName = $0 }
+    }
+}
+
+// MARK: - Previews
+
+struct ElementCallMinimizedBar_Previews: PreviewProvider, TestablePreview {
+    /// `connectedAt` is nil in every case. `Text(_:style: .timer)` counts up from the date it is
+    /// given, so a bar carrying one renders a different string every second and no reference image
+    /// could match twice. The timer is the one part of this bar a snapshot cannot cover.
+    static func bar(_ roomName: String, isMicrophoneMuted: Bool = false) -> some View {
+        ElementCallMinimizedBarContent(roomName: roomName,
+                                       connectedAt: nil,
+                                       isMicrophoneMuted: isMicrophoneMuted,
+                                       onTap: { })
+            .padding()
+            .background(ElementCallStyle.stock.theme.bgCanvasDefault)
+            .environment(\.colorScheme, .dark)
     }
     
-    /// A room opened moments ago may not have its name yet, so the bar follows it rather than
-    /// capturing whatever was known when the call started.
-    private var namePublisher: AnyPublisher<String, Never> {
-        controller.room?.displayNamePublisher ?? Empty().eraseToAnyPublisher()
+    static var previews: some View {
+        bar("Design Team")
+            .previewDisplayName("Resting")
+        bar("Design Team", isMicrophoneMuted: true)
+            .previewDisplayName("Muted")
+        bar("A room with a name far too long for this bar to show all of")
+            .previewDisplayName("Long name")
     }
 }

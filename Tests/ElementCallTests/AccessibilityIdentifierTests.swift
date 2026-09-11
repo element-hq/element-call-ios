@@ -7,6 +7,7 @@
 
 import ElementCall
 @testable import ElementCallUI
+import Foundation
 import Testing
 
 /// The identifiers are consumed by an interop test rig outside this repository, which means they are
@@ -45,6 +46,62 @@ nonisolated struct AccessibilityIdentifierTests {
             let identifier = ElementCallAccessibilityIdentifiers.control(for: icon)
             #expect(identifier.hasPrefix("elementCall."), "\(icon) is not prefixed")
             #expect(identifier.count > "elementCall.".count, "\(icon) has an empty identifier")
+        }
+    }
+    
+    /// The checkout the tests were built from, the same route `PreviewTests` takes to its record
+    /// marker.
+    static let sources = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent() // ElementCallTests
+        .deletingLastPathComponent() // Tests
+        .deletingLastPathComponent() // the checkout
+        .appendingPathComponent("Sources")
+    
+    /// Nil when the simulator may not read the checkout. macOS refuses it anything under
+    /// `~/Documents` or `~/Desktop`, and the read fails with "Operation not permitted" rather than
+    /// "not found", so a checkout in either place would fail the test below on where it sits rather
+    /// than on what it found.
+    static let declarations = try? String(contentsOf: sources.appendingPathComponent("ElementCallUI/ElementCallAccessibilityIdentifiers.swift"),
+                                          encoding: .utf8)
+    
+    /// Spelling is worth nothing if no view carries the identifier. Four of them — the stage, the
+    /// room name, the call state and every tile — were declared, asserted above, and applied to
+    /// nothing at all: the rig could not find any of them, and this suite stayed green throughout,
+    /// because it only ever compared strings to themselves.
+    ///
+    /// So read the sources and insist each one reaches a view. A control reaches one through
+    /// ``ElementCallAccessibilityIdentifiers/control(for:)`` rather than by name, which is why the
+    /// switch arm counts.
+    ///
+    /// Skipped rather than failed where the sources cannot be read, so it lies in neither
+    /// direction. CI checks out somewhere unguarded, which is where this has to hold.
+    @Test("Every declared identifier is applied to a view",
+          .enabled(if: declarations != nil, "the simulator may not read this checkout"))
+    func everyIdentifierIsApplied() throws {
+        let sources = Self.sources
+        let declarations = try #require(Self.declarations)
+        
+        let declared = declarations.split(separator: "\n").compactMap { line -> String? in
+            guard let range = line.range(of: "(?<=static (let|func) )\\w+", options: .regularExpression) else { return nil }
+            let name = String(line[range])
+            return name == "prefix" ? nil : name
+        }
+        // The parse itself can rot. If it ever stops finding the declarations this test would pass
+        // by checking nothing, which is the failure it exists to prevent.
+        #expect(declared.count >= 12, "only parsed \(declared.count) identifiers: \(declared)")
+        
+        var code = ""
+        let files = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)
+        for case let url as URL in files ?? .init() where url.pathExtension == "swift" {
+            code += try String(contentsOf: url, encoding: .utf8)
+        }
+        
+        for name in declared {
+            let isApplied = code.contains("ElementCallAccessibilityIdentifiers.\(name)")
+            let isReachedByIcon = declarations.range(of: ": \(name)$", options: [.regularExpression]) != nil
+                || declarations.contains(": \(name)\n")
+            #expect(isApplied || isReachedByIcon,
+                    "\(name) is declared but no view applies it, and no icon resolves to it")
         }
     }
     

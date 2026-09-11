@@ -103,3 +103,15 @@ custom_rules:
     # host ends up linking, and a test bundle is not shipped, so a test asserting on ClientError
     # classification legitimately imports it.
     excluded: "(Sources/ElementCallMatrix|Tests)/.*"
+
+  # Media synchronises by hand: audio render callbacks, capture delegates and Metal
+  # draws run on threads the compiler cannot reason about, and an actor hop there
+  # costs frames. Everywhere else the escape hatch means the design is wrong, so the
+  # rule confines it rather than banning it outright. Tests are excluded for the same
+  # reason as the SDK rule: a test bundle is not shipped, and the snapshot harness
+  # needs it to carry preferences across a rendering callback.
+  unchecked_sendable_outside_media:
+    regex: "@unchecked Sendable"
+    message: "@unchecked Sendable is confined to ElementCallKit/Media, where the threads are not ours to reason about. Outside it, the design is wrong. See AGENTS.md."
+    severity: error
+    excluded: "(Sources/ElementCallKit/Media|Tests)/.*"
