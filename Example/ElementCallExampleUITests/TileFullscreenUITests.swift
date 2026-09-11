@@ -219,6 +219,28 @@ final class TileFullscreenUITests: XCTestCase {
         XCTAssertTrue(tile("bob").exists, "still the one-to-one arrangement, not full screen")
     }
     
+    // MARK: - With a picture in the tile
+    
+    /// The only case with a Metal surface actually drawing, which is a different thing from a tile
+    /// with an avatar in it: the surface is resized by the animation, and what it does while that
+    /// happens is not something an avatar can tell you. Pair it with the recording recipe in
+    /// AGENTS.md when the move itself is what you need to look at.
+    func testFullScreenWorksWithAPictureInTheTile() {
+        launch("video")
+        let carol = tile("carol")
+        XCTAssertTrue(carol.waitForExistence(timeout: 10))
+        
+        carol.doubleTap()
+        XCTAssertTrue(waitForDisappearance(of: tile("dan")), "full screen with the video mounted")
+        
+        carol.tap()
+        XCTAssertTrue(exitButtonAppears())
+        XCTAssertTrue(app.staticTexts["Carol"].exists)
+        
+        carol.doubleTap()
+        XCTAssertTrue(tile("dan").waitForExistence(timeout: 3), "and back, with the picture intact")
+    }
+    
     // MARK: - Screen share
     
     func testFullScreenOnASharerKeepsTheirScreen() {

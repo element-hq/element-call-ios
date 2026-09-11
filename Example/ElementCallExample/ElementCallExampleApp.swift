@@ -29,6 +29,7 @@ enum ElementCallExampleArrangement: String, CaseIterable {
     case pagedStrip
     case oneToOne
     case screenShare
+    case video
     
     static let launchArgument = "-arrangement"
     
@@ -45,7 +46,14 @@ enum ElementCallExampleArrangement: String, CaseIterable {
         case .pagedStrip: "Paged strip"
         case .oneToOne: "One to one"
         case .screenShare: "Screen share"
+        case .video: "Moving video"
         }
+    }
+    
+    /// Whether the tiles should be fed generated frames. Only the video arrangement asks for it, so
+    /// every other one stays a pure layout harness with no timer running behind it.
+    var wantsVideo: Bool {
+        self == .video
     }
     
     /// Built from the same fixtures the snapshots use, so a failure here and a failure there are
@@ -70,6 +78,12 @@ enum ElementCallExampleArrangement: String, CaseIterable {
         case .screenShare:
             let sharer = Fixtures.tile("Frank", hasVideo: true, isScreenSharing: true)
             return Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob, sharer], spotlight: sharer.memberID)
+        case .video:
+            // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
+            let tiles = ["Alice", "Bob", "Carol", "Dan", "Erin", "Frank"].enumerated().map { index, name in
+                Fixtures.tile(name, isLocal: index == 0, hasVideo: true)
+            }
+            return Fixtures.connected(tiles: tiles, spotlight: tiles[2].memberID)
         }
     }
 }
@@ -78,11 +92,13 @@ struct ElementCallExampleScreen: View {
     let arrangement: ElementCallExampleArrangement
     
     @State private var context: ElementCallScreenContext?
+    @State private var video = TestPatternVideo()
     
     var body: some View {
         ZStack {
             if let context {
                 ElementCallHarnessScreen(context: context)
+                    .environment(\.elementCallPreviewVideo, arrangement.wantsVideo ? video.source : nil)
             }
         }
         .onAppear {

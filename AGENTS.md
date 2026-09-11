@@ -105,9 +105,22 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   `ElementCallStageLayoutTests`, appearance in the snapshots, and geometry in a unit test: a UI test
   is twenty seconds against their twenty milliseconds. What earns its place is gesture arbitration —
   the strip's paging drag against a tile's pan, and the `Button` inside a tile.
-- **No frame is ever drawn**, so nothing about the picture itself is testable here. Fitting, zoom
-  and pan are pinned by `VideoPresentationTests` instead, which asserts on the vertex transform and
-  is exact where a screenshot would only be close.
+- **The `video` arrangement draws real frames**, from `MatrixRTCTestPattern`: colour bars with a
+  heavy border, because the questions are geometric. A border running off the edges is a crop, a
+  border with black beside it is a letterbox, and a border that changes thickness partway through a
+  move is the picture being stretched rather than redrawn. Some members are portrait sources and
+  some landscape, so both answers are on the stage at once. It reaches the tiles through
+  `ElementCallPreviewVideo`, an environment value consulted only where there is no call — nil in
+  every shipping build.
+  
+  Keep it honest, or it is worse than nothing. Two things had to be fixed before it was: the
+  pattern is generated a row at a time rather than a pixel at a time, and one frame per size is
+  shared by every tile that wants it; and its timer runs on `.common`, because on the default mode
+  it stops while the run loop tracks a touch, which starved the tiles of frames for exactly the
+  length of a gesture and made the harness stutter far worse than the app it stands in for.
+- **Exact geometry is still pinned by `VideoPresentationTests`**, which asserts on the vertex
+  transform. The harness is for looking; a test that compares pictures would only be approximate
+  where that one is exact.
 
 #### Running it by hand, and watching a move frame by frame
 

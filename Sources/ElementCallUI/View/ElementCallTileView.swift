@@ -356,6 +356,8 @@ struct ElementCallVideoView<Placeholder: View>: View {
     
     @State private var slot = VideoFrameSlot()
     @State private var gate = FrameGate()
+    /// Only ever set by the example harness. See ``ElementCallPreviewVideo``.
+    @Environment(\.elementCallPreviewVideo) private var previewVideo
     
     var body: some View {
         ZStack {
@@ -374,11 +376,18 @@ struct ElementCallVideoView<Placeholder: View>: View {
                 .opacity(gate.hasFrame ? 1 : 0)
         }
         .onAppear {
-            guard let call = callProvider() else { return }
+            // Wired before the call is asked for, not after: the harness feeds the same slot, and
+            // with this below the guard its first frame would arrive with nothing listening and the
+            // avatar would stay up over a picture that was already drawing.
+            //
             // A slot reused by this tile may already hold a frame from before it went off screen.
             gate.hasFrame = slot.hasReceivedFrame
             slot.setOnFirstFrame { [gate] in
                 Task { @MainActor in gate.hasFrame = true }
+            }
+            guard let call = callProvider() else {
+                previewVideo?.attach(slot, memberID, kind)
+                return
             }
             if isLocal {
                 call.localVideo.attach(slot)
@@ -388,7 +397,10 @@ struct ElementCallVideoView<Placeholder: View>: View {
         }
         .onDisappear {
             slot.setOnFirstFrame(nil)
-            guard let call = callProvider() else { return }
+            guard let call = callProvider() else {
+                previewVideo?.detach(slot)
+                return
+            }
             if isLocal {
                 call.localVideo.detach(slot)
             } else {
