@@ -11,7 +11,13 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`compound-design-tokens` is now a range starting at 11.0.0**, where it was pinned exactly at
+10.2.4. Nothing in the public surface changes, but a host whose Compound still resolves tokens below
+11.0.0 will no longer resolve against this package at all — update Compound first.
+
+The exact pin was the problem. Two `exact` requirements on one package have no solution, so once
+`compound-ios` moved to tokens 11.0.0 the integration failed at resolution, before anything compiled.
+The range means a host bumping Compound ahead of a release here no longer has to wait for one.
 
 ## 0.1.0-rc.2 - 2026-09-11
 
