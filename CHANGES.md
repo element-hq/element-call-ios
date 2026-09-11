@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.2 - 2026-09-11
+
 **Every `MatrixRtc*` type is now `MatrixRTC*`** — `MatrixRTCCall`, `MatrixRTCSession`,
 `MatrixRTCParticipant`, `MatrixRTCLogRecord` and the rest, 33 public types in all. Initialisms are
 uniformly cased per the Swift API Design Guidelines. A find-and-replace of `MatrixRtc` followed by
@@ -50,6 +54,31 @@ Nothing to change unless the bar was relied on as the audio-call presentation.
 *backgrounding* the app during an audio call opens the window by itself. It has a default of
 `false`, so existing conformances keep compiling and behaviour is unchanged; set it to `true` to opt
 in. Minimizing on purpose is not affected by it.
+
+
+
+### What's Changed
+
+🙌 Improvements
+* Carry file and line through both log ports by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/9
+
+🐛 Bugfixes
+* Fixes the hang-up deadlock by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/6
+* Show the avatar until a stream actually delivers a frame by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/11
+* App running on macOS dies on call start with an uncatchable AVFAudio exception by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/12
+* Fix: Audio not starting on iOS app by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/14
+
+⚠️ API Changes
+* Open Picture in Picture for audio calls, showing the avatar by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/7
+* Add an umbrella product so a host takes one dependency by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/8
+* Rename MatrixRtc types to MatrixRTC by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/10
+
+🧱 Build
+* Release 0.1.0-rc.1 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/5
+* Declare the render-block boxes Sendable by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/13
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.1...0.1.0-rc.2
 
 ## 0.1.0-rc.1 - 2026-09-09
 
