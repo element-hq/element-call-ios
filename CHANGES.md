@@ -11,7 +11,23 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`ElementCallStrings` gained seventeen strings.** Every one is defaulted, so nothing breaks and no
+conformance changes — but until you supply them the call screen shows English to every user, whatever
+their language.
+
+Seventeen user-facing strings were literals in the views: they never reached the port, so no host
+could translate them and nothing failed to say so. They are now `joining`, `connecting`, `callEnded`,
+`sharingYourScreen`, `shareScreen`, `stopSharingScreen`, `screenShareTileName`, `ok`, `returnToCall`,
+`returnToCallAccessibilityLabel`, `mute`, `unmute`, `turnCameraOn`, `turnCameraOff`, `hangUp`,
+`microphoneMuted` and `switchCamera`. Eight are VoiceOver labels rather than drawn text, and are the
+only description of the call a VoiceOver user gets; `shareScreen` and `stopSharingScreen` are both.
+
+The two developer toggles — tile stats, audio test tone — stay untranslated on purpose.
+
+**Four accessibility identifiers now reach the UI.** `elementCall.stage`, `elementCall.roomName`,
+`elementCall.callState` and `elementCall.tile.<memberID>` were published and asserted, but applied to
+no view, so an interop rig querying them found nothing. Nothing is renamed and nothing is removed, so
+no rig breaks — but a rig that worked around their absence can now stop.
 
 ## 0.1.0-rc.3 - 2026-09-11
 

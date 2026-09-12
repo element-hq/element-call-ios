@@ -64,7 +64,7 @@ struct ElementCallView: View {
                                         }
                                     }),
                presenting: context.alertInfo) { _ in
-            Button("OK") { context.alertInfo = nil }
+            Button(style.strings.ok) { context.alertInfo = nil }
         } message: { alert in
             Text(alert.message)
         }
@@ -90,19 +90,23 @@ struct ElementCallView: View {
                     .font(style.theme.bodyLGSemibold)
                     .foregroundStyle(style.theme.textPrimary)
                     .lineLimit(1)
+                    .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.roomName)
                 statusLine
+                    .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.callState)
             }
             
             Spacer()
             
             Menu {
+                // Deliberately not in ElementCallStrings: these two are developer diagnostics, not
+                // product text, and a host turns them off entirely with `areTileStatsAvailable`.
                 Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
                 Toggle("Audio test tone (440 Hz)", isOn: Binding(get: { context.viewState.isAudioTestToneEnabled }, set: { _ in context.send(viewAction: .toggleAudioTestTone) }))
                 Button {
                     context.send(viewAction: .toggleScreenShare)
                 } label: {
                     Label {
-                        Text(context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen")
+                        Text(context.viewState.isScreenSharing ? style.strings.stopSharingScreen : style.strings.shareScreen)
                     } icon: {
                         style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
                     }
@@ -118,7 +122,7 @@ struct ElementCallView: View {
     private var screenShareBanner: some View {
         HStack(spacing: 8) {
             style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySMSemibold)
-            Text("You\u{2019}re sharing your screen")
+            Text(style.strings.sharingYourScreen)
                 .font(style.theme.bodySMSemibold)
                 .lineLimit(1)
             Button(style.strings.stop) {
@@ -140,9 +144,9 @@ struct ElementCallView: View {
     private var statusLine: some View {
         switch context.viewState.connection {
         case .idle, .joining:
-            Text("Joining…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(style.strings.joining).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connectingMedia:
-            Text("Connecting…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(style.strings.connecting).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connected:
             if let connectedAt = context.viewState.connectedAt {
                 Text(connectedAt, style: .timer)
@@ -151,7 +155,7 @@ struct ElementCallView: View {
                     .monospacedDigit()
             }
         case .ended:
-            Text("Call ended").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(style.strings.callEnded).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .failed(let message):
             Text(message).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
         }

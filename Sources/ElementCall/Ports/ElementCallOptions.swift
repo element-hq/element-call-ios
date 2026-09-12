@@ -59,11 +59,6 @@ public nonisolated enum ElementCallLogLevel: Sendable {
     case debug, info, warning, error
 }
 
-/// Where our log lines go. The host owns this so call logs land in the same place, and the same
-/// rageshake, as everything else it writes.
-///
-/// Note this covers only this package's own lines. The media layer's logs, and the Rust core's, go
-/// through the core's own subscriber, which the host installs separately.
 /// One of our own log lines, with the position it came from.
 public nonisolated struct ElementCallLogRecord: Sendable {
     public let level: ElementCallLogLevel
@@ -80,6 +75,11 @@ public nonisolated struct ElementCallLogRecord: Sendable {
     }
 }
 
+/// Where our log lines go. The host owns this so call logs land in the same place, and the same
+/// rageshake, as everything else it writes.
+///
+/// Note this covers only this package's own lines. The media layer's logs, and the Rust core's, go
+/// through the core's own subscriber, which the host installs separately.
 public nonisolated protocol ElementCallLogging: Sendable {
     /// The one method a host implements.
     ///
@@ -100,16 +100,99 @@ public nonisolated extension ElementCallLogging {
 
 /// Text the call screen shows. English defaults, because a host without translations should still
 /// get something readable rather than a key.
+///
+/// **Every string the user can read belongs here.** A literal left in a view is English for every
+/// host in every language, and nothing catches it: the package ships no `.strings` file, so there
+/// is no missing-key failure and no translation pass to notice the omission. Most of these were
+/// literals in a view for exactly that reason.
+///
+/// Every parameter is defaulted, so adding one is source-compatible for a host that names the
+/// arguments it cares about.
 public nonisolated struct ElementCallStrings: Sendable {
     public var you: String
     public var error: String
     public var stop: String
     public var back: String
     
-    public init(you: String = "You", error: String = "Error", stop: String = "Stop", back: String = "Back") {
+    // MARK: Status
+    
+    public var joining: String
+    public var connecting: String
+    public var callEnded: String
+    
+    // MARK: Screen sharing
+    
+    public var sharingYourScreen: String
+    public var shareScreen: String
+    public var stopSharingScreen: String
+    /// Stands in for the name on a spotlit screen share, where the tile is the shared screen rather
+    /// than the person.
+    public var screenShareTileName: String
+    
+    // MARK: Alerts
+    
+    public var ok: String
+    
+    // MARK: Minimized bar
+    
+    public var returnToCall: String
+    /// Spoken rather than shown: the bar is too narrow for the full phrase, so ``returnToCall`` is
+    /// the label on it and this is what VoiceOver reads.
+    public var returnToCallAccessibilityLabel: String
+    
+    // MARK: Control labels
+    
+    /// These are spoken, not drawn — the controls are icons. They are still the only description of
+    /// the call a VoiceOver user gets, so they are translated like anything else.
+    public var mute: String
+    public var unmute: String
+    public var turnCameraOn: String
+    public var turnCameraOff: String
+    public var hangUp: String
+    public var microphoneMuted: String
+    public var switchCamera: String
+    
+    public init(you: String = "You",
+                error: String = "Error",
+                stop: String = "Stop",
+                back: String = "Back",
+                joining: String = "Joining…",
+                connecting: String = "Connecting…",
+                callEnded: String = "Call ended",
+                sharingYourScreen: String = "You\u{2019}re sharing your screen",
+                shareScreen: String = "Share screen",
+                stopSharingScreen: String = "Stop sharing screen",
+                screenShareTileName: String = "(Screen share)",
+                ok: String = "OK",
+                returnToCall: String = "Return",
+                returnToCallAccessibilityLabel: String = "Return to call",
+                mute: String = "Mute",
+                unmute: String = "Unmute",
+                turnCameraOn: String = "Turn camera on",
+                turnCameraOff: String = "Turn camera off",
+                hangUp: String = "Hang up",
+                microphoneMuted: String = "Microphone muted",
+                switchCamera: String = "Switch camera") {
         self.you = you
         self.error = error
         self.stop = stop
         self.back = back
+        self.joining = joining
+        self.connecting = connecting
+        self.callEnded = callEnded
+        self.sharingYourScreen = sharingYourScreen
+        self.shareScreen = shareScreen
+        self.stopSharingScreen = stopSharingScreen
+        self.screenShareTileName = screenShareTileName
+        self.ok = ok
+        self.returnToCall = returnToCall
+        self.returnToCallAccessibilityLabel = returnToCallAccessibilityLabel
+        self.mute = mute
+        self.unmute = unmute
+        self.turnCameraOn = turnCameraOn
+        self.turnCameraOff = turnCameraOff
+        self.hangUp = hangUp
+        self.microphoneMuted = microphoneMuted
+        self.switchCamera = switchCamera
     }
 }

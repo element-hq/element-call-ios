@@ -67,6 +67,10 @@ struct ElementCallStage: View {
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .contentShape(Rectangle())
+            // `.contain` rather than the bare identifier: the stage has to be addressable itself
+            // without swallowing the tiles inside it, which carry identifiers of their own.
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.stage)
             .gesture(pagingGesture(pageCount: stage.pageCount, axis: stage.pageAxis, size: geometry.size),
                      including: stage.pageCount > 1 ? .all : .subviews)
             .animation(Self.animation, value: stage)

@@ -36,18 +36,18 @@ struct ElementCallControlsView: View {
         layout {
             controlButton(icon: context.viewState.isMicrophoneMuted ? .micOff : .micOn,
                           isActive: !context.viewState.isMicrophoneMuted,
-                          label: context.viewState.isMicrophoneMuted ? "Unmute" : "Mute") {
+                          label: context.viewState.isMicrophoneMuted ? style.strings.unmute : style.strings.mute) {
                 context.send(viewAction: .toggleMicrophone)
             }
             controlButton(icon: context.viewState.isCameraEnabled ? .videoCall : .videoCallOff,
                           isActive: context.viewState.isCameraEnabled,
-                          label: context.viewState.isCameraEnabled ? "Turn camera off" : "Turn camera on") {
+                          label: context.viewState.isCameraEnabled ? style.strings.turnCameraOff : style.strings.turnCameraOn) {
                 context.send(viewAction: .toggleCamera)
             }
             audioRouteButton
             controlButton(icon: .shareScreen,
                           isActive: !context.viewState.isScreenSharing,
-                          label: context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen") {
+                          label: context.viewState.isScreenSharing ? style.strings.stopSharingScreen : style.strings.shareScreen) {
                 context.send(viewAction: .toggleScreenShare)
             }
             Button {
@@ -58,7 +58,7 @@ struct ElementCallControlsView: View {
                     .frame(width: 56, height: 56)
                     .background(style.theme.bgCriticalPrimary, in: Circle())
             }
-            .accessibilityLabel("Hang up")
+            .accessibilityLabel(style.strings.hangUp)
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.hangUp)
         }
         .padding(8)

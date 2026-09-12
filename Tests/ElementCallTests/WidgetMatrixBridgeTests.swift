@@ -43,9 +43,10 @@ nonisolated struct WidgetMatrixBridgeTests {
     /// `startTimesOutWithoutNegotiation`, which is genuinely about the handshake, shortens only that.
     ///
     /// Five seconds is ample once the suite is serialized, and must stay well under the pipe's own
-    /// ten-second read deadline: whichever fires first decides how the failure reads, and a
-    /// negotiation that gives up first produces a prompt `.timedOut` instead of a read that waits
-    /// out its deadline for a reply nobody is going to send. Raising these above the read deadline
+    /// read deadline for the test side, `nextSent()`: whichever fires first decides how the failure
+    /// reads, and a negotiation that gives up first produces a prompt `.timedOut` instead of a read
+    /// that waits out its deadline for a reply nobody is going to send. (The bridge side, `recv()`,
+    /// has no deadline at all -- see `Pipe.read`.) Raising these above the read deadline
     /// was tried, to survive CI contention, and made things worse -- a test that used to fail in
     /// five seconds sat for thirty, and ten of them then breached the suite's one-minute limit.
     /// Contention was the problem; `.serialized` is the fix for it, not longer nets.
@@ -478,13 +479,32 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
         /// follows the pattern the bridge itself uses for request timeouts -- a timer task that
         /// resumes the pending continuation by id -- and `withdraw` makes exactly one of the two
         /// paths win.
-        func read(deadline: Duration = .seconds(10)) async -> String? {
+        ///
+        /// **`nil` deadline means wait for ever, and `recv()` must use it.** This net is for the
+        /// *test's* reads, where a timeout means the bridge never sent what the test expected. For
+        /// the bridge's own serving loop it means something else entirely: `recv()` returning nil is
+        /// how the driver reports that it died, so an expired deadline there forged a driver death
+        /// on a slow machine. The bridge tore itself down -- `driverStopped()`, then every to-device
+        /// subscriber finished -- and the test failed on `await messages.next() -> nil`, pointing at
+        /// the to-device feed when nothing about to-device had gone wrong.
+        ///
+        /// Raising the number does not fix it, it moves it: CI failed at 10.091s against a 10s
+        /// deadline, and at 31.6s against a 30s one. Contention has no upper bound, so no wall-clock
+        /// deadline on `recv()` is safe. The tests that need the driver to stop call `close()`, which
+        /// is unambiguous and instant, so `recv()` never needed a deadline at all.
+        ///
+        /// A genuine hang is still bounded by the per-test `.timeLimit(.minutes(1))`. Lengthening the
+        /// bridge's own negotiation and request timeouts is a different question -- it was tried, it
+        /// made things worse, see `makeBridge`.
+        func read(deadline: Duration? = .seconds(30)) async -> String? {
             let id = UUID()
-            let timeout = Task { [weak self] in
-                try? await Task.sleep(for: deadline)
-                self?.withdraw(id)
+            let timeout = deadline.map { deadline in
+                Task { [weak self] in
+                    try? await Task.sleep(for: deadline)
+                    self?.withdraw(id)
+                }
             }
-            defer { timeout.cancel() }
+            defer { timeout?.cancel() }
             
             return await withCheckedContinuation { continuation in
                 let ready = state.withLock { state -> String?? in
@@ -538,8 +558,10 @@ private final nonisolated class FakeWidgetChannel: WidgetDriverChannel, Sendable
         toBridge.unreadCount
     }
     
+    /// No deadline, deliberately. A nil from here is the driver reporting its own death, so a
+    /// timeout would be the harness inventing one -- see `Pipe.read`. `close()` ends this properly.
     func recv() async -> String? {
-        await toBridge.read()
+        await toBridge.read(deadline: nil)
     }
     
     func send(msg: String) async -> Bool {

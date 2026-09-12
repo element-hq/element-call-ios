@@ -18,6 +18,13 @@ extension PreviewTests {
         }
     }
 
+    @Test("ElementCallMinimizedBar")
+    func elementCallMinimizedBar() async throws {
+        for (index, preview) in ElementCallMinimizedBar_Previews._allPreviews.enumerated() {
+            try await assertSnapshots(matching: preview, step: index)
+        }
+    }
+
     @Test("ElementCallPlaceholderView")
     func elementCallPlaceholderView() async throws {
         for (index, preview) in ElementCallPlaceholderView_Previews._allPreviews.enumerated() {
