@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.4 - 2026-09-14
+
 **This package no longer uses Git LFS**, and this is the first version a host can resolve without
 `git-lfs` installed. Every earlier tag fails on Xcode Cloud, which has no `git-lfs` on the image:
 
@@ -26,6 +30,19 @@ cannot cope with it at all: it clones with `--mirror`, which never fetches LFS o
 out into a separate worktree where the smudge filter fires and fails
 ([swift-package-manager#5351](https://github.com/swiftlang/swift-package-manager/issues/5351), open
 since 2018). History is untouched; only the filter is gone.
+
+
+
+### What's Changed
+
+✨ Features
+* Double-tap a tile to fill the screen with it by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/24
+
+🧱 Build
+* Store the snapshot references as ordinary blobs, not Git LFS by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/25
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.3...0.1.0-rc.4
 
 ## 0.1.0-rc.3 - 2026-09-11
 
