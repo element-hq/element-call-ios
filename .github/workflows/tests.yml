@@ -30,7 +30,7 @@ jobs:
     steps:
       # Needed for push events, where the filter compares refs with git. Full history because the
       # base can be an older commit on the default branch; the repository is a few megabytes, so
-      # this is cheap. No LFS: nothing here reads a snapshot.
+      # this is cheap.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -51,8 +51,8 @@ jobs:
           #
           # Note what is NOT excluded, and must not be: Sources, Tests, Tools (Sourcery drives the
           # generated-test staleness check), Package.swift, Package.resolved, .swiftformat,
-          # .swiftlint.yml, .gitattributes (it defines the LFS filter for the snapshot references)
-          # and this workflow itself.
+          # .swiftlint.yml, .gitattributes (it is where a checkout filter would reappear if anyone
+          # added one back) and this workflow itself.
           filters: |
             relevant:
               - '**'
@@ -94,16 +94,17 @@ jobs:
       CACHE_VERSION: '1'
 
     steps:
-      # Snapshot references live in Git LFS, and without them every snapshot test fails on a
-      # text pointer rather than an image.
-      - uses: nschloe/action-cached-lfs-checkout@385a8ecc719e50b8c71af6ab01a624b486b7c3bc # v1.2.5
+      # A plain checkout. The snapshot references are ordinary blobs in the repository, so there
+      # is nothing to fetch separately and no filter to run -- see CONTRIBUTING.md for why they must
+      # not go back into Git LFS.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
       - name: Configure Xcode
         run: sudo xcode-select -s "$XCODE_APP"
 
-      # Only Git LFS was cached, so every run re-downloaded the media xcframeworks and recompiled
+      # Nothing used to be cached, so every run re-downloaded the media xcframeworks and recompiled
       # every dependency -- swift-syntax above all, which snapshot-testing's macros pull in and
       # which is the slowest thing in the build. Measured on a green run: 5m32s building against
       # 24s of tests, in a 6m23s job. The tests were never what made this slow.
@@ -118,8 +119,8 @@ jobs:
       # Keyed on Package.resolved and nothing else. Keying on a hash of the sources would look more
       # correct and would be much worse: this directory is a few gigabytes, a repository gets 10 GB
       # of cache with least-recently-used eviction, so a fresh entry per push would exhaust the
-      # quota within a handful of commits and evict the Git LFS cache above along with it. Keyed
-      # this way there is one entry per dependency set, written the first time it is seen.
+      # quota within a handful of commits and evict the entry it just wrote. Keyed this way there is
+      # one entry per dependency set, written the first time it is seen.
       #
       # That means it goes stale, since a cache hit does not write. It is still worth having: what
       # it carries is the dependencies, which change only when Package.resolved does. Our own five

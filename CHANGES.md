@@ -11,7 +11,21 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**This package no longer uses Git LFS**, and this is the first version a host can resolve without
+`git-lfs` installed. Every earlier tag fails on Xcode Cloud, which has no `git-lfs` on the image:
+
+> Couldn't check out revision '…' — git-lfs command not found
+
+Nothing to act on beyond bumping to this version. `git-lfs` is no longer needed to work on the
+package either, and can come off a development machine once no older tag is in use — but leave the
+LFS objects on the remote, because tags up to and including 0.1.0-rc.3 still point at pointer blobs
+and cannot be checked out without them.
+
+The snapshot reference images are ordinary blobs now. They were the only thing in LFS, and SwiftPM
+cannot cope with it at all: it clones with `--mirror`, which never fetches LFS objects, then checks
+out into a separate worktree where the smudge filter fires and fails
+([swift-package-manager#5351](https://github.com/swiftlang/swift-package-manager/issues/5351), open
+since 2018). History is untouched; only the filter is gone.
 
 ## 0.1.0-rc.3 - 2026-09-11
 
