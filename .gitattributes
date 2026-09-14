@@ -1,3 +1,13 @@
-Tests/ElementCallTests/__Snapshots__/** filter=lfs diff=lfs merge=lfs -text
+# Ordinary blobs, not Git LFS. The filter that used to live here made the package unresolvable by
+# any host without git-lfs installed: SwiftPM clones with --mirror, which never fetches LFS objects,
+# then checks out into a separate worktree where the smudge filter fires and fails --
+# swift-package-manager#5351, open since 2018. Xcode Cloud has no git-lfs at all, so element-x-ios
+# could not build against a tag of this package. CONTRIBUTING.md has the rest of the reasoning.
+#
+# `-text` and deliberately not `binary`, which is a macro for `-diff -merge -text`. The `-diff` half
+# is the problem: it makes a forge show "binary file not shown" instead of its side-by-side image
+# comparison, and looking at the two images is the whole of reviewing a re-recorded snapshot. Git
+# detects these as binary by content anyway, so `-diff` buys nothing and costs the review.
+Tests/ElementCallTests/__Snapshots__/** -text
 
 Package.resolved -linguist-generated

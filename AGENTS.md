@@ -156,18 +156,24 @@ its transition runs. At the strip's own zero the spotlight faded out on top of i
 
 ### Re-recording snapshots
 
-Delete the images and run the tests; the harness records whatever is missing.
+Touch the marker file and run the tests; the harness overwrites whatever no longer matches.
 
 ```bash
-rm -rf Tests/ElementCallTests/__Snapshots__/PreviewTests
-# then the xcodebuild command above
+touch Tests/ElementCallTests/.record-snapshots
+# then the xcodebuild command above, then remove the marker
 ```
+
+**Prefer that to deleting the directory.** Deleting also works — the harness records whatever is
+missing — but it re-records all 87 images rather than the few that changed, and PNG re-encoding is
+not byte-identical across Xcode versions. The references are ordinary blobs rather than Git LFS
+pointers (see CONTRIBUTING.md for why they must stay that way), so a wholesale re-record puts 5.5 MB
+of new blobs in the repository permanently and buries the images a reviewer has to look at.
 
 **Not `RECORD_FAILURES=true` on the command line.** The harness reads it from its own environment,
 and nothing on an `xcodebuild` command line gets there: not a build setting, not the `TEST_RUNNER_`
 prefix, not the calling shell. It works when set in a scheme, which is why it works from inside
 Xcode. On the command line it does nothing, silently, and you conclude your change had no visual
-effect. `record-snapshots.yml` deletes for this reason.
+effect. The marker file is what `record-snapshots.yml` uses, for this reason.
 
 `SnapshotEnvironment.renderDevices` is what each preview is rendered as, and the orientation is part
 of it. Note the **iPad entry has always been landscape**: the snapshot library's bare `iPad10_2`

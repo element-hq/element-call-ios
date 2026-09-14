@@ -7,13 +7,23 @@ document only records what differs.
 ## Getting set up
 
 ```bash
-brew install swiftformat swiftlint sourcery git-lfs
-git lfs install --local
+brew install swiftformat swiftlint sourcery
 swift build
 ```
 
-Snapshot reference images live in Git LFS. Without `git lfs install --local` they arrive as text
-pointers and every snapshot test fails in a confusing way.
+Nothing else. In particular **no `git-lfs`**: the snapshot reference images are ordinary blobs, and
+must stay that way. They lived in Git LFS once, and that made the package unresolvable by any host
+on a machine without git-lfs installed — SwiftPM clones with `--mirror`, which never fetches LFS
+objects, then checks out into a separate worktree where the smudge filter fires and fails
+([swift-package-manager#5351], open since 2018). Xcode Cloud has no git-lfs at all, so element-x-ios
+could not build against a tag of this package.
+
+So do not put them back for the sake of repository size. It is 5.5 MB of images against a 1.4 GB
+media xcframework that a checkout does not even carry, and the growth is bounded by re-recording
+only what fails — see the comment in `.github/workflows/record-snapshots.yml`, which is there for
+that reason as much as for keeping a reviewer's diff small.
+
+[swift-package-manager#5351]: https://github.com/swiftlang/swift-package-manager/issues/5351
 
 ## The boundaries this package defends
 

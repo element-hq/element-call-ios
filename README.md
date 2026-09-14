@@ -149,8 +149,7 @@ one thing that would justify revisiting it.
 ## Development
 
 ```bash
-brew install swiftformat swiftlint sourcery git-lfs
-git lfs install --local
+brew install swiftformat swiftlint sourcery
 swift build
 ```
 
