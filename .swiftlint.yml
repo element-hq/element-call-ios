@@ -15,6 +15,9 @@ opt_in_rules:
 included:
   - Sources
   - Tests
+  # The example harness. Linted like everything else: it is the one place that consumes the package
+  # the way a host does, so a boundary it can cross is a boundary a host can cross.
+  - Example
 excluded:
   - "Sources/*/Generated"
   - "Tests/*/Generated"

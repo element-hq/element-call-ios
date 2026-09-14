@@ -18,6 +18,14 @@ public final class ElementCallScreenContext {
     public fileprivate(set) var viewState: ElementCallScreenViewState
     /// Bound by the screen, so an alert shows once and clears itself.
     public var alertInfo: ElementCallAlert?
+    /// The tile filling the screen, if any. Written by the view, like `alertInfo` above and unlike
+    /// everything in `viewState`: which tile you are looking at is a way of looking rather than a
+    /// fact about the call, and the controller neither knows nor needs to. It could not live in
+    /// `viewState` in any case, which `refresh()` rebuilds wholesale from the controller.
+    public var fullscreenMemberID: String?
+    /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
+    /// picture and nothing else, and a single tap brings the controls back.
+    public var isFullscreenChromeVisible = false
     /// Colours, fonts, icons, avatars and text, all supplied by the host.
     public let style: ElementCallStyle
     

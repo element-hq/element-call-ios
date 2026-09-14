@@ -25,12 +25,20 @@ struct ElementCallStage: View {
     @Environment(\.elementCallStyle) private var style
     let tiles: [ElementCallTile]
     let spotlightMemberID: String?
+    /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
+    /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
+    var fullscreenMemberID: String?
     let layout: ElementCallLayout
     let memberCount: Int
     let pictureInPictureSourceView: UIView
     let callProvider: () -> MatrixRTCCall?
     /// How far above the safe area the floating controls reach.
     let controlsClearance: CGFloat
+    /// Double tap. Ahead of `onAction` for the same reason as on the tile: that one is the trailing
+    /// closure at every call site, and a new closure after it would quietly take its place.
+    var onToggleFullscreen: (String) -> Void = { _ in }
+    /// Single tap, which only means anything while full screen.
+    var onToggleChrome: () -> Void = { }
     let onAction: (ElementCallScreenViewAction) -> Void
     
     @State private var currentPage = 0
@@ -49,6 +57,7 @@ struct ElementCallStage: View {
             let insets = geometry.safeAreaInsets
             let stage = ElementCallStageLayout.compute(tiles: tiles,
                                                        spotlightMemberID: spotlightMemberID,
+                                                       fullscreenMemberID: fullscreenMemberID,
                                                        layout: layout,
                                                        currentPage: currentPage,
                                                        metrics: .init(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom),
@@ -71,6 +80,14 @@ struct ElementCallStage: View {
                      including: stage.pageCount > 1 ? .all : .subviews)
             .animation(Self.animation, value: stage)
             .onChange(of: stage.pageCount) { _, pageCount in
+                // Full screen is one page by construction. Clamping to it would forget which page
+                // the strip was on, and the tile you went full screen from is the one you come back
+                // to. The translation goes too: the fullscreen arrangement masks the paging gesture
+                // away, so a toggle mid-swipe would leave a stale offset on every paged placement.
+                guard fullscreenMemberID == nil else {
+                    dragTranslation = 0
+                    return
+                }
                 currentPage = min(currentPage, max(0, pageCount - 1))
                 settledPage = min(settledPage, max(0, pageCount - 1))
             }
@@ -96,6 +113,8 @@ struct ElementCallStage: View {
                                    appearance: placement.appearance,
                                    memberCount: memberCount,
                                    isVideoSuspended: visibility != .live,
+                                   onToggleFullscreen: { onToggleFullscreen(placement.tile.memberID) },
+                                   onToggleChrome: onToggleChrome,
                                    onAction: onAction)
             .background {
                 if placement.tile.memberID == stage.pictureInPictureMemberID {
@@ -126,6 +145,7 @@ struct ElementCallStage: View {
     
     private func releasedMemberIDs(in stage: ElementCallStageLayout) -> Set<String> {
         Set(stage.placements.lazy.filter { visibility(for: $0.page) == .released }.map(\.tile.memberID))
+            .union(stage.hiddenMemberIDs)
     }
     
     private func pageIndicator(pageCount: Int, axis: Axis) -> some View {
@@ -184,9 +204,13 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
         nil
     }
     
-    static func stage(tiles: [ElementCallTile], spotlight: String? = nil, layout: ElementCallLayout) -> some View {
+    static func stage(tiles: [ElementCallTile],
+                      spotlight: String? = nil,
+                      fullscreen: String? = nil,
+                      layout: ElementCallLayout) -> some View {
         ElementCallStage(tiles: tiles,
                          spotlightMemberID: spotlight,
+                         fullscreenMemberID: fullscreen,
                          layout: layout,
                          memberCount: tiles.count,
                          pictureInPictureSourceView: UIView(),
@@ -205,5 +229,7 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("One-to-one")
         stage(tiles: [local], layout: .oneToOne)
             .previewDisplayName("One-to-one, alone")
+        stage(tiles: group, spotlight: group[2].memberID, fullscreen: bob.memberID, layout: .group)
+            .previewDisplayName("Full screen")
     }
 }

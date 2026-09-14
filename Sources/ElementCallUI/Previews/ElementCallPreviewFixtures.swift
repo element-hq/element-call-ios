@@ -11,16 +11,20 @@ import Foundation
 
 /// Shared fixtures for previews, so every snapshot is built from the same people and the diffs
 /// between them mean something.
-enum ElementCallPreviewFixtures {
-    static func tile(_ name: String,
-                     isLocal: Bool = false,
-                     isMuted: Bool = false,
-                     hasMicrophone: Bool = true,
-                     hasVideo: Bool = false,
-                     isScreenSharing: Bool = false,
-                     isSpeaking: Bool = false,
-                     hasHandRaised: Bool = false,
-                     stats: String? = nil) -> ElementCallTile {
+///
+/// Public because the example harness is built from them too, the way the port fakes are: a UI test
+/// and a snapshot then describe the same Alice, Bob and Carol, and `ElementCallTile`'s memberwise
+/// initialiser is internal, so there is no other way to make one from outside.
+public enum ElementCallPreviewFixtures {
+    public static func tile(_ name: String,
+                            isLocal: Bool = false,
+                            isMuted: Bool = false,
+                            hasMicrophone: Bool = true,
+                            hasVideo: Bool = false,
+                            isScreenSharing: Bool = false,
+                            isSpeaking: Bool = false,
+                            hasHandRaised: Bool = false,
+                            stats: String? = nil) -> ElementCallTile {
         let user = "@\(name.lowercased()):example.com"
         return ElementCallTile(memberID: "\(user):DEVICE",
                                userID: user,
@@ -38,20 +42,20 @@ enum ElementCallPreviewFixtures {
                                stats: stats)
     }
     
-    static let alice = tile("Alice", isLocal: true)
-    static let bob = tile("Bob", isMuted: true)
-    static let carol = tile("Carol", isSpeaking: true)
+    public static let alice = tile("Alice", isLocal: true)
+    public static let bob = tile("Bob", isMuted: true)
+    public static let carol = tile("Carol", isSpeaking: true)
     
-    static let group = [alice, bob, carol, tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
+    public static let group = [alice, bob, carol, tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
     
     /// No call object exists in a preview, so `hasVideo` here only changes the badges, not the
     /// picture: a tile with nothing to draw falls back to its avatar.
-    static func connected(tiles: [ElementCallTile],
-                          spotlight: String? = nil,
-                          isDirect: Bool = false,
-                          isMicrophoneMuted: Bool = false,
-                          isScreenSharing: Bool = false,
-                          isTileStatsVisible: Bool = false) -> ElementCallScreenViewState {
+    public static func connected(tiles: [ElementCallTile],
+                                 spotlight: String? = nil,
+                                 isDirect: Bool = false,
+                                 isMicrophoneMuted: Bool = false,
+                                 isScreenSharing: Bool = false,
+                                 isTileStatsVisible: Bool = false) -> ElementCallScreenViewState {
         var state = ElementCallScreenViewState(roomName: "Product | Lobby")
         state.isDirect = isDirect
         state.connection = .connected
@@ -69,7 +73,7 @@ enum ElementCallPreviewFixtures {
         return state
     }
     
-    static func noCall() -> MatrixRTCCall? {
+    public static func noCall() -> MatrixRTCCall? {
         nil
     }
 }

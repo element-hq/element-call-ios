@@ -11,8 +11,9 @@ import Synchronization
 import UIKit
 
 /// Uploads the three I420 planes as R8 textures straight from the frame's memory and converts to
-/// RGB on the GPU (BT.601 limited range, what libwebrtc decodes to). Rotation, mirroring and
-/// aspect-fill are a vertex transform, so no pixel is touched on the CPU.
+/// RGB on the GPU (BT.601 limited range, what libwebrtc decodes to). Rotation, mirroring, fitting
+/// or filling, zoom and pan are all one vertex transform, so no pixel is touched on the CPU: see
+/// ``VideoPresentation/transform(frameWidth:frameHeight:rotation:isMirrored:drawableSize:)``.
 final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private static let shaderSource = """
     #include <metal_stdlib>
@@ -45,6 +46,10 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     }
     
     let slot: VideoFrameSlot
+    /// The upright size of the picture, whenever it changes. The view needs it to report a drawn
+    /// size that excludes the letterbox, and the gesture layer needs it to clamp a pan; the renderer
+    /// is the only place that sees it.
+    private let onContentSize: @Sendable (CGSize) -> Void
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let pipeline: MTLRenderPipelineState
@@ -52,9 +57,14 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     private var textures: (y: MTLTexture, u: MTLTexture, v: MTLTexture)?
     private var textureSize = (0, 0)
     private var lastFrame: MatrixRTCVideoFrame?
+    /// What `textures` currently holds. A pan or a zoom redraws without a new frame, and without
+    /// this every tick would re-upload three unchanged planes: about 3 MB a tick at 1080p.
+    private var uploadedFrame: MatrixRTCVideoFrame?
+    private var lastContentSize: CGSize = .zero
+    private var presentation = VideoPresentation.fill
     private var isReleased = false
     
-    init?(slot: VideoFrameSlot) {
+    init?(slot: VideoFrameSlot, onContentSize: @escaping @Sendable (CGSize) -> Void = { _ in }) {
         guard let device = MTLCreateSystemDefaultDevice(),
               let commandQueue = device.makeCommandQueue(),
               let library = try? device.makeLibrary(source: Self.shaderSource, options: nil) else { return nil }
@@ -65,6 +75,7 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
         guard let pipeline = try? device.makeRenderPipelineState(descriptor: descriptor) else { return nil }
         
         self.slot = slot
+        self.onContentSize = onContentSize
         self.device = device
         self.commandQueue = commandQueue
         self.pipeline = pipeline
@@ -77,8 +88,17 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
         lock.withLock {
             isReleased = true
             lastFrame = nil
+            uploadedFrame = nil
             textures = nil
         }
+    }
+    
+    /// Set from the view, read inside the draw, under the same lock as the textures. With
+    /// `isPaused` and `enableSetNeedsDisplay` the draw is main-thread work, so this never contends
+    /// in practice; a second primitive would only raise the question of which one orders what
+    /// against ``release()``.
+    func setPresentation(_ presentation: VideoPresentation) {
+        lock.withLock { self.presentation = presentation }
     }
     
     // MARK: - MTKViewDelegate
@@ -88,22 +108,32 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
     func draw(in view: MTKView) {
         // Never touch the GPU while inactive: `currentDrawable` blocks and the system kills the app.
         guard UIApplication.shared.applicationState == .active else { return }
-        lock.withLock {
-            guard !isReleased else { return }
+        // Reported after the lock is given up rather than inside it: the callback hops to the main
+        // actor and ends up back here setting a presentation, which on the same thread would
+        // deadlock on a lock that is not reentrant.
+        let contentSize: CGSize? = lock.withLock {
+            guard !isReleased else { return nil }
             if let frame = slot.take() {
                 lastFrame = frame
             }
             guard let frame = lastFrame,
                   let drawable = view.currentDrawable,
                   let passDescriptor = view.currentRenderPassDescriptor,
-                  let commandBuffer = commandQueue.makeCommandBuffer() else { return }
+                  let commandBuffer = commandQueue.makeCommandBuffer() else { return nil }
             
-            upload(frame)
-            guard let textures else { return }
+            if uploadedFrame !== frame {
+                upload(frame)
+                uploadedFrame = frame
+            }
+            guard let textures else { return nil }
             
-            var uniforms = Uniforms(transform: transform(for: frame, drawableSize: view.drawableSize))
+            var uniforms = Uniforms(transform: presentation.transform(frameWidth: frame.width,
+                                                                      frameHeight: frame.height,
+                                                                      rotation: frame.rotation,
+                                                                      isMirrored: frame.isMirrored,
+                                                                      drawableSize: view.drawableSize))
             passDescriptor.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
-            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return }
+            guard let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: passDescriptor) else { return nil }
             encoder.setRenderPipelineState(pipeline)
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)
             encoder.setFragmentTexture(textures.y, index: 0)
@@ -113,6 +143,16 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
+            
+            let rotated = frame.rotation == .deg90 || frame.rotation == .deg270
+            let size = CGSize(width: rotated ? frame.height : frame.width,
+                              height: rotated ? frame.width : frame.height)
+            guard size != lastContentSize else { return nil }
+            lastContentSize = size
+            return size
+        }
+        if let contentSize {
+            onContentSize(contentSize)
         }
     }
     
@@ -140,33 +180,5 @@ final nonisolated class I420MetalRenderer: NSObject, MTKViewDelegate, @unchecked
         }
         guard let y = make(width, height), let u = make((width + 1) / 2, (height + 1) / 2), let v = make((width + 1) / 2, (height + 1) / 2) else { return nil }
         return (y, u, v)
-    }
-    
-    /// Rotate upright, mirror if asked, then scale to fill the drawable while keeping the aspect ratio.
-    /// The frame's rotation is how far it must turn **clockwise** to be upright (WebRTC semantics);
-    /// Metal's y axis points up, so that is a negative angle here.
-    private func transform(for frame: MatrixRTCVideoFrame, drawableSize: CGSize) -> simd_float4x4 {
-        let width = Float(frame.width)
-        let height = Float(frame.height)
-        let angle = -Float(frame.rotation.rawValue) * .pi / 180
-        let rotated = frame.rotation == .deg90 || frame.rotation == .deg270
-        let contentWidth = rotated ? height : width
-        let contentHeight = rotated ? width : height
-        let drawableWidth = Float(max(1, drawableSize.width))
-        let drawableHeight = Float(max(1, drawableSize.height))
-        // Aspect fill: the larger factor covers the drawable, the overflow is clipped.
-        let fill = max(drawableWidth / contentWidth, drawableHeight / contentHeight)
-        
-        // Unit quad → frame pixels → rotated upright → mirrored in display space → drawable NDC.
-        let frameExtent = simd_float4x4(diagonal: SIMD4(width / 2, height / 2, 1, 1))
-        let rotation = simd_float4x4(rows: [
-            SIMD4(cos(angle), -sin(angle), 0, 0),
-            SIMD4(sin(angle), cos(angle), 0, 0),
-            SIMD4(0, 0, 1, 0),
-            SIMD4(0, 0, 0, 1)
-        ])
-        let mirror = simd_float4x4(diagonal: SIMD4(frame.isMirrored ? -1 : 1, 1, 1, 1))
-        let toNDC = simd_float4x4(diagonal: SIMD4(fill * 2 / drawableWidth, fill * 2 / drawableHeight, 1, 1))
-        return toNDC * mirror * rotation * frameExtent
     }
 }

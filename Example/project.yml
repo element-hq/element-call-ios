@@ -1,0 +1,60 @@
+# The example harness: a sample app over the port fakes and the UI tests that drive it.
+#
+# Generated rather than checked in, so what gets reviewed is this file and not forty thousand lines
+# of pbxproj. `xcodegen generate` in this directory, which is what CI does before it builds.
+#
+# It exists because the gestures on a call tile cannot be tested any other way. Everything else the
+# package does is covered in-process by ElementCallTests; a double tap that is declared correctly and
+# never reaches the tile, because something above it claimed the touch first, looks identical to a
+# working one from inside. Only a real touch tells them apart.
+name: ElementCallExample
+options:
+  bundleIdPrefix: io.element.call.example
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+packages:
+  ElementCall:
+    path: ../
+
+targets:
+  ElementCallExample:
+    type: application
+    platform: iOS
+    sources: [ElementCallExample]
+    dependencies:
+      - package: ElementCall
+        product: ElementCallAll
+    settings:
+      base:
+        # libwebrtc's Objective-C categories live in a static archive and are dead-stripped without
+        # this: the app launches and dies on an unrecognised selector on UIDevice. The same flag the
+        # package's own test bundle needs, for the same reason.
+        OTHER_LDFLAGS: $(inherited) -ObjC
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  ElementCallExampleUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ElementCallExampleUITests]
+    dependencies:
+      - target: ElementCallExample
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: ElementCallExample
+
+schemes:
+  ElementCallExample:
+    build:
+      targets:
+        ElementCallExample: all
+        ElementCallExampleUITests: [test]
+    test:
+      targets:
+        - ElementCallExampleUITests

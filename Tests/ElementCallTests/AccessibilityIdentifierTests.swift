@@ -24,6 +24,7 @@ nonisolated struct AccessibilityIdentifierTests {
         #expect(ElementCallAccessibilityIdentifiers.audioOutput == "elementCall.audioOutput")
         #expect(ElementCallAccessibilityIdentifiers.screenShare == "elementCall.screenShare")
         #expect(ElementCallAccessibilityIdentifiers.minimize == "elementCall.minimize")
+        #expect(ElementCallAccessibilityIdentifiers.exitFullscreen == "elementCall.exitFullscreen")
         #expect(ElementCallAccessibilityIdentifiers.more == "elementCall.more")
         #expect(ElementCallAccessibilityIdentifiers.stage == "elementCall.stage")
         #expect(ElementCallAccessibilityIdentifiers.minimizedBar == "elementCall.minimizedBar")

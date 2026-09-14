@@ -347,6 +347,8 @@ public final class MatrixRTCCall {
     /// Drawn sizes per surface, so the SFU is asked for the largest of everything currently showing
     /// a stream rather than for whichever surface happened to lay out last.
     private var drawnSizes = [VideoStreamKey: [UUID: CGSize]]()
+    /// Members paused and waiting out ``releaseLinger`` before they are released.
+    private var pendingReleases = [String: Task<Void, Never>]()
     
     /// A surface reports how big it draws a stream (nil when it stops drawing it).
     public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
@@ -394,8 +396,20 @@ public final class MatrixRTCCall {
         }
     }
     
-    /// The members whose video the stage has paged far enough away to release: unsubscribed rather
-    /// than paused, for both the camera and a screen share, since a tile that far off shows neither.
+    /// How long a member stays merely paused before being released outright. Long enough to cover
+    /// looking at one tile and changing your mind, short enough that actually settling on one frees
+    /// the call's bandwidth.
+    private static let releaseLinger = Duration.seconds(3)
+    
+    /// The members the stage is no longer drawing: paged far enough away, or hidden because one tile
+    /// has the whole screen. For both the camera and a screen share, since neither is being shown.
+    ///
+    /// Getting there takes two steps, and the difference between them is the whole reason the core
+    /// draws a line between paused and released. Pausing is immediate and resumes instantly;
+    /// releasing frees the subscription but costs a visible re-negotiation to undo. So a member
+    /// named here is **paused at once and released only if they are still named a few seconds
+    /// later**: going full screen and straight back out, or swiping past a page, then costs nothing,
+    /// while settling on one tile still gives a thirty-person call its bandwidth back.
     ///
     /// This is a set rather than a per-tile call so there is one place that knows which members are
     /// released. An earlier shape had each tile release itself on the way out, and members who left
@@ -408,21 +422,55 @@ public final class MatrixRTCCall {
         let changed = released.symmetricDifference(releasedVideoMembers)
         releasedVideoMembers = released
         for memberID in changed {
-            let isEnabled = !released.contains(memberID)
+            // Whichever way this member just went, any release still waiting on them is stale.
+            pendingReleases.removeValue(forKey: memberID)?.cancel()
+            let isReleased = released.contains(memberID)
             for kind in [MatrixRTCStreamKind.camera, .screenShare] {
-                let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
-                // Restoring stops at paused, never straight to visible: the tile is a page away, and
-                // it is its own attach that says it is being drawn again and at what size.
-                setVideoConstraints(.init(isEnabled: isEnabled, isVisible: false, pixelSize: applied?.pixelSize),
+                let key = VideoStreamKey(memberID: memberID, kind: kind)
+                // A surface going away reports a nil size, and `reportDrawnSize` drops that report
+                // when the member is already released. Releasing and unmounting happen in one pass
+                // and in no defined order, so whenever the release lands first the departing
+                // surface's size would stay here for the rest of the call and go on inflating the
+                // maximum for whoever draws the stream next. One tile at a time while paging; a
+                // whole call at once now that a tile can go full screen.
+                if isReleased {
+                    drawnSizes[key] = nil
+                }
+                let applied = appliedConstraints[key]
+                // Both directions land on paused. Leaving stops there because it is the tile's own
+                // attach that says it is being drawn again and at what size; arriving stops there
+                // because the release is the step below.
+                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
                                     memberID: memberID,
                                     kind: kind)
             }
+            guard isReleased else { continue }
+            pendingReleases[memberID] = Task { [weak self] in
+                try? await Task.sleep(for: Self.releaseLinger)
+                guard !Task.isCancelled else { return }
+                self?.release(memberID)
+            }
+        }
+    }
+    
+    /// The second step of ``setReleasedVideoMembers(_:)``, once the member has stayed unwatched.
+    private func release(_ memberID: String) {
+        pendingReleases[memberID] = nil
+        // They may have come back while this was waiting, in which case the cancel above raced us.
+        guard releasedVideoMembers.contains(memberID) else { return }
+        for kind in [MatrixRTCStreamKind.camera, .screenShare] {
+            let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
+            setVideoConstraints(.init(isEnabled: false, isVisible: false, pixelSize: applied?.pixelSize),
+                                memberID: memberID,
+                                kind: kind)
         }
     }
     
     // MARK: - Teardown
     
     public func disconnect() async {
+        pendingReleases.values.forEach { $0.cancel() }
+        pendingReleases.removeAll()
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
         audioLevelFlush?.cancel()
