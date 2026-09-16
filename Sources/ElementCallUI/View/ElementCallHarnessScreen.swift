@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCall
+import ElementCallHost
 import SwiftUI
 
 /// The call screen over a view state written by hand, with no call behind it.

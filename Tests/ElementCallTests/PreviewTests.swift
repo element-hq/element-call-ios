@@ -6,7 +6,7 @@
 //
 
 import Combine
-import ElementCall
+import ElementCallHost
 @testable import ElementCallUI
 
 // The library does not expose `verifySnapshot`, `SimplySnapshotting`, `Diffing` or `snapshotView`

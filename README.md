@@ -33,15 +33,20 @@ constraints an agent working here must not break.
 | Module | Contents | Depends on |
 | --- | --- | --- |
 | `ElementCallKit` | Capture, render, packers, audio engine, key handling. | the RTC core |
-| `ElementCall` | Call lifecycle, spotlight, Picture in Picture, and the ports. | nothing |
+| `ElementCallHost` | Call lifecycle, spotlight, Picture in Picture, and the ports. | nothing |
 | `ElementCallUI` | Stage, tiles, controls, minimized bar. | design tokens |
 | `ElementCallMatrix` | A ready-made Matrix transport over the Rust SDK. | the Matrix SDK |
 
 `ElementCallMatrix` is the only module that knows the Matrix SDK exists, and SwiftLint enforces that.
 
-There is also an **`ElementCallAll`** product, which re-exports all four. A host that wants the whole
-thing takes that one dependency and writes one `import ElementCallAll`; the four remain published, so
-a host that only wants the media layer can still depend on `ElementCallKit` alone.
+**`ElementCall` itself is the umbrella**: a module containing nothing but `@_exported import` of the
+four. A host that wants the whole thing takes that one dependency and writes one `import ElementCall`,
+which is why the bare name belongs to it rather than to a layer. The four remain published, so a host
+that only wants the media layer can still depend on `ElementCallKit` alone.
+
+`ElementCallHost` holds the ports a host implements and the lifecycle it drives; it is not the host's
+own module, and a host that imports the umbrella never names it. It was called `ElementCall`, and the
+umbrella was called `ElementCallAll`, until the two swapped — see [CHANGES.md](CHANGES.md).
 
 ## Integrating
 
@@ -53,13 +58,22 @@ Add it as a source dependency, pinned to an exact version:
 
 ```yaml
 # Or, in an XcodeGen project.yml
-ElementCall:
-  url: https://github.com/element-hq/element-call-ios
-  exactVersion: 0.1.0-rc.1
+packages:
+  ElementCall:
+    url: https://github.com/element-hq/element-call-ios
+    exactVersion: 0.1.0-rc.1
 ```
 
 Exactly, not a range: a renamed accessibility identifier is a breaking change, and at `0.x` the ports
 are still moving. Releases are described in [RELEASING.md](RELEASING.md).
+
+On the app target, take the umbrella product. It is the only product name involved:
+
+```yaml
+dependencies:
+  - package: ElementCall
+    product: ElementCall
+```
 
 Then give it an SDK `Client` and a handful of small conformances, and you get a call.
 

@@ -11,6 +11,6 @@ ignore:
   # Preview and snapshot plumbing that ships in the product so Sourcery can scan it.
   - "Sources/ElementCallUI/Previews"
   # Port fakes ship in the product too, so a host can use them for its own previews.
-  - "Sources/ElementCall/Ports/ElementCallFakes.swift"
+  - "Sources/ElementCallHost/Ports/ElementCallFakes.swift"
   - "Tests"
   - "Tools"

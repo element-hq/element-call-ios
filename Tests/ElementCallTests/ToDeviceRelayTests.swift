@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCall
+import ElementCallHost
 import ElementCallKit
 @testable import ElementCallMatrix
 import Foundation

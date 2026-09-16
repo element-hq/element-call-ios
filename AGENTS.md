@@ -18,7 +18,7 @@ knows, and what tends to go wrong.
 | Module | May import | Contents |
 | --- | --- | --- |
 | `ElementCallKit` | the RTC core only | media, session, capture, render, keys |
-| `ElementCall` | nothing beyond the above | call lifecycle, Picture in Picture, **the ports** |
+| `ElementCallHost` | nothing beyond the above | call lifecycle, Picture in Picture, **the ports** |
 | `ElementCallUI` | `CompoundDesignTokens` | stage, tiles, controls, minimized bar |
 | `ElementCallMatrix` | `MatrixRustSDK` | turnkey transport, widget-driver stopgap |
 
@@ -34,11 +34,19 @@ knows, and what tends to go wrong.
 SwiftLint enforces 1 and 2 at error severity. **If you need something from the host, add a port. Never
 add a dependency.**
 
-A fifth target, `ElementCallAll`, exists only to `@_exported import` the four above so a host takes one
-dependency and writes one import. It contains no code and must never contain any: it is a product
+A fifth target, **`ElementCall`**, exists only to `@_exported import` the four above so a host takes
+one dependency and writes one import. It contains no code and must never contain any: it is a product
 convenience, not a fifth layer, and putting anything in it would put that thing outside every boundary
 in the table. Note the lint rules read comments too — they have no `match_kinds` — so naming the Matrix
-SDK in a comment anywhere outside `ElementCallMatrix` fails the build.
+SDK in a comment anywhere outside `ElementCallMatrix` fails the build, and `Sources/ElementCall/` is
+not on the excluded path.
+
+**The bare name belongs to the umbrella, not to a layer.** It used to be the other way round — the
+lifecycle-and-ports module was `ElementCall` and the umbrella was `ElementCallAll` — and hosts kept
+asking why they had to import a name with no meaning. Do not undo that: `import ElementCall` is the
+one line an integrating app writes. `ElementCallHost` is *not* the host's own module; it is the module
+holding the ports a host implements, and `ElementCallCore` was rejected for it because `ElementCallKit`
+sits below rather than above.
 
 ---
 

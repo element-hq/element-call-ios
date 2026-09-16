@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCall
+import ElementCallHost
 import SwiftUI
 
 /// What a single tap raises over a full-screen tile: the way back out, whose picture this is, and

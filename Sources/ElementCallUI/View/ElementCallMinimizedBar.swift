@@ -6,7 +6,7 @@
 //
 
 import Combine
-import ElementCall
+import ElementCallHost
 import SwiftUI
 
 /// The ongoing call, shrunk to a bar at the top of the app. Tapping it restores the full screen.

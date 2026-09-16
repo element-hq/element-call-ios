@@ -7,8 +7,8 @@
 
 // Deliberately the only import: this file exists to prove that one import reaches all four
 // modules. Adding `import ElementCallKit` here to fix a build failure would defeat it — fix the
-// re-export in Sources/ElementCallAll instead.
-import ElementCallAll
+// re-export in Sources/ElementCall instead.
+import ElementCall
 import Testing
 
 /// The umbrella is a compile-time promise, so these are compile-time assertions that happen to run.
@@ -17,7 +17,7 @@ nonisolated struct UmbrellaProductTests {
     func reachesEveryModuleThroughOneImport() {
         // ElementCallKit
         #expect(MatrixRTCStreamKind.camera != .screenShare)
-        // ElementCall
+        // ElementCallHost
         #expect(ElementCallDefaultOptions().isPictureInPictureEnabled)
         // ElementCallUI
         #expect(!ElementCallAccessibilityIdentifiers.minimizedBar.isEmpty)
