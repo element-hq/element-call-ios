@@ -6,7 +6,7 @@
 //
 
 import Combine
-import ElementCall
+import ElementCallHost
 import ElementCallKit
 import SwiftUI
 

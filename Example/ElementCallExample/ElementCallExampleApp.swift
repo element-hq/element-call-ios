@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCallAll
+import ElementCall
 import SwiftUI
 
 /// A call screen with no call behind it, for driving by hand or by a UI test.

@@ -6,7 +6,7 @@
 //
 
 import AVKit
-import ElementCall
+import ElementCallHost
 import SwiftUI
 
 /// The floating control bar from the design: mic, camera, audio route, screen share, hang up.

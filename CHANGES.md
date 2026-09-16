@@ -11,7 +11,26 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`import ElementCallAll` is now `import ElementCall`, and the product is `ElementCall`.** The
+umbrella module — the one that does nothing but re-export the four layers — has taken the bare name,
+because that is the name an integrating app reaches for and there was no answer to "why `All`?" beyond
+"the name was taken". Two edits in a host:
+
+- every `import ElementCallAll` becomes `import ElementCall`;
+- `product: ElementCallAll` becomes `product: ElementCall` (or
+  `.product(name: "ElementCall", package: "element-call-ios")`).
+
+`ElementCallAll` is gone rather than deprecated, so both show up as errors: an unresolved product at
+resolution and an unknown module at build.
+
+**The module formerly named `ElementCall` is now `ElementCallHost`**: the call lifecycle, Picture in
+Picture, and the ports. A host importing the umbrella never names it and has nothing to do. A host
+that depended on the `ElementCall` *product* to get only that layer must switch to `ElementCallHost`
+— the `ElementCall` product now vends everything, so such a host keeps compiling but links the view
+and transport layers it was deliberately avoiding.
+
+Nothing else moved: the four boundaries, every public type name, and every accessibility identifier
+are unchanged.
 
 ## 0.1.0-rc.4 - 2026-09-14
 

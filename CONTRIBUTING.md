@@ -33,7 +33,7 @@ allowed to know the SDK:
 | Module | May import |
 | --- | --- |
 | `ElementCallKit` | the RTC core only |
-| `ElementCall` | nothing beyond the RTC core |
+| `ElementCallHost` | nothing beyond the RTC core |
 | `ElementCallUI` | the design **tokens** package |
 | `ElementCallMatrix` | the Matrix SDK |
 

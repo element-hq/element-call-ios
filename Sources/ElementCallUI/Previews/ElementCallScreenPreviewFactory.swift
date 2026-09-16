@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCall
+import ElementCallHost
 import Foundation
 
 /// Builds view models over the port fakes, so previews and snapshots need no host and no network.

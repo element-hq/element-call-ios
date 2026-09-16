@@ -25,7 +25,7 @@ targets:
     sources: [ElementCallExample]
     dependencies:
       - package: ElementCall
-        product: ElementCallAll
+        product: ElementCall
     settings:
       base:
         # libwebrtc's Objective-C categories live in a static archive and are dead-stripped without

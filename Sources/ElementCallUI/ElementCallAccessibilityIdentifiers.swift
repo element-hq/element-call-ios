@@ -5,7 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import ElementCall
+import ElementCallHost
 import Foundation
 
 /// Accessibility identifiers for the call UI.
