@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.5 - 2026-09-16
+
 **`import ElementCallAll` is now `import ElementCall`, and the product is `ElementCall`.** The
 umbrella module — the one that does nothing but re-export the four layers — has taken the bare name,
 because that is the name an integrating app reaches for and there was no answer to "why `All`?" beyond
@@ -31,6 +35,16 @@ and transport layers it was deliberately avoiding.
 
 Nothing else moved: the four boundaries, every public type name, and every accessibility identifier
 are unchanged.
+
+
+
+### What's Changed
+
+⚠️ API Changes
+* Packaging: Rename ElementCallAll import to ElementCall  by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/27
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.4...0.1.0-rc.5
 
 ## 0.1.0-rc.4 - 2026-09-14
 
