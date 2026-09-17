@@ -29,7 +29,7 @@ public final class MatrixRTCSession {
     public private(set) var call: MatrixRTCCall?
     
     private let manager: RtcSessionManagerHandle
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     private let feeder: RoomStateFeeder
     private var hasLeft = false
     
@@ -40,7 +40,7 @@ public final class MatrixRTCSession {
          slotID: String,
          localMemberID: String,
          manager: RtcSessionManagerHandle,
-         transport: ElementCallMatrixTransport,
+         transport: ElementCallMatrixTransportProtocol,
          feeder: RoomStateFeeder) {
         self.roomID = roomID
         self.slotID = slotID
@@ -147,9 +147,9 @@ public final class MatrixRTCSession {
 }
 
 private final nonisolated class OpenIDTokenProviderAdapter: OpenIdTokenProvider, Sendable {
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     
-    init(transport: ElementCallMatrixTransport) {
+    init(transport: ElementCallMatrixTransportProtocol) {
         self.transport = transport
     }
     

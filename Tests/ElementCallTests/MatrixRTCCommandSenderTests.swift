@@ -76,7 +76,7 @@ nonisolated struct MatrixRTCCommandSenderTests {
 }
 
 /// Records every send; failures are configurable per kind.
-private final nonisolated class RecordingTransport: ElementCallMatrixTransport, @unchecked Sendable {
+private final nonisolated class RecordingTransport: ElementCallMatrixTransportProtocol, @unchecked Sendable {
     let userID = "@alice:example.org"
     let deviceID = "ALICE"
     func rtcTransports(roomID: String) async throws -> [MatrixRTCTransport] {

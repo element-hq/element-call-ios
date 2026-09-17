@@ -23,11 +23,11 @@ knows, and what tends to go wrong.
 | `ElementCallMatrix` | `MatrixRustSDK` | turnkey transport, widget-driver stopgap |
 
 1. **`MatrixRustSDK` only in `ElementCallMatrix`.** Everywhere else, go through
-   `ElementCallMatrixTransport`.
+   `ElementCallMatrixTransportProtocol`.
 2. **Never `import Compound`, in any module.** Its colours live on one shared instance the host
    re-brands at runtime; a copy linked here would never see the override and a re-branded host would
    get a stock-coloured call screen. `CompoundDesignTokens` is fine, being static values.
-3. **No host logger, settings or strings.** Use `ElementCallLogging`, `ElementCallOptions`,
+3. **No host logger, settings or strings.** Use `ElementCallLoggingProtocol`, `ElementCallOptionsProtocol`,
    `ElementCallStrings`.
 4. **Theme members are computed properties**, read at draw time. Never capture a colour.
 
@@ -251,6 +251,16 @@ that way.
   has a *regular* vertical size class, so a size-class branch would leave its controls at the bottom
   while the stage laid its tiles out for a side rail.
 - Follow the [Swift API Design Guidelines]: `ID` not `Id`, `URL` not `Url`.
+- **Every port protocol ends in `Protocol`**, and this is a deliberate exception to those
+  guidelines, which would have `ElementCallSystemProvidingProtocol` be `ElementCallSystemProviding`
+  and `ElementCallOptionsProtocol` be `ElementCallOptions`. The host asked for it: element-x-ios
+  suffixes every protocol it owns, its Sourcery mock template derives a mock name by stripping
+  `Protocol`, and the package's ports were the only unsuffixed protocols in files that otherwise
+  carry the suffix throughout. Uniform rather than selective, so the rule can be stated in one line
+  — including on the four that read as capabilities and so double up a little. **Do not "correct"
+  these back**; the concrete types that implement them (`ElementCallDefaultOptions`,
+  `ElementCallTokenTheme`, the `ElementCallFake*` family) keep plain names, which is what makes the
+  suffix carry information.
 - `MatrixRTC*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
   own API. Note the casing: the initialism is uniform, per the API design guidelines below. The
   bindings' own module is `MatrixRtc`, spelled exactly that way, and `import MatrixRtc` plus the

@@ -68,23 +68,23 @@ custom_rules:
     severity: warning
 
   # This package has no app logger. Everything goes through the injected
-  # ElementCallLogging port so the host decides where logs land.
+  # ElementCallLoggingProtocol port so the host decides where logs land.
   print_deprecation:
     regex: "\\b(print)\\b"
     match_kinds: identifier
-    message: "The injected ElementCallLogging port should be used instead of print()"
+    message: "The injected ElementCallLoggingProtocol port should be used instead of print()"
     severity: error
 
   print_ln_deprecation:
     regex: "\\b(println)\\b"
     match_kinds: identifier
-    message: "The injected ElementCallLogging port should be used instead of println()"
+    message: "The injected ElementCallLoggingProtocol port should be used instead of println()"
     severity: error
 
   os_log_deprecation:
     regex: "\\b(os_log)\\b"
     match_kinds: identifier
-    message: "The injected ElementCallLogging port should be used instead of os_log()"
+    message: "The injected ElementCallLoggingProtocol port should be used instead of os_log()"
     severity: error
 
   # The design system stays on the host's side of the boundary: see the theme
@@ -92,7 +92,7 @@ custom_rules:
   # screen that ignores their brand colour.
   no_compound_dependency:
     regex: "import Compound$"
-    message: "The Compound component library must not be imported: its colours live on a shared instance the host re-brands at runtime. Take colours through ElementCallTheme and icons through ElementCallIconRendering. CompoundDesignTokens is fine."
+    message: "The Compound component library must not be imported: its colours live on a shared instance the host re-brands at runtime. Take colours through ElementCallThemeProtocol and icons through ElementCallIconRenderingProtocol. CompoundDesignTokens is fine."
     severity: error
 
   # Per-module, not package-wide. ElementCallMatrix exists to speak to the SDK, so
@@ -100,7 +100,7 @@ custom_rules:
   # and view modules, where an SDK dependency would be pure coupling.
   no_matrix_sdk_dependency:
     regex: "import MatrixRustSDK"
-    message: "Only ElementCallMatrix may import MatrixRustSDK. Elsewhere, go through ElementCallMatrixTransport."
+    message: "Only ElementCallMatrix may import MatrixRustSDK. Elsewhere, go through ElementCallMatrixTransportProtocol."
     severity: error
     # ElementCallMatrix exists to speak to the SDK. Tests are excluded too: the rule guards what a
     # host ends up linking, and a test bundle is not shipped, so a test asserting on ClientError

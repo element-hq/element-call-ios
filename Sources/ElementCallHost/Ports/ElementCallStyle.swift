@@ -14,7 +14,7 @@ import SwiftUI
 /// Every member is a computed property read at draw time, never a value captured once. That matters
 /// for a host whose design system can be re-branded at runtime: a snapshot taken at construction
 /// would leave the call screen on stock colours while the rest of the app changed.
-public nonisolated protocol ElementCallTheme: Sendable {
+public nonisolated protocol ElementCallThemeProtocol: Sendable {
     // Backgrounds
     @MainActor var bgCanvasDefault: Color { get }
     @MainActor var bgCanvasDefaultLevel: Color { get }
@@ -74,12 +74,12 @@ public nonisolated enum ElementCallTextStyle: Sendable {
 }
 
 /// Icons, supplied by the host so they match the rest of its app and scale with Dynamic Type.
-public nonisolated protocol ElementCallIconRendering: Sendable {
+public nonisolated protocol ElementCallIconRenderingProtocol: Sendable {
     @MainActor
     func icon(_ icon: ElementCallIcon, size: ElementCallIconSize, relativeTo textStyle: ElementCallTextStyle?) -> AnyView
 }
 
-public extension ElementCallIconRendering {
+public extension ElementCallIconRenderingProtocol {
     @MainActor
     func icon(_ icon: ElementCallIcon, size: ElementCallIconSize = .medium) -> AnyView {
         self.icon(icon, size: size, relativeTo: nil)
@@ -97,7 +97,7 @@ public nonisolated enum ElementCallAvatarSize: Sendable {
 
 /// Avatars, supplied by the host. Keeping this on the host's side means the package never loads or
 /// caches media, and avatars keep whatever placeholder colours and initials the host already uses.
-public nonisolated protocol ElementCallAvatarRendering: Sendable {
+public nonisolated protocol ElementCallAvatarRenderingProtocol: Sendable {
     @MainActor
     func avatar(userID: String, displayName: String?, avatarURL: URL?, size: ElementCallAvatarSize) -> AnyView
 }
@@ -106,14 +106,14 @@ public nonisolated protocol ElementCallAvatarRendering: Sendable {
 
 /// Everything presentational the host supplies, gathered so it can be handed to the view tree once.
 public nonisolated struct ElementCallStyle: Sendable {
-    public let theme: any ElementCallTheme
-    public let icons: any ElementCallIconRendering
-    public let avatars: any ElementCallAvatarRendering
+    public let theme: any ElementCallThemeProtocol
+    public let icons: any ElementCallIconRenderingProtocol
+    public let avatars: any ElementCallAvatarRenderingProtocol
     public let strings: ElementCallStrings
     
-    public init(theme: any ElementCallTheme,
-                icons: any ElementCallIconRendering,
-                avatars: any ElementCallAvatarRendering,
+    public init(theme: any ElementCallThemeProtocol,
+                icons: any ElementCallIconRenderingProtocol,
+                avatars: any ElementCallAvatarRenderingProtocol,
                 strings: ElementCallStrings = .init()) {
         self.theme = theme
         self.icons = icons

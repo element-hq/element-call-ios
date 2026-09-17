@@ -40,13 +40,13 @@ allowed to know the SDK:
 Concretely:
 
 - **`MatrixRustSDK` only in `ElementCallMatrix`.** That module exists to speak to the SDK, so the rule
-  would protect nothing there. Everywhere else, go through `ElementCallMatrixTransport`.
+  would protect nothing there. Everywhere else, go through `ElementCallMatrixTransportProtocol`.
 - **Never `import Compound`, anywhere.** Its colours live on a single shared instance the host
   re-brands at runtime, so a copy linked in here would never see the override and a re-branded host
-  would get a stock-coloured call screen. Take colours through `ElementCallTheme` and icons through
-  `ElementCallIconRendering`, and keep every member a computed property so it is read at draw time.
+  would get a stock-coloured call screen. Take colours through `ElementCallThemeProtocol` and icons through
+  `ElementCallIconRenderingProtocol`, and keep every member a computed property so it is read at draw time.
   The `CompoundDesignTokens` package is fine: static values, no shared instance.
-- **No host logger, settings or localisation.** Those are `ElementCallLogging`, `ElementCallOptions`
+- **No host logger, settings or localisation.** Those are `ElementCallLoggingProtocol`, `ElementCallOptionsProtocol`
   and `ElementCallStrings`.
 
 SwiftLint enforces the first two at error severity. If you need something new from the host, add a

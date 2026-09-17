@@ -16,7 +16,7 @@ import Synchronization
 /// because the compat mode fixed by the join decides how they are parsed.
 final nonisolated class RoomStateFeeder: Sendable {
     private let manager: RtcSessionManagerHandle
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     private let roomID: String
     private let slotID: String
     private let compat: MatrixRTCElementCallCompat
@@ -27,7 +27,7 @@ final nonisolated class RoomStateFeeder: Sendable {
     private let haveRoomMembers = Mutex(false)
     
     init(manager: RtcSessionManagerHandle,
-         transport: ElementCallMatrixTransport,
+         transport: ElementCallMatrixTransportProtocol,
          roomID: String,
          slotID: String,
          compat: MatrixRTCElementCallCompat,

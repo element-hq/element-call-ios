@@ -11,7 +11,28 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**Every port protocol now ends in `Protocol`.** Requested by the host: element-x-ios suffixes every
+protocol it owns, so the package's ports were the only unsuffixed ones in files that otherwise carry
+the suffix throughout. Eight renames, and nothing but the names changed:
+
+| Was | Now |
+| --- | --- |
+| `ElementCallMatrixTransport` | `ElementCallMatrixTransportProtocol` |
+| `ElementCallOptions` | `ElementCallOptionsProtocol` |
+| `ElementCallLogging` | `ElementCallLoggingProtocol` |
+| `ElementCallTheme` | `ElementCallThemeProtocol` |
+| `ElementCallIconRendering` | `ElementCallIconRenderingProtocol` |
+| `ElementCallAvatarRendering` | `ElementCallAvatarRenderingProtocol` |
+| `ElementCallSystemProviding` | `ElementCallSystemProvidingProtocol` |
+| `ElementCallRoomContext` | `ElementCallRoomContextProtocol` |
+
+A host updates its conformance declarations and any stored-property or parameter types spelled with
+the old name. The compiler finds all of them.
+
+**The concrete types keep their plain names** — `ElementCallDefaultOptions`, `ElementCallTokenTheme`,
+`ElementCallTokenIcons`, `ElementCallTokenAvatars`, `ElementCallSDKTransport` and the
+`ElementCallFake*` family are untouched, as is `ElementCallStrings`, which is a struct rather than a
+port. So is every method on every port: no requirement was added, removed or resignatured.
 
 ## 0.1.0-rc.5 - 2026-09-16
 

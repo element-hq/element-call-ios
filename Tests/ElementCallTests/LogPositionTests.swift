@@ -44,7 +44,7 @@ nonisolated struct LogPositionTests {
     
     /// Shaped like the private wrappers in `ElementCallController` and `WidgetMatrixBridge`.
     private nonisolated struct Wrapper {
-        let logger: any ElementCallLogging
+        let logger: any ElementCallLoggingProtocol
         
         func emit(_ message: String, file: String = #fileID, line: Int = #line) {
             logger.log(.info, message, file: file, line: line)

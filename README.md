@@ -107,12 +107,12 @@ moment.
 
 | Port | What you supply | Turnkey? |
 | --- | --- | --- |
-| `ElementCallMatrixTransport` | every Matrix send and feed | **yes**, use `ElementCallSDKTransport` |
-| `ElementCallSystemProviding` | CallKit, plus audio-session and mute events coming back | no |
-| `ElementCallRoomContext` | room display name, direct flag, member profiles | no |
-| `ElementCallAvatarRendering` | avatar views, so they match your app | no |
-| `ElementCallTheme`, `ElementCallIconRendering` | colours, fonts and icons | defaults to the real Compound tokens |
-| `ElementCallOptions`, `ElementCallLogging`, `ElementCallStrings` | feature flags, a log sink, localised text | defaults provided |
+| `ElementCallMatrixTransportProtocol` | every Matrix send and feed | **yes**, use `ElementCallSDKTransport` |
+| `ElementCallSystemProvidingProtocol` | CallKit, plus audio-session and mute events coming back | no |
+| `ElementCallRoomContextProtocol` | room display name, direct flag, member profiles | no |
+| `ElementCallAvatarRenderingProtocol` | avatar views, so they match your app | no |
+| `ElementCallThemeProtocol`, `ElementCallIconRenderingProtocol` | colours, fonts and icons | defaults to the real Compound tokens |
+| `ElementCallOptionsProtocol`, `ElementCallLoggingProtocol`, `ElementCallStrings` | feature flags, a log sink, localised text | defaults provided |
 
 The four that are not turnkey are the ones only a host can answer. CallKit is process-wide and usually
 shared with something else. Room metadata and avatars come from whatever caching layer the host
@@ -135,7 +135,7 @@ package of static values with no such instance.
 This said, for a while, that a prebuilt binary "would embed its own copy of the design system and
 never see the override". That does not follow, and it is worth correcting rather than quietly deleting,
 because it is the answer someone will reach for next time: the override travels through the
-`ElementCallTheme` **port**, which is a protocol, and a protocol crosses a binary boundary perfectly
+`ElementCallThemeProtocol` **port**, which is a protocol, and a protocol crosses a binary boundary perfectly
 well. `CompoundDesignTokens` is static values, so a duplicated copy costs binary size, not colours.
 
 The real reason is in `Package.swift`. `ElementCallSDKTransport.init?(client:)` takes a

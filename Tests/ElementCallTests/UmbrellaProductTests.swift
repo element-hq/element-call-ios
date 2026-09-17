@@ -25,7 +25,7 @@ nonisolated struct UmbrellaProductTests {
         // protocol comes from ElementCallKit and the type implementing it from ElementCallMatrix,
         // so this only compiles if the umbrella re-exports both. Named rather than constructed
         // because a transport needs a real Client.
-        let transport: any ElementCallMatrixTransport.Type = ElementCallSDKTransport.self
+        let transport: any ElementCallMatrixTransportProtocol.Type = ElementCallSDKTransport.self
         #expect(transport is ElementCallSDKTransport.Type)
     }
 }

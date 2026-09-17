@@ -16,10 +16,10 @@ import Synchronization
 /// instant it sees us join, leaving a member at `MISSING_KEY` for the entire call.
 final nonisolated class SessionKeyFeeder: Sendable {
     private let manager: RtcSessionManagerHandle
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     private let tasks: Mutex<[Task<Void, Never>]> = .init([])
     
-    init(manager: RtcSessionManagerHandle, transport: ElementCallMatrixTransport) {
+    init(manager: RtcSessionManagerHandle, transport: ElementCallMatrixTransportProtocol) {
         self.manager = manager
         self.transport = transport
     }

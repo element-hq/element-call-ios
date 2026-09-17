@@ -12,7 +12,7 @@ import Foundation
 /// Element Call widget already have a configuration type of their own.
 ///
 /// Read every time rather than captured, so a host backing these with live settings sees the change.
-public nonisolated protocol ElementCallOptions: Sendable {
+public nonisolated protocol ElementCallOptionsProtocol: Sendable {
     /// Whether a minimized call may open a Picture in Picture window. A host without the
     /// background mode entitlement should answer false, and calls minimize to the bar instead.
     var isPictureInPictureEnabled: Bool { get }
@@ -30,7 +30,7 @@ public nonisolated protocol ElementCallOptions: Sendable {
     var isAutomaticPictureInPictureForAudioCallsEnabled: Bool { get }
 }
 
-public nonisolated extension ElementCallOptions {
+public nonisolated extension ElementCallOptionsProtocol {
     /// Defaulted so that adding this did not break every host's existing conformance.
     var isAutomaticPictureInPictureForAudioCallsEnabled: Bool {
         false
@@ -38,7 +38,7 @@ public nonisolated extension ElementCallOptions {
 }
 
 /// Defaults for a host that has no opinion.
-public nonisolated struct ElementCallDefaultOptions: ElementCallOptions {
+public nonisolated struct ElementCallDefaultOptions: ElementCallOptionsProtocol {
     public var isPictureInPictureEnabled: Bool
     public var elementCallCompatibility: MatrixRTCElementCallCompat
     public var areTileStatsAvailable: Bool
@@ -80,7 +80,7 @@ public nonisolated struct ElementCallLogRecord: Sendable {
     }
 }
 
-public nonisolated protocol ElementCallLogging: Sendable {
+public nonisolated protocol ElementCallLoggingProtocol: Sendable {
     /// The one method a host implements.
     ///
     /// Takes a record rather than `(level, message, file, line)` because the convenience below
@@ -90,7 +90,7 @@ public nonisolated protocol ElementCallLogging: Sendable {
     func log(_ record: ElementCallLogRecord)
 }
 
-public nonisolated extension ElementCallLogging {
+public nonisolated extension ElementCallLoggingProtocol {
     /// What everything in this package calls. The defaults make the call site attribute itself,
     /// so a host formatting a line with a position gets our source rather than its own bridge.
     func log(_ level: ElementCallLogLevel, _ message: String, file: String = #fileID, line: Int = #line) {

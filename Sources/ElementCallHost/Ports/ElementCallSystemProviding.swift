@@ -28,10 +28,10 @@ public nonisolated enum ElementCallSystemEvent: Sendable {
 /// Answering an incoming call is deliberately not here. That arrives as a push and ends in a screen
 /// being presented, which is the host's navigation, and reaches this package as an ordinary
 /// ``ElementCallController/startCall(_:room:)``.
-/// Main-actor bound, unlike ``ElementCallMatrixTransport``: the Rust core calls the transport from
+/// Main-actor bound, unlike ``ElementCallMatrixTransportProtocol``: the Rust core calls the transport from
 /// its own threads, whereas this is only ever reached from the call controller.
 @MainActor
-public protocol ElementCallSystemProviding: AnyObject {
+public protocol ElementCallSystemProvidingProtocol: AnyObject {
     /// Reports an outgoing call, or attaches to the ringing call this one answers. Must return only
     /// once the system knows about the call, because our membership goes out immediately after: an
     /// incoming-call watcher that sees our own membership first reads it as answered elsewhere.
