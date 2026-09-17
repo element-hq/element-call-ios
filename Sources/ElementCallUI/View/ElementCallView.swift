@@ -144,22 +144,39 @@ struct ElementCallView: View {
             
             Spacer()
             
+            // The diagnostics menu, and only that. Screen sharing used to be duplicated here from
+            // the control bar, which is where a user actually reaches for it; the audio test tone
+            // that used to sit alongside the stats overlay is gone entirely.
+            //
+            // The version row is why the menu is never empty, which matters because everything else
+            // in it is gated. Unlocalised, like the toggle: neither is a product string.
             Menu {
-                Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
-                Toggle("Audio test tone (440 Hz)", isOn: Binding(get: { context.viewState.isAudioTestToneEnabled }, set: { _ in context.send(viewAction: .toggleAudioTestTone) }))
-                Button {
-                    context.send(viewAction: .toggleScreenShare)
-                } label: {
-                    Label {
-                        Text(context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen")
-                    } icon: {
-                        style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
+                // Absent rather than inert when developer mode is off. The toggle was always shown
+                // and the controller silently refused the tap, which looked like a broken toggle.
+                //
+                // A nested Menu is a submenu, which keeps the diagnostics one level down and leaves
+                // the top level to things a user might actually want. The Toggle inside renders as
+                // a checked menu item, so the checkmark is the state: there is no need to say
+                // "show/hide" in the label, and a plain Button would lose that.
+                if context.viewState.isDeveloperModeEnabled {
+                    Menu("Developer Options") {
+                        Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
                     }
+                    Divider()
                 }
+                // A disabled button rather than a Section header or a bare Text: an empty Section
+                // is dropped by SwiftUI, and a Menu does not render loose Text. Disabled gives a
+                // dimmed, unselectable row, which is what this is.
+                Button("version: \(ElementCallVersion.current)") { }
+                    .disabled(true)
             } label: {
                 style.icons.icon(.overflow)
             }
             .buttonStyle(ElementCallRoundButtonStyle())
+            // Applied here rather than through `control(for:)`, which only the control bar calls.
+            // The constant existed and was pinned by name in the identifier tests, but reached no
+            // view, so nothing could find this button — including the UI test that reads the menu.
+            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.more)
         }
     }
     

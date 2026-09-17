@@ -72,10 +72,10 @@ public nonisolated struct ElementCallScreenViewState: Sendable {
     public var isLoudspeaker = false
     public var isMediaDegraded = false
     public var isTileStatsVisible = false
-    public var areTileStatsAvailable = false
+    public var isDeveloperModeEnabled = false
+    public var isScreenSharingEnabled = false
     /// False while minimized, in the bar or the system window: the tiles unmount so only the window decodes.
     public var isMaximized = true
-    public var isAudioTestToneEnabled = false
     
     /// One-to-one is a direct chat with at most the two of us in it, each on a camera tile: alone
     /// while the other side is still ringing, our own camera fills the screen and shrinks to the
@@ -92,6 +92,28 @@ public nonisolated struct ElementCallScreenViewState: Sendable {
     }
 }
 
+extension ElementCallTile {
+    /// A copy with a different stats string. The overlay draws when a tile carries one, so turning
+    /// it on means rewriting the tiles rather than setting a flag; a live screen rebuilds them from
+    /// receive statistics on every refresh, and the harness has to do the same by hand.
+    func withStats(_ stats: String?) -> ElementCallTile {
+        ElementCallTile(memberID: memberID,
+                        userID: userID,
+                        displayName: displayName,
+                        avatarURL: avatarURL,
+                        isLocal: isLocal,
+                        isMicrophoneMuted: isMicrophoneMuted,
+                        hasMicrophone: hasMicrophone,
+                        hasVideo: hasVideo,
+                        isScreenSharing: isScreenSharing,
+                        isSpeaking: isSpeaking,
+                        hasHandRaised: hasHandRaised,
+                        isFrontCamera: isFrontCamera,
+                        audioLevel: audioLevel,
+                        stats: stats)
+    }
+}
+
 public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleMicrophone
     case toggleCamera
@@ -99,7 +121,6 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleScreenShare
     case toggleLoudspeaker
     case toggleTileStats
-    case toggleAudioTestTone
     case minimize
     case hangUp
     case dismiss

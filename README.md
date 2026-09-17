@@ -112,11 +112,18 @@ moment.
 | `ElementCallRoomContextProtocol` | room display name, direct flag, member profiles | no |
 | `ElementCallAvatarRenderingProtocol` | avatar views, so they match your app | no |
 | `ElementCallThemeProtocol`, `ElementCallIconRenderingProtocol` | colours, fonts and icons | defaults to the real Compound tokens |
-| `ElementCallOptionsProtocol`, `ElementCallLoggingProtocol`, `ElementCallStrings` | feature flags, a log sink, localised text | defaults provided |
+| `ElementCallLoggingProtocol` | a log sink | defaults provided |
+| `ElementCallOptions`, `ElementCallStrings` | feature flags and localised text | **values, not protocols** — construct one, every member defaulted |
 
 The four that are not turnkey are the ones only a host can answer. CallKit is process-wide and usually
 shared with something else. Room metadata and avatars come from whatever caching layer the host
 already has, and what to call a room with no name is a product decision.
+
+Two members of `ElementCallOptions` are worth setting before a first call. `isDeveloperModeEnabled`
+reveals the per-tile diagnostics overlay, so point it at whatever already reveals developer surface
+in your app rather than at the flag that enables calls. `isScreenSharingEnabled` is **off by
+default**, because sharing needs work on the host side before it behaves; turn it on when you are
+ready. Receiving someone else's share never depends on either.
 
 Every port has a fake shipped alongside it, so previews and tests need no host at all.
 

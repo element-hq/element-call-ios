@@ -73,7 +73,7 @@ public final class ElementCallController {
     ///
     /// No longer decides whether minimizing uses the window — every call does — but it still
     /// decides whether *backgrounding* the app opens one by itself, unless the host opted audio
-    /// calls in through ``ElementCallOptionsProtocol/isAutomaticPictureInPictureForAudioCallsEnabled``.
+    /// calls in through ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``.
     public var hasVideo: Bool {
         call?.hasVideo ?? false
     }
@@ -88,9 +88,9 @@ public final class ElementCallController {
         }
     }
     
-    /// Public so the view module can seed its style environment and read the tile-stats flag.
+    /// Public so the view module can seed its style environment and read the developer-mode flag.
     public let style: ElementCallStyle
-    public let options: any ElementCallOptionsProtocol
+    public let options: ElementCallOptions
     
     private let rtcService: MatrixRTCService
     private let transport: any ElementCallMatrixTransportProtocol
@@ -104,7 +104,7 @@ public final class ElementCallController {
     init(rtcService: MatrixRTCService,
          transport: any ElementCallMatrixTransportProtocol,
          system: any ElementCallSystemProvidingProtocol,
-         options: any ElementCallOptionsProtocol,
+         options: ElementCallOptions,
          style: ElementCallStyle,
          logger: (any ElementCallLoggingProtocol)?) {
         self.rtcService = rtcService
@@ -221,7 +221,7 @@ public final class ElementCallController {
     }
     
     public func toggleTileStats() {
-        guard options.areTileStatsAvailable else { return }
+        guard options.isDeveloperModeEnabled else { return }
         isTileStatsVisible.toggle()
         log(.info, "tile stats \(isTileStatsVisible ? "shown" : "hidden")")
     }
@@ -267,6 +267,9 @@ public final class ElementCallController {
     /// so the window is given up for the duration of a share and comes back when it ends. A call
     /// minimized meanwhile uses the bar.
     public func setScreenShareEnabled(_ enabled: Bool) {
+        // Only starting is gated. Stopping stays available unconditionally so a share already in
+        // flight can always be ended, whatever the option says.
+        guard options.isScreenSharingEnabled || !enabled else { return }
         Task {
             guard let call else { return }
             if enabled {
@@ -299,10 +302,6 @@ public final class ElementCallController {
         } catch {
             log(.warning, "could not switch the audio output: \(error)")
         }
-    }
-    
-    public func setAudioTestToneEnabled(_ enabled: Bool) {
-        call?.setAudioTestToneEnabled(enabled)
     }
     
     // MARK: - System audio session

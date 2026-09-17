@@ -17,8 +17,11 @@ that is what SwiftPM matches a host's `exactVersion` against; the script refuses
 renamed identifier is a breaking change with an external interop rig pinned against it (see
 [CONTRIBUTING.md](CONTRIBUTING.md)). `0.x` says the surface is still moving.
 
-There is no version string anywhere in the repository. The tag is the only place a version exists,
-so there is nothing to bump ahead of time and nothing to go stale.
+Nothing is bumped ahead of time. The one version string in the repository,
+`ElementCallVersion.current`, is stamped by `scripts/release.sh` into the commit it tags, so a
+contributor never edits it and a pull request never carries a version. It exists because the call
+screen shows it: SwiftPM tells a compiled module nothing about the version it was resolved at, and
+the package has no bundle of its own to read one from.
 
 ## Cut a release
 

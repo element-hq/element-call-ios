@@ -27,7 +27,7 @@ public final class ElementCallStack {
     
     public init(transport: any ElementCallMatrixTransportProtocol,
                 system: any ElementCallSystemProvidingProtocol,
-                options: any ElementCallOptionsProtocol = ElementCallDefaultOptions(),
+                options: ElementCallOptions = .init(),
                 style: ElementCallStyle = .stock,
                 logger: (any ElementCallLoggingProtocol)? = nil) {
         let rtcService = MatrixRTCService(transport: transport)

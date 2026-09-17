@@ -18,7 +18,7 @@ nonisolated struct UmbrellaProductTests {
         // ElementCallKit
         #expect(MatrixRTCStreamKind.camera != .screenShare)
         // ElementCallHost
-        #expect(ElementCallDefaultOptions().isPictureInPictureEnabled)
+        #expect(ElementCallOptions().isPictureInPictureEnabled)
         // ElementCallUI
         #expect(!ElementCallAccessibilityIdentifiers.minimizedBar.isEmpty)
         // ElementCallMatrix, and with it that the conformance still crosses the boundary: the

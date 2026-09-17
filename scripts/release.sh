@@ -63,6 +63,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 CHANGELOG="CHANGES.md"
+VERSION_FILE="Sources/ElementCallKit/API/ElementCallVersion.swift"
 
 # The changelog is rewritten through a temporary file, so a failure mid-write leaves the original
 # intact -- but it would leave the temporary behind, untracked and not ignored, ready to be swept
@@ -303,6 +304,29 @@ mv "$CHANGELOG.tmp" "$CHANGELOG"
 rm -f "$NOTES_OUT.clean"
 
 echo "Recorded $VERSION in $CHANGELOG and opened a fresh Unreleased section."
+
+# --- 6. Stamp the version constant -------------------------------------------------------------
+#
+# The one place in the source that names a version, and it is written here rather than by hand so
+# that "the tag is the only place a version exists" stays true of pull requests. It lands in the
+# commit the release tags, next to the changelog, for the same reason: a host resolving the tag must
+# get a tree that describes itself.
+#
+# Matched by pattern rather than by the value it currently holds, because on main that value is
+# whichever release wrote it last. Verified afterwards: a silent no-op here would ship a tag
+# claiming to be its predecessor, which is worse than a failed release.
+if ! grep -qE '^    public static let current = ".*"$' "$VERSION_FILE"; then
+    fail "$VERSION_FILE does not have the expected 'public static let current' line to stamp."
+fi
+
+sed -e "s/^    public static let current = \".*\"$/    public static let current = \"$VERSION\"/" \
+    "$VERSION_FILE" > "$VERSION_FILE.tmp"
+mv "$VERSION_FILE.tmp" "$VERSION_FILE"
+
+grep -qF "public static let current = \"$VERSION\"" "$VERSION_FILE" \
+    || fail "Could not stamp $VERSION into $VERSION_FILE."
+
+echo "Stamped $VERSION into $VERSION_FILE."
 
 # Consumed by the workflow: the tag it should push, and whether the release is a prerelease.
 if [ -n "${GITHUB_OUTPUT:-}" ]; then

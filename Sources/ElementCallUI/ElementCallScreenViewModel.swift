@@ -48,6 +48,48 @@ public final class ElementCallScreenContext {
         ElementCallScreenContext(viewState: state, style: style)
     }
     
+    /// Like ``preview(state:style:)``, but with taps wired to the state they would change.
+    ///
+    /// The previews want a still: one fixed state and no behaviour. The example harness wants the
+    /// menu and the control bar to answer, and it has no view model to route through — a controller
+    /// produces no tiles until it has actually joined, so a harness built on one could only show a
+    /// spinner. So the transitions a harness can honestly fake are applied to the view state here,
+    /// which is also the only place they can be: `handler` is fileprivate on purpose, so that a
+    /// host cannot reach in and drive the screen behind its own view model's back.
+    ///
+    /// Only the reversible ones. Minimize, hang up and dismiss belong to a host and there is
+    /// nothing here to return to, so they stay inert rather than stranding the harness on a dead
+    /// screen.
+    public static func harness(state: ElementCallScreenViewState,
+                               style: ElementCallStyle = .stock) -> ElementCallScreenContext {
+        let context = ElementCallScreenContext(viewState: state, style: style)
+        // Weakly, or the context owns a closure that owns the context.
+        context.handler = { [weak context] action in
+            guard let context else { return }
+            switch action {
+            case .toggleTileStats:
+                let isVisible = !context.viewState.isTileStatsVisible
+                context.viewState.isTileStatsVisible = isVisible
+                context.viewState.tiles = context.viewState.tiles.map {
+                    $0.withStats(isVisible ? ElementCallPreviewFixtures.sampleStats : nil)
+                }
+            case .toggleMicrophone:
+                context.viewState.isMicrophoneMuted.toggle()
+            case .toggleCamera:
+                context.viewState.isCameraEnabled.toggle()
+            case .switchCamera:
+                context.viewState.isFrontCamera.toggle()
+            case .toggleScreenShare:
+                context.viewState.isScreenSharing.toggle()
+            case .toggleLoudspeaker:
+                context.viewState.isLoudspeaker.toggle()
+            case .minimize, .hangUp, .dismiss:
+                break
+            }
+        }
+        return context
+    }
+    
     public func send(viewAction: ElementCallScreenViewAction) {
         handler?(viewAction)
     }
@@ -88,6 +130,14 @@ public final class ElementCallScreenViewModel {
                                            style: controller.style)
         context.handler = { [weak self] action in self?.process(viewAction: action) }
         
+        // Seeded here rather than in refresh() because the options are immutable for the life of
+        // the controller, so this is a fact about construction, not something to re-read. It also
+        // has to be true before the first render: refresh() runs inside observe()'s Task, which has
+        // not happened yet when a preview or a snapshot draws, and a control gated on one of these
+        // would be missing from that first frame.
+        context.viewState.isDeveloperModeEnabled = controller.options.isDeveloperModeEnabled
+        context.viewState.isScreenSharingEnabled = controller.options.isScreenSharingEnabled
+        
         if let room {
             room.displayNamePublisher
                 .receive(on: DispatchQueue.main)
@@ -125,8 +175,6 @@ public final class ElementCallScreenViewModel {
             controller.setLoudspeaker(!controller.isLoudspeaker)
         case .toggleTileStats:
             controller.toggleTileStats()
-        case .toggleAudioTestTone:
-            controller.setAudioTestToneEnabled(!(controller.call?.isAudioTestToneEnabled ?? false))
         case .minimize:
             controller.requestMinimize()
         case .hangUp:
@@ -161,7 +209,6 @@ public final class ElementCallScreenViewModel {
         state.connectedAt = controller.connectedAt
         state.isLoudspeaker = controller.isLoudspeaker
         state.isTileStatsVisible = controller.isTileStatsVisible
-        state.areTileStatsAvailable = controller.options.areTileStatsAvailable
         state.isMaximized = controller.isMaximized
         state.memberCount = controller.session?.memberCount ?? 0
         state.spotlightMemberID = controller.spotlightMemberID
@@ -187,7 +234,6 @@ public final class ElementCallScreenViewModel {
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
-        state.isAudioTestToneEnabled = call.isAudioTestToneEnabled
         
         state.tiles = call.participants.map { participant in
             let profile = profiles[participant.userID]

@@ -177,12 +177,17 @@ public extension ElementCallController {
     static func fake(connection: ElementCallConnection,
                      room: any ElementCallRoomContextProtocol = ElementCallFakeRoom(),
                      isAudioCall: Bool = false,
+                     // Everything on, like the preview fixtures: a fake host is a host that
+                     // supports the lot, so a preview covers the fullest chrome. Pass an explicit
+                     // value to exercise a gate.
+                     options: ElementCallOptions = ElementCallOptions(isDeveloperModeEnabled: true,
+                                                                      isScreenSharingEnabled: true),
                      style: ElementCallStyle = .stock) -> ElementCallController {
         let transport = ElementCallFakeTransport()
         let controller = ElementCallController(rtcService: MatrixRTCService(transport: transport),
                                                transport: transport,
                                                system: ElementCallFakeSystem(),
-                                               options: ElementCallDefaultOptions(areTileStatsAvailable: true),
+                                               options: options,
                                                style: style,
                                                logger: nil)
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),

@@ -18,7 +18,6 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
     private let engine: CallAudioEngine
     private let ring = PCMRingBuffer(capacity: AudioFormat.samplesPerFrame * 50)
     private let isMuted = Atomic<Bool>(false)
-    private let isTestToneEnabled = Atomic<Bool>(false)
     private let onLevel: @Sendable (MatrixRTCAudioLevel) -> Void
     
     private let tap: MicrophoneTap
@@ -29,7 +28,6 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
         var track: FfiLocalTrack?
         var drainer: Task<Void, Never>?
         var frameCount: UInt64 = 0
-        var tonePhase: Float = 0
         var reportedOversizedCallbacks = 0
     }
     
@@ -75,11 +73,6 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
         isMuted.store(muted, ordering: .relaxed)
     }
     
-    /// A fixed 440 Hz sine at a known level takes the capture device out of the picture.
-    func setTestToneEnabled(_ enabled: Bool) {
-        isTestToneEnabled.store(enabled, ordering: .relaxed)
-    }
-    
     // MARK: - Private
     
     /// Resamples whatever the hardware produced into 480-sample 48 kHz frames and pushes them.
@@ -101,10 +94,6 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
             while pending.count >= AudioFormat.samplesPerFrame {
                 var samples = Array(pending.prefix(AudioFormat.samplesPerFrame))
                 pending.removeFirst(AudioFormat.samplesPerFrame)
-                
-                if isTestToneEnabled.load(ordering: .relaxed) {
-                    fillTestTone(&samples)
-                }
                 
                 // Meter before the mute check: knowing the microphone is alive while muted is exactly
                 // the question a silent call raises.
@@ -165,18 +154,5 @@ final nonisolated class MicrophoneCapturer: @unchecked Sendable {
             output[index] = Int16(Float(samples[lower]) * (1 - fraction) + Float(samples[upper]) * fraction)
         }
         return output
-    }
-    
-    private func fillTestTone(_ samples: inout [Int16]) {
-        state.withLock { state in
-            let step = 2 * Float.pi * 440 / Float(AudioFormat.sampleRate)
-            for index in samples.indices {
-                samples[index] = Int16(sin(state.tonePhase) * 0.3 * Float(Int16.max))
-                state.tonePhase += step
-                if state.tonePhase > 2 * .pi {
-                    state.tonePhase -= 2 * .pi
-                }
-            }
-        }
     }
 }

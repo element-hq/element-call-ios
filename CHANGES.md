@@ -13,12 +13,11 @@ version will actually read it.
 
 **Every port protocol now ends in `Protocol`.** Requested by the host: element-x-ios suffixes every
 protocol it owns, so the package's ports were the only unsuffixed ones in files that otherwise carry
-the suffix throughout. Eight renames, and nothing but the names changed:
+the suffix throughout. Seven renames, and nothing but the names changed:
 
 | Was | Now |
 | --- | --- |
 | `ElementCallMatrixTransport` | `ElementCallMatrixTransportProtocol` |
-| `ElementCallOptions` | `ElementCallOptionsProtocol` |
 | `ElementCallLogging` | `ElementCallLoggingProtocol` |
 | `ElementCallTheme` | `ElementCallThemeProtocol` |
 | `ElementCallIconRendering` | `ElementCallIconRenderingProtocol` |
@@ -29,10 +28,62 @@ the suffix throughout. Eight renames, and nothing but the names changed:
 A host updates its conformance declarations and any stored-property or parameter types spelled with
 the old name. The compiler finds all of them.
 
-**The concrete types keep their plain names** — `ElementCallDefaultOptions`, `ElementCallTokenTheme`,
-`ElementCallTokenIcons`, `ElementCallTokenAvatars`, `ElementCallSDKTransport` and the
-`ElementCallFake*` family are untouched, as is `ElementCallStrings`, which is a struct rather than a
-port. So is every method on every port: no requirement was added, removed or resignatured.
+**The concrete types keep their plain names** — `ElementCallTokenTheme`, `ElementCallTokenIcons`,
+`ElementCallTokenAvatars`, `ElementCallSDKTransport` and the `ElementCallFake*` family are untouched,
+as is `ElementCallStrings`, which is a struct rather than a port. So is every method on every port:
+no requirement was added, removed or resignatured.
+
+**The settings port is now a struct, and `areTileStatsAvailable` is now `isDeveloperModeEnabled`.**
+`ElementCallOptionsProtocol` and `ElementCallDefaultOptions` are both gone, replaced by one value
+type:
+
+```swift
+options: ElementCallOptions(isDeveloperModeEnabled: appSettings.developerOptionsEnabled)
+```
+
+Every member is defaulted, so a host states only what it wants to change — the defaults are Picture
+in Picture on, `.stateEvents` compatibility, developer mode off, automatic Picture in Picture for
+audio calls off. **A host that had a type conforming to the port can delete it**; pass a constructed
+`ElementCallOptions` instead. Note this is the only port that lost its `Protocol` suffix in the same
+release it gained one: a concrete type keeps a plain name, so the spelling is `ElementCallOptions`,
+which is what it was called before either change.
+
+It is read once, when the stack is built, rather than on every access. Nothing in the call ever
+needed a fresher value — compatibility is read when a session joins, the Picture in Picture flags
+when the window binds, developer mode when a toggle is tapped — so a host backing these with live
+settings should know the values are captured. If that is a problem for you, say so and the stack can
+gain a setter.
+
+**Developer mode gates the stats overlay, and hides it.** The overflow menu now holds a
+**Developer Options** submenu, and `isDeveloperModeEnabled` decides whether that submenu exists at
+all — previously the "Tile stats" toggle was shown unconditionally and the tap was silently refused.
+The toggle inside carries a checkmark, so reopening the menu says whether the overlay is on. Point
+this at whatever reveals developer surface in your app, not at the flag that enables calls: the
+overlay is raw RTP counters in 9pt monospace and is not meant for ordinary users.
+
+**The audio test tone is gone.** The 440 Hz sine that could be injected into the microphone from the
+overflow menu, and the generator behind it, are removed outright — it was an early bring-up aid and
+had outlived its purpose. `MatrixRTCCall.setAudioTestToneEnabled(_:)`,
+`ElementCallController.setAudioTestToneEnabled(_:)` and the `isAudioTestToneEnabled` view-state
+property are all deleted; a host calling any of them will not compile.
+
+**Screen sharing is now opt-in, through `isScreenSharingEnabled`, and defaults to off.** It needs
+work on the host side before a share behaves, so a host asks for it when it is ready rather than
+finding the feature half-wired. Deliberately *not* folded into developer mode: a host may want to
+ship sharing to everyone while keeping diagnostics to itself, so the two are separate axes — wire
+this to your developer flag today and change one line later.
+
+With it off, the share button is absent from the control bar and `setScreenShareEnabled(true)` is
+refused. **Receiving a share is unaffected**: a remote presenter still takes the spotlight, renders,
+and is labelled, because a call with a Web peer sharing would otherwise look broken. Stopping a share
+is never gated either, so one already in flight can always be ended.
+
+The screen share entry is also **gone from the overflow menu**, where it duplicated the control bar
+button exactly. The bar is where a user reaches for it; the menu is now diagnostics only.
+
+**The call screen shows the package version**, as a disabled `version: <semver>` row at the foot of
+the overflow menu, so a bug report can quote it — readable as `ElementCallVersion.current` if a host
+wants it elsewhere. It is stamped by the release, so it is exact for any host that resolves a tag.
 
 ## 0.1.0-rc.5 - 2026-09-16
 

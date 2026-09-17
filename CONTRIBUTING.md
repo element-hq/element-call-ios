@@ -46,7 +46,7 @@ Concretely:
   would get a stock-coloured call screen. Take colours through `ElementCallThemeProtocol` and icons through
   `ElementCallIconRenderingProtocol`, and keep every member a computed property so it is read at draw time.
   The `CompoundDesignTokens` package is fine: static values, no shared instance.
-- **No host logger, settings or localisation.** Those are `ElementCallLoggingProtocol`, `ElementCallOptionsProtocol`
+- **No host logger, settings or localisation.** Those are `ElementCallLoggingProtocol`, `ElementCallOptions`
   and `ElementCallStrings`.
 
 SwiftLint enforces the first two at error severity. If you need something new from the host, add a

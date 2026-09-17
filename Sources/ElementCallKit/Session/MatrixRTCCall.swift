@@ -25,7 +25,6 @@ public final class MatrixRTCCall {
     public private(set) var activeSpeakerIDs: Set<String> = []
     public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
     public private(set) var isMicrophoneMuted = false
-    public private(set) var isAudioTestToneEnabled = false
     public private(set) var isCameraEnabled = false
     /// The system holds the camera (app backgrounded without the multitasking entitlement); the
     /// track is muted at the transport meanwhile so peers see camera-off rather than a frozen frame.
@@ -143,7 +142,6 @@ public final class MatrixRTCCall {
             throw MatrixRTCError.media("Failed to publish the microphone: \(error)")
         }
         microphoneTrack = track
-        microphone.setTestToneEnabled(isAudioTestToneEnabled)
         microphone.start(track: track)
         // The transport only learns about a mute once there is a track.
         await setMicrophoneMuted(isMicrophoneMuted)
@@ -156,11 +154,6 @@ public final class MatrixRTCCall {
         isMicrophoneMuted = muted
         microphone.setMuted(muted)
         await setTransportMuted(.microphone, muted: muted)
-    }
-    
-    public func setAudioTestToneEnabled(_ enabled: Bool) {
-        isAudioTestToneEnabled = enabled
-        microphone.setTestToneEnabled(enabled)
     }
     
     // MARK: - Camera
