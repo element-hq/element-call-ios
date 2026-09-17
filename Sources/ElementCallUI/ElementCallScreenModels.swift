@@ -72,10 +72,10 @@ public nonisolated struct ElementCallScreenViewState: Sendable {
     public var isLoudspeaker = false
     public var isMediaDegraded = false
     public var isTileStatsVisible = false
-    public var areTileStatsAvailable = false
+    public var isDeveloperModeEnabled = false
+    public var isScreenSharingEnabled = false
     /// False while minimized, in the bar or the system window: the tiles unmount so only the window decodes.
     public var isMaximized = true
-    public var isAudioTestToneEnabled = false
     
     /// One-to-one is a direct chat with at most the two of us in it, each on a camera tile: alone
     /// while the other side is still ringing, our own camera fills the screen and shrinks to the
@@ -99,7 +99,6 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleScreenShare
     case toggleLoudspeaker
     case toggleTileStats
-    case toggleAudioTestTone
     case minimize
     case hangUp
     case dismiss

@@ -45,10 +45,12 @@ struct ElementCallControlsView: View {
                 context.send(viewAction: .toggleCamera)
             }
             audioRouteButton
-            controlButton(icon: .shareScreen,
-                          isActive: !context.viewState.isScreenSharing,
-                          label: context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen") {
-                context.send(viewAction: .toggleScreenShare)
+            if context.viewState.isScreenSharingEnabled {
+                controlButton(icon: .shareScreen,
+                              isActive: !context.viewState.isScreenSharing,
+                              label: context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen") {
+                    context.send(viewAction: .toggleScreenShare)
+                }
             }
             Button {
                 context.send(viewAction: .hangUp)

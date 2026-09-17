@@ -27,7 +27,7 @@ knows, and what tends to go wrong.
 2. **Never `import Compound`, in any module.** Its colours live on one shared instance the host
    re-brands at runtime; a copy linked here would never see the override and a re-branded host would
    get a stock-coloured call screen. `CompoundDesignTokens` is fine, being static values.
-3. **No host logger, settings or strings.** Use `ElementCallLoggingProtocol`, `ElementCallOptionsProtocol`,
+3. **No host logger, settings or strings.** Use `ElementCallLoggingProtocol`, `ElementCallOptions`,
    `ElementCallStrings`.
 4. **Theme members are computed properties**, read at draw time. Never capture a colour.
 
@@ -193,8 +193,17 @@ coverage.
 ## Releasing
 
 A release is a **tag**, nothing more. Bare semver — `0.1.0`, `0.2.0-rc.1` — because that is what
-SwiftPM matches a host's `exactVersion` against, and **the tag is the only place a version exists**:
-there is no version constant, no `MARKETING_VERSION`, nothing to bump in a pull request.
+SwiftPM matches a host's `exactVersion` against, and **nothing is bumped in a pull request**: there
+is no `MARKETING_VERSION` and nobody edits a version by hand.
+
+There is one version constant, `ElementCallVersion.current`, which the call screen shows so a bug
+report can quote it. **`scripts/release.sh` stamps it**, in the same step that closes the
+`## Unreleased` heading, so it lands inside the commit the release tags and a host resolving that tag
+gets a tree that describes itself. The script fails the release if the rewrite does not take, and
+`release.yml` names the file in its `git add` — the commit is path-explicit, not `git add -A`, so a
+new generated file has to be named there or it never reaches the tag. On `main` between releases the
+constant reads as the previous release, which is only ever visible in a build made from this
+repository rather than from a tag.
 
 The pipeline is `.github/workflows/release.yml` plus `scripts/release.sh`, which holds all of the
 validation and never touches the remote so it can be rehearsed locally. Release notes come from the
@@ -253,14 +262,16 @@ that way.
 - Follow the [Swift API Design Guidelines]: `ID` not `Id`, `URL` not `Url`.
 - **Every port protocol ends in `Protocol`**, and this is a deliberate exception to those
   guidelines, which would have `ElementCallSystemProvidingProtocol` be `ElementCallSystemProviding`
-  and `ElementCallOptionsProtocol` be `ElementCallOptions`. The host asked for it: element-x-ios
+  and `ElementCallRoomContextProtocol` be `ElementCallRoomContext`. The host asked for it: element-x-ios
   suffixes every protocol it owns, its Sourcery mock template derives a mock name by stripping
   `Protocol`, and the package's ports were the only unsuffixed protocols in files that otherwise
   carry the suffix throughout. Uniform rather than selective, so the rule can be stated in one line
   — including on the four that read as capabilities and so double up a little. **Do not "correct"
-  these back**; the concrete types that implement them (`ElementCallDefaultOptions`,
-  `ElementCallTokenTheme`, the `ElementCallFake*` family) keep plain names, which is what makes the
-  suffix carry information.
+  these back**; the concrete types that implement them (`ElementCallTokenTheme`,
+  `ElementCallSDKTransport`, the `ElementCallFake*` family) keep plain names, which is what makes the
+  suffix carry information. So does a port that is a plain value rather than something a host
+  implements — `ElementCallOptions` and `ElementCallStrings` are structs with every member defaulted,
+  and the suffix would be a lie on them.
 - `MatrixRTC*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
   own API. Note the casing: the initialism is uniform, per the API design guidelines below. The
   bindings' own module is `MatrixRtc`, spelled exactly that way, and `import MatrixRtc` plus the

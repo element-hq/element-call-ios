@@ -88,10 +88,13 @@ jobs:
 
       # --intent-to-add so this shows something on the very first release too, when CHANGES.md is a
       # new untracked file and a plain `git diff` would print nothing at all.
+      #
+      # The version constant is shown alongside it because the release stamps that too, and a dry
+      # run is the only chance to see both before the tag exists.
       - name: Show the changelog diff
         run: |
-          git add --intent-to-add CHANGES.md
-          git --no-pager diff -- CHANGES.md
+          git add --intent-to-add CHANGES.md Sources/ElementCallKit/API/ElementCallVersion.swift
+          git --no-pager diff -- CHANGES.md Sources/ElementCallKit/API/ElementCallVersion.swift
 
       # Uploaded on every run, not just the dry one, and before anything is published. On a dry run
       # this is the output to read; on a real run it is the recovery path -- if the release-creation
@@ -104,6 +107,7 @@ jobs:
           path: |
             ${{ steps.prepare.outputs.notes }}
             CHANGES.md
+            Sources/ElementCallKit/API/ElementCallVersion.swift
           retention-days: 30
           if-no-files-found: error
 
@@ -122,7 +126,7 @@ jobs:
         run: |
           git config user.name "Element CI"
           git config user.email "ci@element.io"
-          git add CHANGES.md
+          git add CHANGES.md Sources/ElementCallKit/API/ElementCallVersion.swift
           git commit -m "Release $VERSION"
           git tag -a "$VERSION" -m "$VERSION"
           git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$VERSION"

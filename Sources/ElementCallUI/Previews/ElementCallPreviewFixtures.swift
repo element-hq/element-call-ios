@@ -69,7 +69,11 @@ public enum ElementCallPreviewFixtures {
         state.isMicrophoneMuted = isMicrophoneMuted
         state.isScreenSharing = isScreenSharing
         state.isTileStatsVisible = isTileStatsVisible
-        state.areTileStatsAvailable = true
+        // The fixtures stand in for a host that has turned everything on, so the previews cover
+        // the fullest chrome. A host with either flag off simply renders less, and the gates are
+        // pinned by DeveloperModeTests rather than by an image.
+        state.isDeveloperModeEnabled = true
+        state.isScreenSharingEnabled = true
         return state
     }
     
