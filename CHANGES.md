@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.6 - 2026-09-17
+
 **Every port protocol now ends in `Protocol`.** Requested by the host: element-x-ios suffixes every
 protocol it owns, so the package's ports were the only unsuffixed ones in files that otherwise carry
 the suffix throughout. Seven renames, and nothing but the names changed:
@@ -84,6 +88,17 @@ button exactly. The bar is where a user reaches for it; the menu is now diagnost
 **The call screen shows the package version**, as a disabled `version: <semver>` row at the foot of
 the overflow menu, so a bug report can quote it — readable as `ElementCallVersion.current` if a host
 wants it elsewhere. It is stamped by the release, so it is exact for any host that resolves a tag.
+
+
+
+### What's Changed
+
+⚠️ API Changes
+* Suffix every port protocol with Protocol by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/29
+* Make the settings port a value, and gate screen sharing and diagnostics by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/30
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.5...0.1.0-rc.6
 
 ## 0.1.0-rc.5 - 2026-09-16
 
