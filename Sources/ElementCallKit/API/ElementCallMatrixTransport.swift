@@ -60,7 +60,7 @@ public nonisolated enum MatrixRTCTransportError: Error, Sendable, Equatable {
 
 /// The Matrix side the core needs, implemented by the host with its SDK proxies. This package never
 /// imports the Matrix SDK, so this is the whole contract between the two.
-public nonisolated protocol ElementCallMatrixTransport: AnyObject, Sendable {
+public nonisolated protocol ElementCallMatrixTransportProtocol: AnyObject, Sendable {
     var userID: String { get }
     var deviceID: String { get }
     
@@ -125,7 +125,7 @@ public nonisolated protocol ElementCallMatrixTransport: AnyObject, Sendable {
     func didLeaveRoom(roomID: String) async
 }
 
-public extension ElementCallMatrixTransport {
+public extension ElementCallMatrixTransportProtocol {
     func willJoinRoom(roomID: String) async throws { }
     func didLeaveRoom(roomID: String) async { }
 }

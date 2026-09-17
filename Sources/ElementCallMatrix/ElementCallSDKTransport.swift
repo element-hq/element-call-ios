@@ -21,17 +21,17 @@ import MatrixRustSDK
 /// ``willJoinRoom(roomID:)`` and closed in ``didLeaveRoom(roomID:)``. See `Widget/` for what retires
 /// that, and note that MSC4515 transport discovery already came off the stopgap list.
 @MainActor
-public final class ElementCallSDKTransport: ElementCallMatrixTransport {
+public final class ElementCallSDKTransport: ElementCallMatrixTransportProtocol {
     public nonisolated let userID: String
     public nonisolated let deviceID: String
     
     private let client: Client
-    private let logger: (any ElementCallLogging)?
+    private let logger: (any ElementCallLoggingProtocol)?
     private var liveBridges = [String: LiveBridge]()
     /// The core subscribes once per session; bridges come and go with calls.
     private nonisolated let toDeviceRelay = ToDeviceRelay()
     
-    public init?(client: Client, logger: (any ElementCallLogging)? = nil) {
+    public init?(client: Client, logger: (any ElementCallLoggingProtocol)? = nil) {
         guard let userID = try? client.userId(), let deviceID = try? client.deviceId() else {
             logger?.log(.error, "no user or device ID, cannot serve a call")
             return nil

@@ -46,7 +46,7 @@ let package = Package(
         // their own small package, so depending on them is safe. Compound itself is not, because its
         // colours live on a shared instance a host re-brands at runtime: a second copy linked in
         // here would never see that override, and a re-branded host would get a stock call screen.
-        // The host still supplies the real colours through ElementCallTheme; these are the default.
+        // The host still supplies the real colours through ElementCallThemeProtocol; these are the default.
         //
         // A range, for the same reason the SDK below is one: the host links these tokens too, through
         // Compound, so an exact pin here forces the host's Compound onto our version. It was exact at

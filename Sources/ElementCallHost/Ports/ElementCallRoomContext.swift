@@ -26,7 +26,7 @@ public nonisolated struct ElementCallMemberProfile: Sendable, Hashable {
 /// Each of these carries a current value as well as a stream of changes, because the call screen has
 /// to draw a name on its first frame and a freshly opened room may not have one yet.
 @MainActor
-public protocol ElementCallRoomContext: AnyObject {
+public protocol ElementCallRoomContextProtocol: AnyObject {
     var roomID: String { get }
     
     var displayName: String { get }
@@ -41,7 +41,7 @@ public protocol ElementCallRoomContext: AnyObject {
 }
 
 /// What a call was started for; fixed at start time. Whether the room is a direct chat and what it is
-/// called are read from the ``ElementCallRoomContext`` instead, because both can change mid-call.
+/// called are read from the ``ElementCallRoomContextProtocol`` instead, because both can change mid-call.
 public nonisolated struct ElementCallData: Sendable, Equatable {
     public let isAudioCall: Bool
     /// Whether this device is starting the call, which rings the room, or joining one already running.

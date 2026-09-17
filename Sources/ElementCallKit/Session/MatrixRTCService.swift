@@ -15,13 +15,13 @@ import Synchronization
 /// Never rebuilt: it accumulates memberships and keys across calls.
 @MainActor
 public final class MatrixRTCService {
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     private var manager: RtcSessionManagerHandle?
     private var keyFeeder: SessionKeyFeeder?
     private var startTask: Task<RtcSessionManagerHandle, Never>?
     private var sessions = [String: MatrixRTCSession]()
     
-    public init(transport: ElementCallMatrixTransport) {
+    public init(transport: ElementCallMatrixTransportProtocol) {
         self.transport = transport
     }
     

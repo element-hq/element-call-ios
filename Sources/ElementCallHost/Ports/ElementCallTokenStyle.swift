@@ -15,11 +15,11 @@ import SwiftUI
 // re-brands at runtime, and a second copy of it linked into this package would never receive that
 // override, leaving a re-branded host with a stock-coloured call screen.
 //
-// So a host that wants its own brand still supplies `ElementCallTheme` and reads its own instance.
+// So a host that wants its own brand still supplies `ElementCallThemeProtocol` and reads its own instance.
 // These types are what previews, snapshots and the example harness use, and what a host with no
 // design system of its own gets for free.
 
-public nonisolated struct ElementCallTokenTheme: ElementCallTheme {
+public nonisolated struct ElementCallTokenTheme: ElementCallThemeProtocol {
     // Built per read rather than stored: the tokens are a bag of `Color` values, so there is
     // nothing here worth caching. It also had to be this way under compound-design-tokens 10.x,
     // where CompoundColorTokens was not Sendable; it is Sendable from 11.0.0, so that half of the
@@ -109,7 +109,7 @@ public nonisolated struct ElementCallTokenTheme: ElementCallTheme {
     }
 }
 
-public nonisolated struct ElementCallTokenIcons: ElementCallIconRendering {
+public nonisolated struct ElementCallTokenIcons: ElementCallIconRenderingProtocol {
     public init() { }
     
     public func icon(_ icon: ElementCallIcon, size: ElementCallIconSize, relativeTo textStyle: ElementCallTextStyle?) -> AnyView {
@@ -182,7 +182,7 @@ private struct ScaledCompoundIcon: View {
 /// Initials on a colour derived from the user ID, which is what most Matrix clients do. Media
 /// loading stays with the host, so the avatar URL is ignored here on purpose: a snapshot test must
 /// not reach the network.
-public nonisolated struct ElementCallTokenAvatars: ElementCallAvatarRendering {
+public nonisolated struct ElementCallTokenAvatars: ElementCallAvatarRenderingProtocol {
     private static let palette: [Color] = [.blue, .green, .orange, .purple, .pink, .teal]
     
     public init() { }

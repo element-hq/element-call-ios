@@ -52,7 +52,7 @@ public final class ElementCallController {
     public private(set) var isTileStatsVisible = false
     
     /// The room the current call is in, for as long as there is one.
-    public private(set) var room: (any ElementCallRoomContext)?
+    public private(set) var room: (any ElementCallRoomContextProtocol)?
     
     /// The last failure worth telling the user about; the screen shows it once and clears it.
     public var errorMessage: String?
@@ -73,7 +73,7 @@ public final class ElementCallController {
     ///
     /// No longer decides whether minimizing uses the window — every call does — but it still
     /// decides whether *backgrounding* the app opens one by itself, unless the host opted audio
-    /// calls in through ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``.
+    /// calls in through ``ElementCallOptionsProtocol/isAutomaticPictureInPictureForAudioCallsEnabled``.
     public var hasVideo: Bool {
         call?.hasVideo ?? false
     }
@@ -90,23 +90,23 @@ public final class ElementCallController {
     
     /// Public so the view module can seed its style environment and read the tile-stats flag.
     public let style: ElementCallStyle
-    public let options: any ElementCallOptions
+    public let options: any ElementCallOptionsProtocol
     
     private let rtcService: MatrixRTCService
-    private let transport: any ElementCallMatrixTransport
-    private let system: any ElementCallSystemProviding
-    private let logger: (any ElementCallLogging)?
+    private let transport: any ElementCallMatrixTransportProtocol
+    private let system: any ElementCallSystemProvidingProtocol
+    private let logger: (any ElementCallLoggingProtocol)?
     private let actionsSubject = PassthroughSubject<ElementCallControllerAction, Never>()
     private var eventsTask: Task<Void, Never>?
     private var routeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     
     init(rtcService: MatrixRTCService,
-         transport: any ElementCallMatrixTransport,
-         system: any ElementCallSystemProviding,
-         options: any ElementCallOptions,
+         transport: any ElementCallMatrixTransportProtocol,
+         system: any ElementCallSystemProvidingProtocol,
+         options: any ElementCallOptionsProtocol,
          style: ElementCallStyle,
-         logger: (any ElementCallLogging)?) {
+         logger: (any ElementCallLoggingProtocol)?) {
         self.rtcService = rtcService
         self.transport = transport
         self.system = system
@@ -157,7 +157,7 @@ public final class ElementCallController {
     
     // MARK: - Lifecycle
     
-    public func startCall(_ callData: ElementCallData, room: any ElementCallRoomContext) {
+    public func startCall(_ callData: ElementCallData, room: any ElementCallRoomContextProtocol) {
         guard !isInCall else {
             log(.warning, "already in a call, ignoring start for \(room.roomID)")
             return
@@ -339,7 +339,7 @@ public final class ElementCallController {
     /// them.
     private var runTask: Task<Void, Never>?
     
-    private func runCall(_ callData: ElementCallData, room: any ElementCallRoomContext) async {
+    private func runCall(_ callData: ElementCallData, room: any ElementCallRoomContextProtocol) async {
         log(.info, "joining \(room.roomID)")
         guard let (session, transport) = await joinSession(for: callData, room: room) else { return }
         
@@ -365,7 +365,7 @@ public final class ElementCallController {
     
     /// Claims the system call, finds a transport and joins the session, which puts our membership out.
     private func joinSession(for callData: ElementCallData,
-                             room: any ElementCallRoomContext) async -> (MatrixRTCSession, MatrixRTCTransport)? {
+                             room: any ElementCallRoomContextProtocol) async -> (MatrixRTCSession, MatrixRTCTransport)? {
         // Claim the system call *before* our membership goes out: the incoming-call watcher reads
         // our own membership as "answered elsewhere" and would end the ringing call under us.
         // For an outgoing call this requests the start action; the system activates the audio session
@@ -422,7 +422,7 @@ public final class ElementCallController {
     private func publishMedia(on call: MatrixRTCCall,
                               session: MatrixRTCSession,
                               callData: ElementCallData,
-                              room: any ElementCallRoomContext) async {
+                              room: any ElementCallRoomContextProtocol) async {
         // Where nothing else owns the session, we do: the simulator, and an iOS app on macOS,
         // where the host's system-call port is inert because CallKit is unavailable. Runtime
         // rather than `#if`, because an iOS-on-Mac binary is indistinguishable from an iOS one at
@@ -508,7 +508,7 @@ public final class ElementCallController {
     
     /// Only when *starting* a call; joining one someone else started happens quietly. A direct chat
     /// rings, a group call is an invitation rather than a summons.
-    private func notify(for callData: ElementCallData, room: any ElementCallRoomContext) -> MatrixRTCNotify? {
+    private func notify(for callData: ElementCallData, room: any ElementCallRoomContextProtocol) -> MatrixRTCNotify? {
         guard callData.isStartingCall else { return nil }
         return MatrixRTCNotify(kind: room.isDirect ? .ring : .notification,
                                intent: callData.isAudioCall ? .audio : .video)
@@ -611,7 +611,7 @@ public final class ElementCallController {
     }
     
     /// Previews and tests only: shows a state without joining anything.
-    func setPreviewState(callData: ElementCallData, room: any ElementCallRoomContext, connection: ElementCallConnection) {
+    func setPreviewState(callData: ElementCallData, room: any ElementCallRoomContextProtocol, connection: ElementCallConnection) {
         self.callData = callData
         self.room = room
         self.connection = connection

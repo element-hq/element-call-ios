@@ -18,9 +18,9 @@ final nonisolated class MatrixRTCCommandSender: CommandSenderCallback, Sendable 
     /// matrix-rust-sdk's `sendStickyRaw` returns nothing, so there is no event ID to report.
     static let noEventID = ""
     
-    private let transport: ElementCallMatrixTransport
+    private let transport: ElementCallMatrixTransportProtocol
     
-    init(transport: ElementCallMatrixTransport) {
+    init(transport: ElementCallMatrixTransportProtocol) {
         self.transport = transport
     }
     

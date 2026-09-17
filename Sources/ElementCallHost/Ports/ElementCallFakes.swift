@@ -15,7 +15,7 @@ import Synchronization
 
 /// Answers every Matrix call with nothing. Enough for a controller that never joins, and the
 /// starting point for a test that scripts specific answers.
-public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransport {
+public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransportProtocol {
     public let userID: String
     public let deviceID: String
     public let transports: [MatrixRTCTransport]
@@ -83,7 +83,7 @@ public final nonisolated class ElementCallFakeTransport: ElementCallMatrixTransp
 
 /// Records what the call asked the system to do, and lets a test push events back.
 @MainActor
-public final class ElementCallFakeSystem: ElementCallSystemProviding {
+public final class ElementCallFakeSystem: ElementCallSystemProvidingProtocol {
     public enum Request: Sendable, Equatable {
         case start(roomID: String, displayName: String, isVideo: Bool)
         case connected(roomID: String)
@@ -123,7 +123,7 @@ public final class ElementCallFakeSystem: ElementCallSystemProviding {
 
 /// A fixed room, with publishers that never emit because nothing about it changes.
 @MainActor
-public final class ElementCallFakeRoom: ElementCallRoomContext {
+public final class ElementCallFakeRoom: ElementCallRoomContextProtocol {
     public let roomID: String
     public let displayName: String
     public let isDirect: Bool
@@ -153,7 +153,7 @@ public final class ElementCallFakeRoom: ElementCallRoomContext {
 }
 
 /// Keeps every line, so a test can assert on what was logged.
-public final nonisolated class ElementCallFakeLogger: ElementCallLogging {
+public final nonisolated class ElementCallFakeLogger: ElementCallLoggingProtocol {
     private let recorded = Mutex<[ElementCallLogRecord]>([])
     
     public init() { }
@@ -175,7 +175,7 @@ public final nonisolated class ElementCallFakeLogger: ElementCallLogging {
 public extension ElementCallController {
     /// A controller with faked dependencies, for previews and snapshot tests. Never joins anything.
     static func fake(connection: ElementCallConnection,
-                     room: any ElementCallRoomContext = ElementCallFakeRoom(),
+                     room: any ElementCallRoomContextProtocol = ElementCallFakeRoom(),
                      isAudioCall: Bool = false,
                      style: ElementCallStyle = .stock) -> ElementCallController {
         let transport = ElementCallFakeTransport()

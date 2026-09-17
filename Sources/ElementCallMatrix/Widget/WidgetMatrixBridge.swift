@@ -74,7 +74,7 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     private var state = [String: [String: MatrixRTCRoomStateEvent]]()
     private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation)]()
     private var toDeviceSubscribers = [UUID: AsyncStream<MatrixRTCToDeviceMessage>.Continuation]()
-    private let logger: (any ElementCallLogging)?
+    private let logger: (any ElementCallLoggingProtocol)?
     
     /// - Parameters:
     ///   - channel: the driver's handle (or a fake in tests).
@@ -84,7 +84,7 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
          channel: any WidgetDriverChannel,
          requestTimeout: Duration = .seconds(30),
          negotiationTimeout: Duration? = nil,
-         logger: (any ElementCallLogging)? = nil,
+         logger: (any ElementCallLoggingProtocol)? = nil,
          runDriver: @escaping @Sendable () async -> Void) {
         self.roomID = roomID
         self.widgetID = widgetID

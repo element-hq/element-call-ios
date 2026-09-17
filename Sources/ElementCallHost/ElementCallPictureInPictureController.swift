@@ -40,9 +40,9 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     private let actionsSubject = PassthroughSubject<ElementCallPictureInPictureAction, Never>()
     
     /// Set by the controller that owns this; nil until then, which only costs a few log lines.
-    var logger: (any ElementCallLogging)?
+    var logger: (any ElementCallLoggingProtocol)?
     
-    /// Mirrors ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``, set at bind.
+    /// Mirrors ``ElementCallOptionsProtocol/isAutomaticPictureInPictureForAudioCallsEnabled``, set at bind.
     var automaticStartIncludesAudioCalls = false
     
     var isActive: Bool {
@@ -121,7 +121,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     /// (subject to the system's "Start PiP Automatically" setting).
     ///
     /// An audio call only follows if the host asked for it through
-    /// ``ElementCallOptions/isAutomaticPictureInPictureForAudioCallsEnabled``: minimizing on
+    /// ``ElementCallOptionsProtocol/isAutomaticPictureInPictureForAudioCallsEnabled``: minimizing on
     /// purpose is one thing, but a window appearing on every app switch to show a still avatar is
     /// another, and CallKit's island already covers that case.
     private func observeAutomaticStart() {

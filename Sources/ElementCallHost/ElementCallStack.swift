@@ -23,13 +23,13 @@ public final class ElementCallStack {
     public let controller: ElementCallController
     
     private let rtcService: MatrixRTCService
-    private let logger: (any ElementCallLogging)?
+    private let logger: (any ElementCallLoggingProtocol)?
     
-    public init(transport: any ElementCallMatrixTransport,
-                system: any ElementCallSystemProviding,
-                options: any ElementCallOptions = ElementCallDefaultOptions(),
+    public init(transport: any ElementCallMatrixTransportProtocol,
+                system: any ElementCallSystemProvidingProtocol,
+                options: any ElementCallOptionsProtocol = ElementCallDefaultOptions(),
                 style: ElementCallStyle = .stock,
-                logger: (any ElementCallLogging)? = nil) {
+                logger: (any ElementCallLoggingProtocol)? = nil) {
         let rtcService = MatrixRTCService(transport: transport)
         self.rtcService = rtcService
         self.logger = logger
