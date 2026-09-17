@@ -177,6 +177,11 @@ public extension ElementCallController {
     static func fake(connection: ElementCallConnection,
                      room: any ElementCallRoomContextProtocol = ElementCallFakeRoom(),
                      isAudioCall: Bool = false,
+                     // Placed after `isAudioCall` so no existing positional meaning shifts. A
+                     // preview must leave this nil, for the reason `ElementCallPreviewFixtures`
+                     // gives: a duration renders as a live counting timer, so any snapshot of one
+                     // differs on every run. The example harness is not snapshotted, so it may.
+                     connectedAt: Date? = nil,
                      // Everything on, like the preview fixtures: a fake host is a host that
                      // supports the lot, so a preview covers the fullest chrome. Pass an explicit
                      // value to exercise a gate.
@@ -192,7 +197,8 @@ public extension ElementCallController {
                                                logger: nil)
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
                                    room: room,
-                                   connection: connection)
+                                   connection: connection,
+                                   connectedAt: connectedAt)
         return controller
     }
 }

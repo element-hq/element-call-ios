@@ -131,6 +131,11 @@ struct ElementCallView: View {
             }
             .buttonStyle(ElementCallRoundButtonStyle())
             .accessibilityLabel(style.strings.back)
+            // The same omission as the one fixed for `.more` below, and for the same reason: the
+            // top bar does not go through `ElementCallControlsView.controlButton`, which is the
+            // only caller of `control(for:)`, so a constant that exists and is pinned by name in
+            // the identifier tests still reached no view and nothing could tap this button.
+            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimize)
             
             Spacer()
             
