@@ -153,14 +153,21 @@ struct ElementCallView: View {
             Menu {
                 // Absent rather than inert when developer mode is off. The toggle was always shown
                 // and the controller silently refused the tap, which looked like a broken toggle.
+                //
+                // A nested Menu is a submenu, which keeps the diagnostics one level down and leaves
+                // the top level to things a user might actually want. The Toggle inside renders as
+                // a checked menu item, so the checkmark is the state: there is no need to say
+                // "show/hide" in the label, and a plain Button would lose that.
                 if context.viewState.isDeveloperModeEnabled {
-                    Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
+                    Menu("Developer Options") {
+                        Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
+                    }
                     Divider()
                 }
                 // A disabled button rather than a Section header or a bare Text: an empty Section
                 // is dropped by SwiftUI, and a Menu does not render loose Text. Disabled gives a
                 // dimmed, unselectable row, which is what this is.
-                Button("Element Call \(ElementCallVersion.current)") { }
+                Button("version: \(ElementCallVersion.current)") { }
                     .disabled(true)
             } label: {
                 style.icons.icon(.overflow)

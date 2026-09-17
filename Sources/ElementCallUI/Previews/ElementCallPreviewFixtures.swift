@@ -42,6 +42,18 @@ public enum ElementCallPreviewFixtures {
                                stats: stats)
     }
     
+    /// What the stats overlay looks like on a tile that is receiving properly, in the shape
+    /// `ElementCallScreenViewModel.describe(...)` produces. Illustrative numbers: there is no call
+    /// behind a fixture, so the harness cannot have real ones.
+    public static let sampleStats = """
+    1280x720 @ 30 fps
+    asked auto
+    e2ee: ok
+    pkts 4821 lost 3
+    frames 4802 dropped 19
+    concealed 0%
+    """
+    
     public static let alice = tile("Alice", isLocal: true)
     public static let bob = tile("Bob", isMuted: true)
     public static let carol = tile("Carol", isSpeaking: true)

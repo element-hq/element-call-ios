@@ -54,11 +54,12 @@ when the window binds, developer mode when a toggle is tapped — so a host back
 settings should know the values are captured. If that is a problem for you, say so and the stack can
 gain a setter.
 
-**Developer mode gates the stats overlay, and hides it.** With `isDeveloperModeEnabled` off the
-"Tile stats" toggle is absent from the overflow menu rather than present and inert — previously it
-was always shown and the tap was silently refused. Point this at whatever reveals developer surface
-in your app, not at the flag that enables calls: the overlay is raw RTP counters in 9pt monospace and
-is not meant for ordinary users.
+**Developer mode gates the stats overlay, and hides it.** The overflow menu now holds a
+**Developer Options** submenu, and `isDeveloperModeEnabled` decides whether that submenu exists at
+all — previously the "Tile stats" toggle was shown unconditionally and the tap was silently refused.
+The toggle inside carries a checkmark, so reopening the menu says whether the overlay is on. Point
+this at whatever reveals developer surface in your app, not at the flag that enables calls: the
+overlay is raw RTP counters in 9pt monospace and is not meant for ordinary users.
 
 **The audio test tone is gone.** The 440 Hz sine that could be injected into the microphone from the
 overflow menu, and the generator behind it, are removed outright — it was an early bring-up aid and
@@ -80,9 +81,9 @@ is never gated either, so one already in flight can always be ended.
 The screen share entry is also **gone from the overflow menu**, where it duplicated the control bar
 button exactly. The bar is where a user reaches for it; the menu is now diagnostics only.
 
-**The call screen shows the package version**, at the foot of the overflow menu, so a bug report can
-quote it — readable as `ElementCallVersion.current` if a host wants it elsewhere. It is stamped by
-the release, so it is exact for any host that resolves a tag.
+**The call screen shows the package version**, as a disabled `version: <semver>` row at the foot of
+the overflow menu, so a bug report can quote it — readable as `ElementCallVersion.current` if a host
+wants it elsewhere. It is stamped by the release, so it is exact for any host that resolves a tag.
 
 ## 0.1.0-rc.5 - 2026-09-16
 

@@ -109,7 +109,7 @@ struct ElementCallExampleScreen: View {
         }
         .onAppear {
             guard context == nil else { return }
-            context = .preview(state: arrangement.state)
+            context = .harness(state: arrangement.state)
         }
     }
 }

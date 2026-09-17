@@ -92,6 +92,28 @@ public nonisolated struct ElementCallScreenViewState: Sendable {
     }
 }
 
+extension ElementCallTile {
+    /// A copy with a different stats string. The overlay draws when a tile carries one, so turning
+    /// it on means rewriting the tiles rather than setting a flag; a live screen rebuilds them from
+    /// receive statistics on every refresh, and the harness has to do the same by hand.
+    func withStats(_ stats: String?) -> ElementCallTile {
+        ElementCallTile(memberID: memberID,
+                        userID: userID,
+                        displayName: displayName,
+                        avatarURL: avatarURL,
+                        isLocal: isLocal,
+                        isMicrophoneMuted: isMicrophoneMuted,
+                        hasMicrophone: hasMicrophone,
+                        hasVideo: hasVideo,
+                        isScreenSharing: isScreenSharing,
+                        isSpeaking: isSpeaking,
+                        hasHandRaised: hasHandRaised,
+                        isFrontCamera: isFrontCamera,
+                        audioLevel: audioLevel,
+                        stats: stats)
+    }
+}
+
 public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleMicrophone
     case toggleCamera

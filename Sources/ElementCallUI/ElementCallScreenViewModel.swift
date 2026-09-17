@@ -48,6 +48,48 @@ public final class ElementCallScreenContext {
         ElementCallScreenContext(viewState: state, style: style)
     }
     
+    /// Like ``preview(state:style:)``, but with taps wired to the state they would change.
+    ///
+    /// The previews want a still: one fixed state and no behaviour. The example harness wants the
+    /// menu and the control bar to answer, and it has no view model to route through — a controller
+    /// produces no tiles until it has actually joined, so a harness built on one could only show a
+    /// spinner. So the transitions a harness can honestly fake are applied to the view state here,
+    /// which is also the only place they can be: `handler` is fileprivate on purpose, so that a
+    /// host cannot reach in and drive the screen behind its own view model's back.
+    ///
+    /// Only the reversible ones. Minimize, hang up and dismiss belong to a host and there is
+    /// nothing here to return to, so they stay inert rather than stranding the harness on a dead
+    /// screen.
+    public static func harness(state: ElementCallScreenViewState,
+                               style: ElementCallStyle = .stock) -> ElementCallScreenContext {
+        let context = ElementCallScreenContext(viewState: state, style: style)
+        // Weakly, or the context owns a closure that owns the context.
+        context.handler = { [weak context] action in
+            guard let context else { return }
+            switch action {
+            case .toggleTileStats:
+                let isVisible = !context.viewState.isTileStatsVisible
+                context.viewState.isTileStatsVisible = isVisible
+                context.viewState.tiles = context.viewState.tiles.map {
+                    $0.withStats(isVisible ? ElementCallPreviewFixtures.sampleStats : nil)
+                }
+            case .toggleMicrophone:
+                context.viewState.isMicrophoneMuted.toggle()
+            case .toggleCamera:
+                context.viewState.isCameraEnabled.toggle()
+            case .switchCamera:
+                context.viewState.isFrontCamera.toggle()
+            case .toggleScreenShare:
+                context.viewState.isScreenSharing.toggle()
+            case .toggleLoudspeaker:
+                context.viewState.isLoudspeaker.toggle()
+            case .minimize, .hangUp, .dismiss:
+                break
+            }
+        }
+        return context
+    }
+    
     public func send(viewAction: ElementCallScreenViewAction) {
         handler?(viewAction)
     }
