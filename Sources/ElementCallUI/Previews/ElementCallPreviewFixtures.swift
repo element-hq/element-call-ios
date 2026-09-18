@@ -17,28 +17,35 @@ import Foundation
 /// initialiser is internal, so there is no other way to make one from outside.
 public enum ElementCallPreviewFixtures {
     public static func tile(_ name: String,
+                            kind: MatrixRTCStreamKind = .camera,
                             isLocal: Bool = false,
                             isMuted: Bool = false,
-                            hasMicrophone: Bool = true,
                             hasVideo: Bool = false,
-                            isScreenSharing: Bool = false,
+                            isHero: Bool = false,
                             isSpeaking: Bool = false,
                             hasHandRaised: Bool = false,
                             stats: String? = nil) -> ElementCallTile {
         let user = "@\(name.lowercased()):example.com"
-        return ElementCallTile(memberID: "\(user):DEVICE",
+        return ElementCallTile(id: MatrixRTCTileID(memberID: "\(user):DEVICE", kind: kind),
                                userID: user,
                                displayName: isLocal ? "You" : name,
                                avatarURL: nil,
                                isLocal: isLocal,
                                isMicrophoneMuted: isMuted,
-                               hasMicrophone: hasMicrophone,
                                hasVideo: hasVideo,
-                               isScreenSharing: isScreenSharing,
                                isSpeaking: isSpeaking,
                                hasHandRaised: hasHandRaised,
-                               isFrontCamera: isLocal,
+                               isHero: isHero,
                                stats: stats)
+    }
+    
+    /// A member's screen, which is a tile of its own beside their camera rather than a state of it.
+    ///
+    /// Separate from ``tile(_:kind:isLocal:isMuted:hasVideo:isHero:isSpeaking:hasHandRaised:stats:)``
+    /// so a fixture cannot build one and forget that it shares a member ID with that member's
+    /// camera. That sharing is the whole of what changed, and nothing in the suite covered it.
+    public static func share(_ name: String, isHero: Bool = true) -> ElementCallTile {
+        tile(name, kind: .screenShare, hasVideo: true, isHero: isHero)
     }
     
     /// What the stats overlay looks like on a tile that is receiving properly, in the shape
@@ -57,12 +64,19 @@ public enum ElementCallPreviewFixtures {
     public static let bob = tile("Bob", isMuted: true)
     public static let carol = tile("Carol", isSpeaking: true)
     
-    public static let group = [alice, bob, carol, tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
+    /// In the model's order, which is what the stage renders: Carol is speaking, so she is the head
+    /// of the ranking and so the spotlight. Ourselves at index 0, where the view model splices us.
+    public static let group = [alice, carol, bob, tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
+    
+    /// The one fixture with a member on two tiles: Frank's screen is the hero and his camera is
+    /// still in the strip. Every member-keyed thing that survived the migration is wrong on this
+    /// array — the accessibility identifier, the released set, the `ForEach` identity, the Picture
+    /// in Picture source view.
+    public static let sharingGroup = [alice, share("Frank"), tile("Frank", hasVideo: true), carol, bob, tile("Dan")]
     
     /// No call object exists in a preview, so `hasVideo` here only changes the badges, not the
     /// picture: a tile with nothing to draw falls back to its avatar.
     public static func connected(tiles: [ElementCallTile],
-                                 spotlight: String? = nil,
                                  isDirect: Bool = false,
                                  isMicrophoneMuted: Bool = false,
                                  isScreenSharing: Bool = false,
@@ -76,7 +90,6 @@ public enum ElementCallPreviewFixtures {
         state.connectedAt = nil
         state.memberCount = tiles.count
         state.tiles = tiles
-        state.spotlightMemberID = spotlight
         state.isMicrophoneMuted = isMicrophoneMuted
         state.isScreenSharing = isScreenSharing
         state.isTileStatsVisible = isTileStatsVisible

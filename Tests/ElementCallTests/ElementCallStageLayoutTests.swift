@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import ElementCallKit
 @testable import ElementCallUI
 import Foundation
 import Testing
@@ -43,28 +44,41 @@ struct ElementCallStageLayoutTests {
     func everyArrangementAnchorsThePictureInPictureSource() {
         // Alone in a group call is the case that failed: the spotlight is never ourselves, so there
         // was no spotlight tile to hang it on.
-        let alone = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
-        #expect(alone.pictureInPictureMemberID == local.memberID)
+        let alone = ElementCallStageLayout.compute(tiles: [local], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(alone.pictureInPictureTileID == local.id)
         
         // And with others present but nobody spotlit, which the same nil would have covered.
-        let unspotlit = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
-        #expect(unspotlit.pictureInPictureMemberID != nil)
-        #expect(alone.placements.contains { $0.tile.memberID == alone.pictureInPictureMemberID })
-        #expect(unspotlit.placements.contains { $0.tile.memberID == unspotlit.pictureInPictureMemberID })
+        let unspotlit = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(unspotlit.pictureInPictureTileID != nil)
+        #expect(alone.placements.contains { $0.tile.id == alone.pictureInPictureTileID })
+        #expect(unspotlit.placements.contains { $0.tile.id == unspotlit.pictureInPictureTileID })
     }
     
     /// The spotlight still wins when there is one: the window continues the picture you were
     /// watching, and the shrink animates from that tile's frame rather than from an arbitrary cell.
     @Test
     func theSpotlightIsPreferredAsThePictureInPictureAnchor() {
-        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)
-        #expect(layout.pictureInPictureMemberID == bob.memberID)
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: bob.id, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(layout.pictureInPictureTileID == bob.id)
     }
     
-    static func tile(_ name: String, isLocal: Bool = false) -> ElementCallTile {
-        ElementCallTile(memberID: "@\(name):example.com:DEVICE", userID: "@\(name):example.com", displayName: name,
-                        avatarURL: nil, isLocal: isLocal, isMicrophoneMuted: false, hasMicrophone: true, hasVideo: false, isScreenSharing: false,
-                        isSpeaking: false, hasHandRaised: false, isFrontCamera: isLocal, stats: nil)
+    static func tile(_ name: String, kind: MatrixRTCStreamKind = .camera, isLocal: Bool = false, isHero: Bool = false) -> ElementCallTile {
+        ElementCallTile(id: MatrixRTCTileID(memberID: "@\(name):example.com:DEVICE", kind: kind),
+                        userID: "@\(name):example.com",
+                        displayName: name,
+                        avatarURL: nil,
+                        isLocal: isLocal,
+                        isMicrophoneMuted: false,
+                        hasVideo: kind == .screenShare,
+                        isSpeaking: false,
+                        hasHandRaised: false,
+                        isHero: isHero,
+                        stats: nil)
+    }
+    
+    /// A member's screen: the same member ID as their camera tile, a different stream.
+    static func share(_ name: String) -> ElementCallTile {
+        tile(name, kind: .screenShare, isHero: true)
     }
     
     func placement(_ tile: ElementCallTile, in layout: ElementCallStageLayout) throws -> ElementCallTilePlacement {
@@ -73,7 +87,7 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func aloneInAGroupCallOurTileStandsInTheSpotlightSlot() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
         let only = try placement(local, in: layout)
         #expect(only.frame == CGRect(x: margin, y: 0, width: width - 2 * margin, height: safeHeight * 0.4))
         #expect(only.appearance == .card)
@@ -84,10 +98,10 @@ struct ElementCallStageLayoutTests {
         // Was pinned as nil, which pinned a bug: with no anchor the Picture in Picture source view
         // is mounted nowhere, and minimizing while alone failed outright. See
         // `everyArrangementAnchorsThePictureInPictureSource`.
-        #expect(layout.pictureInPictureMemberID == local.memberID)
+        #expect(layout.pictureInPictureTileID == local.id)
         
         // The first person to arrive takes the spotlight and we slide down into the strip.
-        let joined = ElementCallStageLayout.compute(tiles: [local, bob], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)
+        let joined = ElementCallStageLayout.compute(tiles: [local, bob], spotlightID: bob.id, layout: .group, currentPage: 0, metrics: metrics)
         let spotlight = try placement(bob, in: joined)
         let ours = try placement(local, in: joined)
         #expect(spotlight.frame == only.frame)
@@ -97,12 +111,12 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func spotlightOnTopAndTheOthersInTwoColumnsBelow() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: bob.id, layout: .group, currentPage: 0, metrics: metrics)
         let spotlight = try placement(bob, in: layout)
         #expect(spotlight.isSpotlight)
         #expect(spotlight.frame == CGRect(x: margin, y: 0, width: width - 2 * margin, height: safeHeight * 0.4))
         #expect(spotlight.page == nil)
-        #expect(layout.pictureInPictureMemberID == bob.memberID)
+        #expect(layout.pictureInPictureTileID == bob.id)
         
         let first = try placement(local, in: layout)
         let second = try placement(carol, in: layout)
@@ -122,7 +136,7 @@ struct ElementCallStageLayoutTests {
         // 700 - 84 - 12 = 604 above the controls; a spotlight leaves 604 - 292 = 312, room for two
         // 145 pt rows of two, so the fifth strip tile starts a second page.
         let others = (0..<7).map { Self.tile("m\($0)") }
-        let layout = ElementCallStageLayout.compute(tiles: [local] + others, spotlightMemberID: local.memberID, layout: .group, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [local] + others, spotlightID: local.id, layout: .group, currentPage: 0, metrics: metrics)
         #expect(layout.pageCount == 2)
         let onSecondPage = try placement(others[4], in: layout)
         #expect(onSecondPage.page == 1)
@@ -133,7 +147,7 @@ struct ElementCallStageLayoutTests {
         #expect(onFirstPage.frame.minY > onSecondPage.frame.minY)
         #expect(layout.pageIndicatorCenter?.x == width / 2)
         
-        let turned = ElementCallStageLayout.compute(tiles: [local] + others, spotlightMemberID: local.memberID, layout: .group, currentPage: 1, metrics: metrics)
+        let turned = ElementCallStageLayout.compute(tiles: [local] + others, spotlightID: local.id, layout: .group, currentPage: 1, metrics: metrics)
         let lastMoved = try placement(others[6], in: turned)
         let firstMoved = try placement(others[0], in: turned)
         #expect(lastMoved.frame.minX == margin)
@@ -145,8 +159,8 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func promotionKeepsEveryTileAndMovesTwo() throws {
-        let before = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)
-        let after = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: carol.memberID, layout: .group, currentPage: 0, metrics: metrics)
+        let before = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: bob.id, layout: .group, currentPage: 0, metrics: metrics)
+        let after = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: carol.id, layout: .group, currentPage: 0, metrics: metrics)
         #expect(Set(before.placements.map(\.id)) == Set(after.placements.map(\.id)))
         let (bobBefore, carolBefore, localBefore) = try (placement(bob, in: before), placement(carol, in: before), placement(local, in: before))
         let (bobAfter, carolAfter, localAfter) = try (placement(bob, in: after), placement(carol, in: after), placement(local, in: after))
@@ -157,20 +171,20 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func aloneInADirectCallOurCameraRunsEdgeToEdge() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .oneToOne, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightID: nil, layout: .oneToOne, currentPage: 0, metrics: metrics)
         let only = try placement(local, in: layout)
         #expect(only.frame == CGRect(origin: .zero, size: metrics.area))
         #expect(only.appearance == .fullBleed)
-        #expect(layout.pictureInPictureMemberID == local.memberID)
+        #expect(layout.pictureInPictureTileID == local.id)
     }
     
     @Test
     func theOtherPersonTakesTheScreenAndWeBecomeAThumbnailClearOfTheControls() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local, bob], spotlightMemberID: nil, layout: .oneToOne, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob], spotlightID: nil, layout: .oneToOne, currentPage: 0, metrics: metrics)
         let remote = try placement(bob, in: layout)
         #expect(remote.frame == CGRect(origin: .zero, size: metrics.area))
         #expect(remote.appearance == .fullBleed)
-        #expect(layout.pictureInPictureMemberID == bob.memberID)
+        #expect(layout.pictureInPictureTileID == bob.id)
         
         let thumbnail = try placement(local, in: layout)
         #expect(thumbnail.appearance == .thumbnail)
@@ -198,7 +212,7 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func noTilesNoPlacements() {
-        let layout = ElementCallStageLayout.compute(tiles: [], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        let layout = ElementCallStageLayout.compute(tiles: [], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
         #expect(layout.placements.isEmpty)
         #expect(layout.pageCount == 0)
     }
@@ -210,7 +224,7 @@ struct ElementCallStageLayoutTests {
     @Test
     func landscapeGivesTheSpotlightTheWidthAndQueuesTheRestBesideIt() throws {
         let tiles = [local] + Self.group
-        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: bob.id, layout: .group, currentPage: 0, metrics: landscape)
         let spotlight = try placement(bob, in: layout)
         
         // Most of the width, all of the height between the top and the home indicator. Portrait's
@@ -237,7 +251,7 @@ struct ElementCallStageLayoutTests {
     func landscapeKeepsEveryTileOnScreenAndClearOfTheChrome() {
         let tiles = [local] + Self.group
         for page in 0..<4 {
-            let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: page, metrics: landscape)
+            let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: bob.id, layout: .group, currentPage: page, metrics: landscape)
             // Only the page in view has to be on screen; the others are parked a stage away, which
             // is what makes the swipe a translation rather than a rebuild.
             for placement in layout.placements where placement.page == nil || placement.page == page {
@@ -253,7 +267,7 @@ struct ElementCallStageLayoutTests {
     @Test
     func landscapePagesUpTheColumnRatherThanSideways() throws {
         let tiles = [local] + Self.group
-        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: bob.id, layout: .group, currentPage: 0, metrics: landscape)
         
         // Two cells fit the column, so seven others need four pages.
         #expect(layout.pageCount == 4)
@@ -271,7 +285,7 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func landscapeCardsClearTheSensorHousingAndTheControlsRail() {
-        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightID: bob.id, layout: .group, currentPage: 0, metrics: landscape)
         let onScreen = layout.placements.filter { $0.page == nil || $0.page == 0 }
         // 59 pt of housing plus the 16 pt margin on one side; 84 pt of rail plus the margin on the other.
         #expect(onScreen.map(\.frame.minX).min() == 75)
@@ -285,7 +299,7 @@ struct ElementCallStageLayoutTests {
     @Test
     func aShortLandscapeStageNarrowsTheColumnRatherThanPagingEveryTile() throws {
         let tight = ElementCallStageLayout.Metrics(area: CGSize(width: 812, height: 300), bottomInset: 1, controlsClearance: 84)
-        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: tight)
+        let layout = ElementCallStageLayout.compute(tiles: [local] + Self.group, spotlightID: bob.id, layout: .group, currentPage: 0, metrics: tight)
         
         let onFirstPage = layout.placements.filter { $0.page == 0 }
         #expect(onFirstPage.count == 2)
@@ -299,7 +313,7 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func landscapeAloneGivesTheOneTileTheWholeStage() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: [local], spotlightID: nil, layout: .group, currentPage: 0, metrics: landscape)
         let only = try placement(local, in: layout)
         // Nobody to sit beside, so it takes the column's room too rather than leaving a gap.
         #expect(only.frame == landscapeCards)
@@ -308,7 +322,7 @@ struct ElementCallStageLayoutTests {
     
     @Test
     func landscapeThumbnailDodgesTheRailInsteadOfTheBottomBar() throws {
-        let layout = ElementCallStageLayout.compute(tiles: [local, bob], spotlightMemberID: nil, layout: .oneToOne, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob], spotlightID: nil, layout: .oneToOne, currentPage: 0, metrics: landscape)
         let main = try placement(bob, in: layout)
         let thumbnail = try placement(local, in: layout)
         
@@ -344,7 +358,7 @@ struct ElementCallStageLayoutTests {
         // Thirty people, two to a landscape page: the point of the exercise is that what we keep
         // does not grow with the call.
         let tiles = (0..<30).map { Self.tile("member\($0)") }
-        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightMemberID: tiles[0].memberID, layout: .group, currentPage: 0, metrics: landscape)
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: tiles[0].id, layout: .group, currentPage: 0, metrics: landscape)
         let states = layout.placements.map { ElementCallTileVisibility.forPage($0.page, currentPage: 0, livePages: [0]) }
         #expect(states.filter { $0 == .live }.count == 3)
         #expect(states.filter { $0 == .paused }.count == 2)
@@ -357,8 +371,8 @@ struct ElementCallStageLayoutTests {
     func fullScreenGivesOneTileTheWholeAreaAndHidesTheRest() throws {
         let tiles = (0..<30).map { Self.tile("member\($0)") }
         let layout = ElementCallStageLayout.compute(tiles: tiles,
-                                                    spotlightMemberID: tiles[0].memberID,
-                                                    fullscreenMemberID: tiles[7].memberID,
+                                                    spotlightID: tiles[0].id,
+                                                    fullscreenID: tiles[7].id,
                                                     layout: .group,
                                                     currentPage: 0,
                                                     metrics: metrics)
@@ -372,14 +386,14 @@ struct ElementCallStageLayoutTests {
         #expect(only.page == nil)
         #expect(layout.pageCount == 1)
         // The window continues the picture you were actually watching.
-        #expect(layout.pictureInPictureMemberID == tiles[7].memberID)
+        #expect(layout.pictureInPictureTileID == tiles[7].id)
         
         // The twenty-nine nobody is looking at. Named rather than simply dropped: the stage derives
         // what it releases from the placements, so a single placement would otherwise release
         // nobody at the exact moment there is nobody left to watch.
-        #expect(layout.hiddenMemberIDs.count == 29)
-        #expect(!layout.hiddenMemberIDs.contains(tiles[7].memberID))
-        #expect(layout.hiddenMemberIDs.contains(tiles[0].memberID))
+        #expect(layout.hiddenTileIDs.count == 29)
+        #expect(!layout.hiddenTileIDs.contains(tiles[7].id))
+        #expect(layout.hiddenTileIDs.contains(tiles[0].id))
     }
     
     /// The tiles full screen replaces do not vanish, they animate out, and a leaving view keeps its
@@ -392,7 +406,7 @@ struct ElementCallStageLayoutTests {
         let everyOtherZIndex = [ElementCallLayout.group, .oneToOne].flatMap { layout in
             [metrics, landscape].flatMap { metrics in
                 ElementCallStageLayout.compute(tiles: tiles,
-                                               spotlightMemberID: bob.memberID,
+                                               spotlightID: bob.id,
                                                layout: layout,
                                                currentPage: 0,
                                                metrics: metrics).placements.map(\.zIndex)
@@ -402,8 +416,8 @@ struct ElementCallStageLayoutTests {
         #expect(ElementCallStageLayout.fullscreenZIndex > highest)
         
         let fullScreen = ElementCallStageLayout.compute(tiles: tiles,
-                                                        spotlightMemberID: bob.memberID,
-                                                        fullscreenMemberID: carol.memberID,
+                                                        spotlightID: bob.id,
+                                                        fullscreenID: carol.id,
                                                         layout: .group,
                                                         currentPage: 0,
                                                         metrics: metrics)
@@ -415,26 +429,146 @@ struct ElementCallStageLayoutTests {
     @Test
     func fullScreenOnAMemberWhoHasLeftFallsBackToTheOrdinaryLayout() throws {
         let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol],
-                                                    spotlightMemberID: bob.memberID,
-                                                    fullscreenMemberID: "@ghost:example.com:DEVICE",
+                                                    spotlightID: bob.id,
+                                                    fullscreenID: MatrixRTCTileID(memberID: "@ghost:example.com:DEVICE"),
                                                     layout: .group,
                                                     currentPage: 0,
                                                     metrics: metrics)
         #expect(layout.placements.count == 3)
-        #expect(layout.hiddenMemberIDs.isEmpty)
+        #expect(layout.hiddenTileIDs.isEmpty)
         #expect(try placement(bob, in: layout).isSpotlight)
     }
     
     @Test
     func fullScreenWorksInAOneToOneCallToo() {
         let layout = ElementCallStageLayout.compute(tiles: [local, bob],
-                                                    spotlightMemberID: nil,
-                                                    fullscreenMemberID: local.memberID,
+                                                    spotlightID: nil,
+                                                    fullscreenID: local.id,
                                                     layout: .oneToOne,
                                                     currentPage: 0,
                                                     metrics: metrics)
         #expect(layout.placements.count == 1)
         #expect(layout.placements.first?.tile.memberID == local.memberID)
-        #expect(layout.hiddenMemberIDs == [bob.memberID])
+        #expect(layout.hiddenTileIDs == [bob.id])
+    }
+
+    // MARK: - A member on two tiles
+    
+    /// The case no fixture in this file had before, and the reason several member-keyed assumptions
+    /// were bugs waiting to happen: one person, two tiles, drawn at once.
+    @Test
+    func aSharerIsTwoTilesAndOnlyTheirScreenTakesTheSpotlight() throws {
+        let share = Self.share("bob")
+        let tiles = [local, share, bob, carol]
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: share.id, layout: .group, currentPage: 0, metrics: metrics)
+        
+        // Two placements carry Bob's member ID and they are different tiles. A `ForEach` keyed on
+        // the member would have collapsed them into one view.
+        let bobs = layout.placements.filter { $0.tile.memberID == bob.memberID }
+        #expect(bobs.count == 2)
+        #expect(Set(layout.placements.map(\.id)).count == layout.placements.count)
+        
+        #expect(try placement(share, in: layout).isSpotlight)
+        let camera = try placement(bob, in: layout)
+        #expect(!camera.isSpotlight)
+        #expect(camera.page == 0)
+    }
+    
+    /// R16: a tile's identity survives the things that happen around it. A member's camera tile is
+    /// the same tile before, during and after their screen share — which is what lets the stage
+    /// animate the share appearing beside it rather than rebuilding the pair.
+    @Test
+    func aCameraTileKeepsItsIdentityWhenAShareStartsAndStops() throws {
+        let share = Self.share("bob")
+        let before = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        let during = ElementCallStageLayout.compute(tiles: [local, share, bob, carol], spotlightID: share.id, layout: .group, currentPage: 0, metrics: metrics)
+        let after = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        for layout in [before, during, after] {
+            #expect(try placement(bob, in: layout).id == bob.id)
+        }
+        #expect(Set(after.placements.map(\.id)) == Set(before.placements.map(\.id)))
+    }
+    
+    /// **The invariant the release path rests on.** The stage decides what to stop asking the SFU
+    /// for by taking the complement of what it draws, so a tile that is neither placed nor named
+    /// hidden is a subscription nobody ever closes. It held by accident while a member was one tile;
+    /// with two it has to hold on purpose.
+    @Test
+    func everyTileIsEitherPlacedOrNamedHidden() {
+        let share = Self.share("bob")
+        let tiles = [local, share, bob, carol] + (0..<9).map { Self.tile("m\($0)") }
+        let arrangements = [ElementCallStageLayout.compute(tiles: tiles, spotlightID: share.id, layout: .group, currentPage: 0, metrics: metrics),
+                            ElementCallStageLayout.compute(tiles: tiles, spotlightID: share.id, layout: .group, currentPage: 1, metrics: metrics),
+                            ElementCallStageLayout.compute(tiles: tiles, spotlightID: share.id, fullscreenID: share.id, layout: .group, currentPage: 0, metrics: metrics)]
+        for layout in arrangements {
+            let accounted = Set(layout.placements.map(\.id)).union(layout.hiddenTileIDs)
+            #expect(accounted == Set(tiles.map(\.id)))
+        }
+        // One-to-one draws exactly the two tiles it is given, so nothing is left unaccounted there
+        // either — and it is the one arrangement that ignores everyone else rather than hiding them.
+        let direct = ElementCallStageLayout.compute(tiles: [local, bob], spotlightID: nil, layout: .oneToOne, currentPage: 0, metrics: metrics)
+        #expect(Set(direct.placements.map(\.id)).union(direct.hiddenTileIDs) == Set([local.id, bob.id]))
+    }
+    
+    /// Going full screen on a share must hide its owner's camera like anybody else's, rather than
+    /// treating "this member is on screen" as an answer. They are two tiles and only one is drawn.
+    @Test
+    func fullScreenOnAShareHidesItsOwnersCameraToo() {
+        let share = Self.share("bob")
+        let layout = ElementCallStageLayout.compute(tiles: [local, share, bob, carol],
+                                                    spotlightID: share.id,
+                                                    fullscreenID: share.id,
+                                                    layout: .group,
+                                                    currentPage: 0,
+                                                    metrics: metrics)
+        #expect(layout.placements.count == 1)
+        #expect(layout.hiddenTileIDs.contains(bob.id))
+        #expect(!layout.hiddenTileIDs.contains(share.id))
+    }
+    
+    // MARK: - The order is the ranking
+    
+    /// The model ranks and damps; the stage renders what it is given. A sort here would fight that
+    /// damping at a different period, so this pins that the strip is the ranking with the spotlight
+    /// taken out of it, in order, rather than anything the stage decided for itself.
+    @Test
+    func theStripKeepsTheModelsOrder() {
+        let tiles = [local, carol, bob] + (0..<5).map { Self.tile("m\($0)") }
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: carol.id, layout: .group, currentPage: 0, metrics: metrics)
+        let strip = layout.placements.filter { $0.page != nil }
+            .sorted { ($0.page ?? 0, $0.frame.minY, $0.frame.minX) < ($1.page ?? 0, $1.frame.minY, $1.frame.minX) }
+        #expect(strip.map(\.id) == tiles.filter { $0.id != carol.id }.map(\.id))
+    }
+    
+    /// Taking the spotlight out of the strip makes a strip index the rank index shifted by one — and
+    /// only when there is a spotlight, which since a share always marks a hero is now most of the
+    /// time. Nothing here maps a page back to a rank, so this is a trap rather than a bug: it is
+    /// pinned so that whoever translates "page N" into a rank range for the model's detail window
+    /// finds it written down.
+    @Test
+    func removingTheSpotlightFromTheStripShiftsEveryRankByOne() throws {
+        let tiles = [local, carol, bob] + (0..<5).map { Self.tile("m\($0)") }
+        let withSpotlight = ElementCallStageLayout.compute(tiles: tiles, spotlightID: carol.id, layout: .group, currentPage: 0, metrics: metrics)
+        let without = ElementCallStageLayout.compute(tiles: tiles, spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        // Bob is rank 2. With the spotlight removed from the strip he sits at strip index 1.
+        let strip = { (layout: ElementCallStageLayout) in
+            layout.placements.filter { $0.page != nil }
+                .sorted { ($0.page ?? 0, $0.frame.minY, $0.frame.minX) < ($1.page ?? 0, $1.frame.minY, $1.frame.minX) }
+                .map(\.id)
+        }
+        #expect(strip(withSpotlight).firstIndex(of: bob.id) == 1)
+        #expect(strip(without).firstIndex(of: bob.id) == 2)
+    }
+    
+    /// Nothing in either repository had a fixture past eight tiles, and the layout is a pure
+    /// function, so a large call is cheap to pin and expensive to discover the hard way.
+    @Test
+    func twoHundredTilesPageWithoutLosingAnyOfThem() {
+        let tiles = [local] + (0..<199).map { Self.tile("m\($0)") }
+        let layout = ElementCallStageLayout.compute(tiles: tiles, spotlightID: tiles[1].id, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(Set(layout.placements.map(\.id)).count == tiles.count)
+        #expect(layout.pageCount > 1)
+        // Everything off the current page is released rather than drawn, which is the whole point.
+        #expect(layout.placements.filter { $0.page == 0 }.count < 10)
     }
 }

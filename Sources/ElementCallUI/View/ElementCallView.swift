@@ -96,11 +96,12 @@ struct ElementCallView: View {
             setFullscreen(nil)
         }
         .onChange(of: context.viewState.tiles) { _, tiles in
-            // The person you were watching can leave. The arrangement falls back on its own, but the
+            // The tile you were watching can go. The arrangement falls back on its own, but the
             // screen would go on believing it was full screen: top bar hidden, chrome hidden, and
-            // nothing left on screen that brings either back.
-            guard let memberID = context.fullscreenMemberID,
-                  !tiles.contains(where: { $0.memberID == memberID }) else { return }
+            // nothing left on screen that brings either back. Two ways now rather than one — their
+            // member leaves, or they stop sharing and the share tile goes with them.
+            guard let tileID = context.fullscreenTileID,
+                  !tiles.contains(where: { $0.id == tileID }) else { return }
             setFullscreen(nil)
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
@@ -109,15 +110,15 @@ struct ElementCallView: View {
     
     /// The tile full screen right now, if it is still in the call.
     private var fullscreenTile: ElementCallTile? {
-        guard let memberID = context.fullscreenMemberID else { return nil }
-        return context.viewState.tiles.first { $0.memberID == memberID }
+        guard let tileID = context.fullscreenTileID else { return nil }
+        return context.viewState.tiles.first { $0.id == tileID }
     }
     
     /// Entering always starts with the chrome down, so the first thing a full-screen tile shows is
     /// the picture; leaving puts it back down for next time.
-    private func setFullscreen(_ memberID: String?) {
+    private func setFullscreen(_ tileID: MatrixRTCTileID?) {
         withAnimation(.easeInOut(duration: 0.25)) {
-            context.fullscreenMemberID = memberID
+            context.fullscreenTileID = tileID
             context.isFullscreenChromeVisible = false
         }
     }
@@ -237,24 +238,30 @@ struct ElementCallView: View {
     @ViewBuilder
     private var content: some View {
         let state = context.viewState
-        if state.tiles.isEmpty {
+        // The spinner means "no call yet". That used to be the same thing as "no tiles" and is not
+        // any more: the model's ranked list is *empty* when you are the only person in the call, and
+        // your own tile — which is never in it — is the whole stage. Keying the spinner on emptiness
+        // answers exactly that case with a spinner there is no way out of. The own tile is spliced
+        // in unconditionally so the list is not actually empty here, but the invariant should not be
+        // the only thing standing between a user alone in a call and a permanent loading screen.
+        if state.connection != .connected, state.tiles.isEmpty {
             Spacer()
             ProgressView()
                 .tint(style.theme.iconPrimary)
             Spacer()
         } else {
             ElementCallStage(tiles: state.tiles,
-                             spotlightMemberID: state.spotlightMemberID,
-                             fullscreenMemberID: fullscreenTile?.memberID,
+                             spotlightID: state.spotlightID,
+                             fullscreenID: fullscreenTile?.id,
                              layout: state.layout,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
                              controlsClearance: Self.controlsClearance,
-                             onToggleFullscreen: { memberID in
+                             onToggleFullscreen: { tileID in
                                  // The same tile again is the way back out, which is what makes one
                                  // gesture do both halves of it.
-                                 setFullscreen(context.fullscreenMemberID == memberID ? nil : memberID)
+                                 setFullscreen(context.fullscreenTileID == tileID ? nil : tileID)
                              },
                              onToggleChrome: {
                                  withAnimation(.easeInOut(duration: 0.2)) {
@@ -282,9 +289,8 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
     /// Full screen is written onto the context rather than reached by tapping, which is the same
     /// seam the rest of these previews use: there is no call here to tap anything on.
     static func fullscreen(isChromeVisible: Bool) -> some View {
-        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
-                                                                                                   spotlight: ElementCallPreviewFixtures.carol.memberID))
-        context.fullscreenMemberID = ElementCallPreviewFixtures.carol.memberID
+        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
+        context.fullscreenTileID = ElementCallPreviewFixtures.carol.id
         context.isFullscreenChromeVisible = isChromeVisible
         return ElementCallView(context: context,
                                pictureInPictureSourceView: UIView(),
@@ -296,15 +302,17 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Joining")
         ElementCallView(context: failedViewModel.context, pictureInPictureSourceView: UIView()) { nil }
             .previewDisplayName("Failed")
-        screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
-                                                    spotlight: ElementCallPreviewFixtures.carol.memberID))
+        screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
             .previewDisplayName("Connected group")
+        // Alone in the call: the model's ranked list is empty and our own tile is the whole stage.
+        // This used to render as a spinner you could not get out of.
+        screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice]))
+            .previewDisplayName("Alone in the call")
         screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice,
                                                             ElementCallPreviewFixtures.bob],
                                                     isDirect: true))
             .previewDisplayName("Connected one to one")
         screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
-                                                    spotlight: ElementCallPreviewFixtures.carol.memberID,
                                                     isMicrophoneMuted: true,
                                                     isScreenSharing: true))
             .previewDisplayName("Muted and sharing")

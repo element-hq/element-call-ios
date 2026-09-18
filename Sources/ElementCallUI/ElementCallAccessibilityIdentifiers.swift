@@ -6,6 +6,7 @@
 //
 
 import ElementCallHost
+import ElementCallKit
 import Foundation
 
 /// Accessibility identifiers for the call UI.
@@ -39,9 +40,24 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     public static let roomName = "\(prefix).roomName"
     public static let callState = "\(prefix).callState"
     
-    /// A tile, identified by the member on it, so a test can assert about one participant.
+    /// A tile, identified by the member on it **and the stream it draws**.
+    ///
+    /// This is the break. A member publishing a camera and a screen share is two tiles now, so the
+    /// member alone no longer names one. A camera tile keeps the exact string it has always had —
+    /// that is what the external rig pins, and it is every case the rig has ever asked about — and a
+    /// share carries its stream after a slash. So nothing that worked stops working; there is simply
+    /// more on screen than there was, which a rig counting tiles to count people will notice.
+    public static func tile(_ id: MatrixRTCTileID) -> String {
+        switch id.kind {
+        case .camera: "\(prefix).tile.\(id.memberID)"
+        default: "\(prefix).tile.\(id.memberID)/\(id.kind)"
+        }
+    }
+    
+    /// A member's camera tile, by member ID. Kept because it is what an external rig calls, and
+    /// because "Bob's tile" has always meant his camera.
     public static func tile(memberID: String) -> String {
-        "\(prefix).tile.\(memberID)"
+        tile(MatrixRTCTileID(memberID: memberID, kind: .camera))
     }
     
     /// The control that shows a given icon. Derived rather than hand-written at each call site so a

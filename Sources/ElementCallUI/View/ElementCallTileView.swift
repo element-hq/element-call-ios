@@ -111,7 +111,7 @@ struct ElementCallTileView: View {
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(memberID: tile.memberID))
+        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
         .accessibilityAction(named: Text("Full screen")) { onToggleFullscreen() }
@@ -121,16 +121,16 @@ struct ElementCallTileView: View {
         ZStack {
             style.theme.bgSubtleSecondary
             
-            if tile.hasVideo || tile.isScreenSharing, !isVideoSuspended {
-                // A share is what a big tile is for, and full screen is the biggest there is: this
-                // read `isSpotlight` alone, so double-tapping someone who was sharing swapped their
-                // screen for their camera, which is the one picture nobody was asking for.
-                let kind: MatrixRTCStreamKind = tile.isScreenSharing && (isSpotlight || isFullscreen) ? .screenShare : .camera
+            if tile.hasVideo, !isVideoSuspended {
                 // The crop opens as the tile grows rather than at the moment it is told to: see
-                // ``AnimatableFit``.
-                AnimatableFit(fit: isFullscreen ? 1 : 0) { fit in
+                // ``AnimatableFit``. A share is fitted at *every* size, not only when it is large:
+                // the stage can put one in a strip cell now that it is a tile of its own, and
+                // cropping a document to a 1.2-wide cell throws away whatever somebody is pointing
+                // at. A camera still starts filled, because a centre-cropped face still reads as a
+                // face and letterboxing every cell makes a grid look like a contact sheet.
+                AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : 0) { fit in
                     ElementCallVideoView(memberID: tile.memberID,
-                                         kind: kind,
+                                         kind: tile.kind,
                                          isLocal: tile.isLocal,
                                          callProvider: callProvider,
                                          presentation: presentation(fit: fit),
@@ -139,10 +139,10 @@ struct ElementCallTileView: View {
                                          // When the two disagree the tile would be a black rectangle,
                                          // so the avatar holds the space until a frame actually lands.
                                          placeholder: { avatar })
-                        // A tile slot (the spotlight in particular) keeps its view identity when its
-                        // member changes; without an explicit identity the renderer would stay
-                        // attached to the previous member's stream.
-                        .id("\(tile.memberID)/\(kind)")
+                        // A tile slot (the spotlight in particular) keeps its view identity when the
+                        // tile in it changes; without an explicit identity the renderer would stay
+                        // attached to the previous tile's stream.
+                        .id(tile.id)
                 }
             } else {
                 avatar
@@ -244,7 +244,9 @@ struct ElementCallTileView: View {
                         Text("\(memberCount)")
                     }
                 }
-                if tile.hasHandRaised {
+                // The raised hand belongs to the person, and a person is their camera tile. On a
+                // share as well it reads as two people with their hands up.
+                if tile.hasHandRaised, !tile.isScreenShare {
                     badge { style.icons.icon(.raisedHand, size: .xSmall, relativeTo: .bodySM) }
                 }
                 Spacer()
@@ -252,8 +254,18 @@ struct ElementCallTileView: View {
             Spacer()
             HStack(alignment: .bottom, spacing: 4) {
                 badge {
-                    style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
-                    Text(tile.isScreenSharing && isSpotlight ? "(Screen share)" : tile.displayName)
+                    // A screen has no microphone of its own, and a mic glyph on both of one person's
+                    // tiles reads as two people. The share glyph says what the tile is instead.
+                    if tile.isScreenShare {
+                        style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
+                    } else {
+                        style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
+                    }
+                    // Named as well as labelled: a share can sit in a strip cell right beside its
+                    // owner's camera now, so "(Screen share)" on its own no longer says whose. It
+                    // used to be shown only in the spotlight, which was the only place a share was
+                    // ever drawn.
+                    Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
                         .lineLimit(1)
                 }
                 Spacer()
@@ -272,7 +284,9 @@ struct ElementCallTileView: View {
     private var fullBleedChrome: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                if tile.hasHandRaised {
+                // The raised hand belongs to the person, and a person is their camera tile. On a
+                // share as well it reads as two people with their hands up.
+                if tile.hasHandRaised, !tile.isScreenShare {
                     badge { style.icons.icon(.raisedHand, size: .xSmall, relativeTo: .bodySM) }
                 }
                 Spacer()
@@ -325,6 +339,12 @@ struct ElementCallTileView: View {
     private var outlineColor: Color {
         switch appearance {
         case .card:
+            // The ring and the hand belong to the person, and a person is their camera tile. Ringing
+            // a sharer's screen as well puts two rings round one speaker, which reads as two people
+            // talking at once.
+            if tile.isScreenShare {
+                return .clear
+            }
             if tile.hasHandRaised {
                 return style.theme.iconAccentPrimary
             }
@@ -467,12 +487,15 @@ struct ElementCallTileView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Speaking")
         tileView(Fixtures.bob)
             .previewDisplayName("Muted")
-        tileView(Fixtures.tile("Dan", hasMicrophone: false))
-            .previewDisplayName("No microphone stream")
         tileView(Fixtures.tile("Erin", hasHandRaised: true))
             .previewDisplayName("Hand raised")
-        tileView(Fixtures.tile("Frank", isScreenSharing: true), isSpotlight: true)
-            .previewDisplayName("Screen sharing spotlight")
+        tileView(Fixtures.share("Frank"), isSpotlight: true)
+            .previewDisplayName("Screen share spotlight")
+        // A share in an ordinary strip cell, which it could never be while a share was a flag on its
+        // owner's tile that only the spotlight honoured. It is fitted rather than filled at this
+        // size for the same reason it is full screen: cropping a document loses what it was showing.
+        tileView(Fixtures.share("Frank"))
+            .previewDisplayName("Screen share in a cell")
         tileView(Fixtures.alice, appearance: .thumbnail)
             .previewDisplayName("Own thumbnail")
         tileView(Fixtures.bob, appearance: .fullBleed)

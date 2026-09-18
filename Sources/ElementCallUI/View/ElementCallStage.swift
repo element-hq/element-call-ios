@@ -24,10 +24,10 @@ import SwiftUI
 struct ElementCallStage: View {
     @Environment(\.elementCallStyle) private var style
     let tiles: [ElementCallTile]
-    let spotlightMemberID: String?
+    let spotlightID: MatrixRTCTileID?
     /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
     /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
-    var fullscreenMemberID: String?
+    var fullscreenID: MatrixRTCTileID?
     let layout: ElementCallLayout
     let memberCount: Int
     let pictureInPictureSourceView: UIView
@@ -36,7 +36,7 @@ struct ElementCallStage: View {
     let controlsClearance: CGFloat
     /// Double tap. Ahead of `onAction` for the same reason as on the tile: that one is the trailing
     /// closure at every call site, and a new closure after it would quietly take its place.
-    var onToggleFullscreen: (String) -> Void = { _ in }
+    var onToggleFullscreen: (MatrixRTCTileID) -> Void = { _ in }
     /// Single tap, which only means anything while full screen.
     var onToggleChrome: () -> Void = { }
     let onAction: (ElementCallScreenViewAction) -> Void
@@ -56,8 +56,8 @@ struct ElementCallStage: View {
         GeometryReader { geometry in
             let insets = geometry.safeAreaInsets
             let stage = ElementCallStageLayout.compute(tiles: tiles,
-                                                       spotlightMemberID: spotlightMemberID,
-                                                       fullscreenMemberID: fullscreenMemberID,
+                                                       spotlightID: spotlightID,
+                                                       fullscreenID: fullscreenID,
                                                        layout: layout,
                                                        currentPage: currentPage,
                                                        metrics: .init(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom),
@@ -84,7 +84,7 @@ struct ElementCallStage: View {
                 // the strip was on, and the tile you went full screen from is the one you come back
                 // to. The translation goes too: the fullscreen arrangement masks the paging gesture
                 // away, so a toggle mid-swipe would leave a stale offset on every paged placement.
-                guard fullscreenMemberID == nil else {
+                guard fullscreenID == nil else {
                     dragTranslation = 0
                     return
                 }
@@ -113,11 +113,11 @@ struct ElementCallStage: View {
                                    appearance: placement.appearance,
                                    memberCount: memberCount,
                                    isVideoSuspended: visibility != .live,
-                                   onToggleFullscreen: { onToggleFullscreen(placement.tile.memberID) },
+                                   onToggleFullscreen: { onToggleFullscreen(placement.id) },
                                    onToggleChrome: onToggleChrome,
                                    onAction: onAction)
             .background {
-                if placement.tile.memberID == stage.pictureInPictureMemberID {
+                if placement.id == stage.pictureInPictureTileID {
                     PictureInPictureSourceView(sourceView: pictureInPictureSourceView)
                 }
             }
@@ -145,14 +145,12 @@ struct ElementCallStage: View {
     
     /// The streams nothing on the stage is drawing.
     ///
-    /// A placement names its member's camera, because that is the only stream a tile that is not the
-    /// spotlight ever attaches: the spotlight is unpaged and so never released, and a share reaches
-    /// the screen only through it. When a share becomes a placement of its own this reads
-    /// `\.tile.id` and the mapping here goes.
+    /// Per stream rather than per member, and it has to be: a sharer's screen can be the spotlight
+    /// while their camera is pages away in the strip, so "this member is not being drawn" is not a
+    /// question with an answer. Releasing by member took the picture everybody was looking at.
     private func releasedStreams(in stage: ElementCallStageLayout) -> Set<MatrixRTCTileID> {
-        let members = Set(stage.placements.lazy.filter { visibility(for: $0.page) == .released }.map(\.tile.memberID))
-            .union(stage.hiddenMemberIDs)
-        return Set(members.map { MatrixRTCTileID(memberID: $0, kind: .camera) })
+        Set(stage.placements.lazy.filter { visibility(for: $0.page) == .released }.map(\.id))
+            .union(stage.hiddenTileIDs)
     }
     
     private func pageIndicator(pageCount: Int, axis: Axis) -> some View {
@@ -197,46 +195,39 @@ struct ElementCallStage: View {
 // MARK: - Previews
 
 struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
-    static func tile(_ name: String, isLocal: Bool = false, isMuted: Bool = false, isSpeaking: Bool = false) -> ElementCallTile {
-        ElementCallTile(memberID: "@\(name.lowercased()):example.com:DEVICE", userID: "@\(name.lowercased()):example.com", displayName: isLocal ? "You" : name,
-                        avatarURL: nil, isLocal: isLocal, isMicrophoneMuted: isMuted, hasMicrophone: true, hasVideo: false, isScreenSharing: false,
-                        isSpeaking: isSpeaking, hasHandRaised: false, isFrontCamera: isLocal, stats: nil)
-    }
+    typealias Fixtures = ElementCallPreviewFixtures
     
-    static let local = tile("Alice", isLocal: true)
-    static let bob = tile("Bob", isMuted: true)
-    static let group = [local, bob, tile("Carol", isSpeaking: true), tile("Dan"), tile("Erin"), tile("Frank"), tile("Grace"), tile("Heidi")]
-    
-    static func noCall() -> MatrixRTCCall? {
-        nil
-    }
-    
+    /// Derived rather than passed, so a preview cannot show a spotlight the app would not choose.
+    /// This is the view state's own rule, and it reads the array as the ranking it now is.
     static func stage(tiles: [ElementCallTile],
-                      spotlight: String? = nil,
-                      fullscreen: String? = nil,
+                      fullscreen: MatrixRTCTileID? = nil,
                       layout: ElementCallLayout) -> some View {
         ElementCallStage(tiles: tiles,
-                         spotlightMemberID: spotlight,
-                         fullscreenMemberID: fullscreen,
+                         spotlightID: Fixtures.connected(tiles: tiles).spotlightID,
+                         fullscreenID: fullscreen,
                          layout: layout,
                          memberCount: tiles.count,
                          pictureInPictureSourceView: UIView(),
-                         callProvider: noCall,
+                         callProvider: Fixtures.noCall,
                          controlsClearance: ElementCallView.controlsClearance) { _ in }
             .background(ElementCallStyle.stock.theme.bgCanvasDefault)
             .environment(\.colorScheme, .dark)
     }
     
     static var previews: some View {
-        stage(tiles: group, spotlight: group[2].memberID, layout: .group)
+        stage(tiles: Fixtures.group, layout: .group)
             .previewDisplayName("Group with spotlight")
-        stage(tiles: [local], layout: .group)
+        stage(tiles: [Fixtures.alice], layout: .group)
             .previewDisplayName("Alone in a group call")
-        stage(tiles: [local, bob], layout: .oneToOne)
+        stage(tiles: [Fixtures.alice, Fixtures.bob], layout: .oneToOne)
             .previewDisplayName("One-to-one")
-        stage(tiles: [local], layout: .oneToOne)
+        stage(tiles: [Fixtures.alice], layout: .oneToOne)
             .previewDisplayName("One-to-one, alone")
-        stage(tiles: group, spotlight: group[2].memberID, fullscreen: bob.memberID, layout: .group)
+        stage(tiles: Fixtures.group, fullscreen: Fixtures.bob.id, layout: .group)
             .previewDisplayName("Full screen")
+        // A member on two tiles: the one case in which every member-keyed assumption that survived
+        // the migration would be wrong, and the only preview that shows a share in a strip cell.
+        stage(tiles: Fixtures.sharingGroup, layout: .group)
+            .previewDisplayName("A member on two tiles")
     }
 }

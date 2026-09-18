@@ -6,6 +6,7 @@
 //
 
 import ElementCallHost
+import ElementCallKit
 @testable import ElementCallUI
 import Testing
 
@@ -32,10 +33,17 @@ nonisolated struct AccessibilityIdentifierTests {
         #expect(ElementCallAccessibilityIdentifiers.callState == "elementCall.callState")
     }
     
-    @Test("A tile is addressable by the member on it")
+    /// The camera spelling is the one an external rig pins, and it has not moved. A share is a
+    /// second tile with the same member on it, so it needs a spelling of its own — and the two must
+    /// differ, or anything collecting identifiers into a set counts one person's two tiles as one.
+    @Test("A tile is addressable by the member on it and the stream it draws")
     func tile() {
         #expect(ElementCallAccessibilityIdentifiers.tile(memberID: "@bob:example.com:DEVICE")
             == "elementCall.tile.@bob:example.com:DEVICE")
+        #expect(ElementCallAccessibilityIdentifiers.tile(MatrixRTCTileID(memberID: "@bob:example.com:DEVICE", kind: .camera))
+            == "elementCall.tile.@bob:example.com:DEVICE")
+        #expect(ElementCallAccessibilityIdentifiers.tile(MatrixRTCTileID(memberID: "@bob:example.com:DEVICE", kind: .screenShare))
+            == "elementCall.tile.@bob:example.com:DEVICE/screenShare")
     }
     
     /// Every control derives its identifier from its icon, so this is what stops a new control from
