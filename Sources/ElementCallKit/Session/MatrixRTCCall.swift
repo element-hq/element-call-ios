@@ -67,7 +67,25 @@ public final class MatrixRTCCall {
     /// track is muted at the transport meanwhile so peers see camera-off rather than a frozen frame.
     public private(set) var isCameraInterrupted = false
     public private(set) var isFrontCamera = true
-    public private(set) var isScreenSharing = false
+    /// Whether a screen share is actually up.
+    ///
+    /// The core's answer, derived from publication state — the stream up *and* unmuted — rather than
+    /// from what we asked for. That is the point of it: our intent can be wrong, and a share that
+    /// failed to come up used to leave this true for the rest of the call.
+    ///
+    /// ``pendingScreenShare`` is the exception, and it is not a nicety. We publish, start capture,
+    /// and unmute only once capture is live (`setScreenShareEnabled`), so between the tap and the
+    /// unmute the core is correctly saying *false* — through a second or more of publishing and a
+    /// system consent prompt. A banner that appears a second after the button reads as a broken
+    /// button. The intent is dropped the instant the core agrees, and on a deadline if it never
+    /// does, so it can only ever shorten the truth, never outlive it.
+    public var isScreenSharing: Bool {
+        pendingScreenShare ?? localState?.isScreenSharing ?? false
+    }
+    
+    private var pendingScreenShare: Bool?
+    @ObservationIgnored private var screenShareIntentDeadline: Task<Void, Never>?
+    private static let screenShareIntentTimeout = Duration.seconds(10)
     public private(set) var isMediaDegraded = false
     public private(set) var hasEnded = false
     
@@ -97,7 +115,14 @@ public final class MatrixRTCCall {
         return capturer
     }()
     
-    private let screenShare = ScreenShareCapturer()
+    /// Lazy so the handler can capture `self`, the way the camera capturer above does.
+    @ObservationIgnored private lazy var screenShare: ScreenShareCapturer = {
+        let capturer = ScreenShareCapturer()
+        capturer.setOnUnexpectedStop { [weak self] in
+            Task { @MainActor in await self?.handleScreenShareStopped() }
+        }
+        return capturer
+    }()
     /// The self view: frames straight from the camera, mirrored for the front one.
     public let localVideo = LocalVideoFanOut()
     
@@ -330,6 +355,7 @@ public final class MatrixRTCCall {
     /// drawing an empty tile for a share that ended.
     public func setScreenShareEnabled(_ enabled: Bool) async throws {
         guard isScreenSharing != enabled else { return }
+        setPendingScreenShare(enabled)
         if enabled {
             let track: FfiLocalTrack
             do {
@@ -346,6 +372,9 @@ public final class MatrixRTCCall {
                 try await screenShare.start(track: track)
             } catch {
                 try? await mediaSession.unpublish(kind: .screenShare)
+                // The intent goes back now rather than waiting out the deadline: the banner should
+                // not sit there for ten seconds after a share that never started.
+                setPendingScreenShare(nil)
                 throw error
             }
             await setTransportMuted(.screenShare, muted: false)
@@ -357,8 +386,52 @@ public final class MatrixRTCCall {
                 MatrixRTCLog.warning("Could not unpublish the screen share: \(error)")
             }
         }
-        isScreenSharing = enabled
-        MatrixRTCLog.info("Screen share \(enabled ? "started" : "stopped") for \(localMemberID)")
+        MatrixRTCLog.info("Screen share \(enabled ? "started" : "stopped") requested for \(localMemberID)")
+        reconcileScreenShare()
+    }
+    
+    /// ReplayKit stopped without us asking — Control Centre, another app taking the recorder, a
+    /// restriction. The publication is still up, so the core still reports us as sharing, because
+    /// from the transport's point of view we are: it cannot see ReplayKit and learns a share ended
+    /// only because we unpublished.
+    ///
+    /// Retracting the publication is the only thing that makes both true again. Unpublish rather
+    /// than mute, for the same reason stopping deliberately does: a screen has no "off" state a mute
+    /// could stand for, so peers would go on drawing an empty tile — and under the tile model that
+    /// tile is a hero, sitting in the largest slot every one of them has.
+    private func handleScreenShareStopped() async {
+        guard isScreenSharing || pendingScreenShare == true else { return }
+        MatrixRTCLog.info("Screen capture ended without us asking; unpublishing the share")
+        setPendingScreenShare(false)
+        await screenShare.stop()
+        do {
+            try await mediaSession.unpublish(kind: .screenShare)
+        } catch {
+            MatrixRTCLog.warning("Could not unpublish after an unexpected screen capture stop: \(error)")
+        }
+        reconcileScreenShare()
+    }
+    
+    private func setPendingScreenShare(_ pending: Bool?) {
+        screenShareIntentDeadline?.cancel()
+        pendingScreenShare = pending
+        guard pending != nil else {
+            screenShareIntentDeadline = nil
+            return
+        }
+        screenShareIntentDeadline = Task { [weak self] in
+            try? await Task.sleep(for: Self.screenShareIntentTimeout)
+            guard !Task.isCancelled, let self, pendingScreenShare != nil else { return }
+            MatrixRTCLog.warning("Screen share intent was never confirmed by the core; deferring to its state")
+            setPendingScreenShare(nil)
+        }
+    }
+    
+    /// Drops the optimistic value once the core says the same thing, so from then on there is one
+    /// answer rather than two that can drift.
+    private func reconcileScreenShare() {
+        guard let pendingScreenShare, pendingScreenShare == localState?.isScreenSharing else { return }
+        setPendingScreenShare(nil)
     }
     
     // MARK: - Remote video
@@ -593,6 +666,7 @@ public final class MatrixRTCCall {
         let mapped = state.map { MatrixRTCLocalState($0, localMemberID: localMemberID) }
         guard mapped != localState else { return }
         localState = mapped
+        reconcileScreenShare()
     }
     
     private func pumpEvents() async {
