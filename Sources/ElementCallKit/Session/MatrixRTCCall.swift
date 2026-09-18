@@ -253,54 +253,63 @@ public final class MatrixRTCCall {
         (isCameraEnabled && !isCameraInterrupted) || participants.contains { !$0.isLocal && ($0.isPublishing(.camera) || $0.isPublishing(.screenShare)) }
     }
     
-    /// What a single-tile surface (Picture in Picture) should show: the spotlight member's screen share
-    /// or camera, else the first remote member with video, else our own camera.
-    public func pictureInPictureCandidate(spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
+    /// What a single-tile surface (Picture in Picture) should show: the spotlight tile if it still
+    /// has a picture, else the first remote member with video, else our own camera.
+    ///
+    /// Reads the participant roster rather than the ranked tiles, deliberately. This is one of the
+    /// questions that is about the *call* rather than about what is drawn, and it is rank-blind by
+    /// construction: it scans for the first member with video, wherever they sit in the ranking.
+    public func pictureInPictureCandidate(spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
         Self.pictureInPictureCandidate(participants: participants,
                                        localMemberID: localMemberID,
                                        isLocalCameraAvailable: isCameraEnabled && !isCameraInterrupted,
-                                       spotlightMemberID: spotlightMemberID)
+                                       spotlight: spotlight)
     }
     
     public nonisolated static func pictureInPictureCandidate(participants: [MatrixRTCParticipant],
                                                              localMemberID: String,
                                                              isLocalCameraAvailable: Bool,
-                                                             spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
-        func candidate(for participant: MatrixRTCParticipant) -> (memberID: String, kind: MatrixRTCStreamKind)? {
+                                                             spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
+        func candidate(for participant: MatrixRTCParticipant) -> MatrixRTCTileID? {
             if participant.isPublishing(.screenShare) {
-                return (participant.memberID, .screenShare)
+                return MatrixRTCTileID(memberID: participant.memberID, kind: .screenShare)
             }
             if participant.isPublishing(.camera) {
-                return (participant.memberID, .camera)
+                return MatrixRTCTileID(memberID: participant.memberID, kind: .camera)
             }
             return nil
         }
-        if let spotlightMemberID, let spotlight = participants.first(where: { $0.memberID == spotlightMemberID && !$0.isLocal }),
-           let candidate = candidate(for: spotlight) {
-            return candidate
+        // The spotlight names its own stream now, so this no longer has to work out which of the
+        // member's streams was meant: it only has to check the one it names is still publishing.
+        if let spotlight,
+           let participant = participants.first(where: { $0.memberID == spotlight.memberID && !$0.isLocal }),
+           participant.isPublishing(spotlight.kind) {
+            return spotlight
         }
         if let remote = participants.filter({ !$0.isLocal }).compactMap(candidate(for:)).first {
             return remote
         }
         if isLocalCameraAvailable {
-            return (localMemberID, .camera)
+            return MatrixRTCTileID(memberID: localMemberID, kind: .camera)
         }
         return nil
     }
     
     /// Who the single-tile surface should *name* when nobody has video and it falls back to an
-    /// avatar. Separate from ``pictureInPictureCandidate(spotlightMemberID:)``, which answers what
-    /// stream to show and returns nil in exactly that case.
-    public func pictureInPicturePlaceholderMemberID(spotlightMemberID: String?) -> String? {
-        Self.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: spotlightMemberID)
+    /// avatar. Separate from ``pictureInPictureCandidate(spotlight:)``, which answers what stream to
+    /// show and returns nil in exactly that case.
+    ///
+    /// A member rather than a tile, because this names a person.
+    public func pictureInPicturePlaceholderMemberID(spotlight: MatrixRTCTileID?) -> String? {
+        Self.pictureInPicturePlaceholderMemberID(participants: participants, spotlight: spotlight)
     }
     
     public nonisolated static func pictureInPicturePlaceholderMemberID(participants: [MatrixRTCParticipant],
-                                                                       spotlightMemberID: String?) -> String? {
+                                                                       spotlight: MatrixRTCTileID?) -> String? {
         // The spotlight can be us — it is only excluded when picking a stream — and showing the
         // user their own avatar in the window tells them nothing about who they are talking to.
-        if let spotlightMemberID, participants.contains(where: { $0.memberID == spotlightMemberID && !$0.isLocal }) {
-            return spotlightMemberID
+        if let spotlight, participants.contains(where: { $0.memberID == spotlight.memberID && !$0.isLocal }) {
+            return spotlight.memberID
         }
         return participants.first { !$0.isLocal }?.memberID
     }

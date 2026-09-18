@@ -64,13 +64,13 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     var placeholderProvider: ((String?) -> AnyView)?
     private var pictureInPictureController: AVPictureInPictureController?
     private var stopReason: StopReason?
-    private var attached: (memberID: String, kind: MatrixRTCStreamKind)?
+    private var attached: MatrixRTCTileID?
     private var observationTask: Task<Void, Never>?
     private var automaticStartTask: Task<Void, Never>?
     /// Whether a failed start is worth one more attempt. See ``start()``.
     private var pendingStartRetry = false
     private weak var call: MatrixRTCCall?
-    private var spotlightProvider: (() -> String?)?
+    private var spotlightProvider: (() -> MatrixRTCTileID?)?
     
     override init() {
         super.init()
@@ -105,7 +105,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     }
     
     /// Binds to a call; the spotlight provider is read whenever the call's video state changes.
-    func bind(call: MatrixRTCCall, spotlightProvider: @escaping () -> String?) {
+    func bind(call: MatrixRTCCall, spotlightProvider: @escaping () -> MatrixRTCTileID?) {
         self.call = call
         self.spotlightProvider = spotlightProvider
         if pictureInPictureController == nil, AVPictureInPictureController.isPictureInPictureSupported() {
@@ -159,8 +159,8 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     /// goes through `start()`. Both are before the window appears, which is the only time the size
     /// is honoured.
     @discardableResult
-    private func applyPreferredSizeForCurrentSource() -> (memberID: String, kind: MatrixRTCStreamKind)? {
-        let candidate = call?.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?())
+    private func applyPreferredSizeForCurrentSource() -> MatrixRTCTileID? {
+        let candidate = call?.pictureInPictureCandidate(spotlight: spotlightProvider?())
         if let call, let candidate, let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
             applyPreferredSize(aspect: aspect)
         } else if candidate == nil {
@@ -324,16 +324,16 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     
     private func updateVideoSource() {
         guard let call else { return }
-        let candidate = call.pictureInPictureCandidate(spotlightMemberID: spotlightProvider?())
+        let candidate = call.pictureInPictureCandidate(spotlight: spotlightProvider?())
         if candidate == nil {
             // Nobody has video: show who we are in the call with instead of a black window.
-            let shown = call.pictureInPicturePlaceholderMemberID(spotlightMemberID: spotlightProvider?())
+            let shown = call.pictureInPicturePlaceholderMemberID(spotlight: spotlightProvider?())
             placeholderHost.rootView = placeholderProvider?(shown) ?? AnyView(Color.black)
             placeholderHost.view.isHidden = false
         } else {
             placeholderHost.view.isHidden = true
         }
-        guard candidate?.memberID != attached?.memberID || candidate?.kind != attached?.kind else { return }
+        guard candidate != attached else { return }
         detach()
         guard let candidate else { return }
         if let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {

@@ -95,8 +95,23 @@ public final class ElementCallController {
         call?.hasVideo ?? false
     }
     
-    /// The member spotlighted by the layout: a screen share, else the loudest recent speaker.
-    public private(set) var spotlightMemberID: String?
+    /// The tile the layout gives its largest slot: the hero if the model marked one, else the head
+    /// of the model's ranking.
+    ///
+    /// **Computed, because there is nothing left to remember.** This used to be stored state
+    /// maintained by an `updateSpotlight` that re-implemented the ranking: a sharer wins, else the
+    /// loudest remote speaker, else keep the current one while they are still talking, else the
+    /// first remote. Every clause of that is the model's now, and damped — the "keep the current
+    /// one" clause was this app's entire hysteresis and it had no timer at all. A stored copy would
+    /// be a second ranking, free to disagree with the one being drawn.
+    ///
+    /// Never ourselves, and that costs nothing now: our own tile is not in the ranked list.
+    public var spotlightTileID: MatrixRTCTileID? {
+        guard let tiles = call?.tiles else { return nil }
+        // The hero rather than simply the head, because a hero is a fact the model states and the
+        // order is an arrangement of it. They agree today; if they ever stop, the hero is right.
+        return (tiles.order.first(where: \.isHero) ?? tiles.order.first)?.id
+    }
     
     public var isInCall: Bool {
         switch connection {
@@ -325,7 +340,7 @@ public final class ElementCallController {
     private func bindPictureInPictureIfEnabled(_ call: MatrixRTCCall) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
-        pictureInPicture.bind(call: call) { [weak self] in self?.spotlightMemberID }
+        pictureInPicture.bind(call: call) { [weak self] in self?.spotlightTileID }
     }
     
     public func setLoudspeaker(_ enabled: Bool) {
@@ -500,44 +515,16 @@ public final class ElementCallController {
         
         connection = .connected
         connectedAt = .now
-        updateSpotlight(speakers: [])
         isLoudspeaker = CallAudioSessionConfigurator.isLoudspeaker
         system.reportConnected(roomID: room.roomID)
     }
     
     private func handle(_ event: MatrixRTCCallEvent) {
-        switch event {
-        case .activeSpeakers(let speakers):
-            updateSpotlight(speakers: speakers.map(\.memberID))
-        case .streamStarted(let memberID, .screenShare):
-            spotlightMemberID = memberID
-        case .streamStopped(_, .screenShare), .participantLeft, .participantJoined, .streamStarted(_, .camera):
-            updateSpotlight(speakers: [])
-        case .ended:
-            // From a different task than the event collector: teardown cancels that task.
-            Task { await endCall(leave: false) }
-        default:
-            break
-        }
-    }
-    
-    /// A screen share wins; otherwise the loudest speaker other than us, keeping the current one
-    /// while they are still talking so tiles do not shuffle on every word.
-    private func updateSpotlight(speakers: [String]) {
-        guard let call else { return }
-        if let sharer = call.participants.first(where: { $0.isPublishing(.screenShare) }) {
-            spotlightMemberID = sharer.memberID
-            return
-        }
-        let remoteSpeakers = speakers.filter { $0 != call.localMemberID }
-        if let current = spotlightMemberID, remoteSpeakers.contains(current) {
-            return
-        }
-        if let loudest = remoteSpeakers.first {
-            spotlightMemberID = loudest
-        } else if spotlightMemberID == nil || !call.participants.contains(where: { $0.memberID == spotlightMemberID }) {
-            spotlightMemberID = call.participants.first { !$0.isLocal }?.memberID
-        }
+        // Everything else this switch used to carry existed only to recompute the spotlight, which
+        // the model now ranks and damps for us.
+        guard case .ended = event else { return }
+        // From a different task than the event collector: teardown cancels that task.
+        Task { await endCall(leave: false) }
     }
     
     /// Only when *starting* a call; joining one someone else started happens quietly. A direct chat
@@ -632,7 +619,6 @@ public final class ElementCallController {
             connection = .ended
         }
         connectedAt = nil
-        spotlightMemberID = nil
         actionsSubject.send(.ended)
     }
     
