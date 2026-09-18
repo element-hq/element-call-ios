@@ -200,9 +200,9 @@ touch Tests/ElementCallTests/.record-snapshots
 ```
 
 **Prefer that to deleting the directory.** Deleting also works — the harness records whatever is
-missing — but it re-records all 87 images rather than the few that changed, and PNG re-encoding is
+missing — but it re-records all 93 images rather than the few that changed, and PNG re-encoding is
 not byte-identical across Xcode versions. The references are ordinary blobs rather than Git LFS
-pointers (see CONTRIBUTING.md for why they must stay that way), so a wholesale re-record puts 5.5 MB
+pointers (see CONTRIBUTING.md for why they must stay that way), so a wholesale re-record puts 6 MB
 of new blobs in the repository permanently and buries the images a reviewer has to look at.
 
 **Not `RECORD_FAILURES=true` on the command line.** The harness reads it from its own environment,
