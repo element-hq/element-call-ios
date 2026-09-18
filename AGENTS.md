@@ -104,15 +104,41 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   `Example/*.xcodeproj` is ignored, for the same reason `GeneratedPreviewTests.swift` is regenerated
   in CI: nobody reads a pbxproj and everybody conflicts on one. The app target needs the same
   `-ObjC` the package's test bundle does, for the same reason.
-- **No server, no camera, no call.** The app builds its screen from `ElementCallPreviewFixtures`
-  through `ElementCallHarnessScreen`, which is the seam the previews have always used, made public.
-  `ElementCallController.fake(...)` cannot serve here: it never joins, so it produces no tiles and
-  the screen would be a spinner. Which arrangement the app opens on comes from `-arrangement` in the
-  launch arguments, so a test starts where it means to.
+- **No server, no camera, no call.** The app builds its connected screens from
+  `ElementCallPreviewFixtures` through `ElementCallHarnessScreen`, which is the seam the previews
+  have always used, made public. `ElementCallController.fake(...)` cannot serve for those: it never
+  joins, so it produces no tiles and the screen would be a spinner. It serves for everything else,
+  though — the connecting states run a real `ElementCallScreenViewModel` over one, and the minimized
+  bar is drawn from one, which needs only a room name, a style and a duration. Two things a fake
+  cannot know: the mic glyph reads through `call`, which is nil, so the bar always shows unmuted;
+  and `connectedAt` has to be passed in, which is why `fake(...)` takes it.
+- **The app opens on a catalogue of fixtures, and minimizes back to it.** `-arrangement <name>`
+  skips the catalogue and opens that fixture directly, so a test starts where it means to rather
+  than tapping its way there — with the argument present the view hierarchy is what it was before
+  the catalogue existed, which is what keeps the older UI tests looking at the tree they were
+  written against. The argument used to fall back to the group arrangement on anything it did not
+  recognise, so a typo failed a strip test with "this tile is not hittable", true and about nothing;
+  an unrecognised name now names itself on screen instead, where the failure screenshot catches it.
+- **Minimizing goes to `ElementCallMinimizedBar`, not to a system window, and that is honest rather
+  than a shortcut.** `ElementCallPictureInPictureController` builds its `AVPictureInPictureController`
+  only in `bind(call:spotlightProvider:)`, and that needs a live call which cannot exist here, so
+  `isPossible` is false, `requestMinimize()` takes its `else` branch and reports
+  `pictureInPictureUnavailable` — the documented path a host takes when the window is not available.
+  The harness is the only place that path, and that public view, are exercised at all. **Do not add
+  `UIBackgroundModes` to `Example/project.yml` trying to make real Picture in Picture work here**: it
+  would not, without a call, and simulator Picture in Picture is unreliable besides. Note this is
+  where iOS and Android differ rather than where iOS is behind: Android's `enterPictureInPictureMode`
+  shrinks the whole Activity, so the fixture list behind it is revealed for free, while AVKit leaves
+  our window alone and renders a separate one — so taking the call screen down is the host's job
+  either way, and only the minimized representation would change.
 - **Put a test here only if it needs a real touch.** Arrangement belongs in
   `ElementCallStageLayoutTests`, appearance in the snapshots, and geometry in a unit test: a UI test
   is twenty seconds against their twenty milliseconds. What earns its place is gesture arbitration —
-  the strip's paging drag against a tile's pan, and the `Button` inside a tile.
+  the strip's paging drag against a tile's pan, and the `Button` inside a tile — and the minimize
+  round trip, which is three real-touch questions at once: whether the identifier reaches a view at
+  all, whether the button in the top bar wins the touch, and whether the bar is hittable where a
+  host puts it. Which branch the controller takes when asked to minimize is *not* one of them; that
+  is `MinimizeRoutingTests`, in process, in milliseconds.
 - **The `video` arrangement draws real frames**, from `MatrixRTCTestPattern`: colour bars with a
   heavy border, because the questions are geometric. A border running off the edges is a crop, a
   border with black beside it is a letterbox, and a border that changes thickness partway through a
@@ -139,6 +165,8 @@ xcrun simctl install "$SIMULATOR_UDID" \
   "$(find ~/Library/Developer/Xcode/DerivedData -name ElementCallExample.app -path '*Debug-iphonesimulator*' | head -1)"
 xcrun simctl launch "$SIMULATOR_UDID" io.element.call.example.ElementCallExample -arrangement pagedStrip
 ```
+
+Leave `-arrangement` off to get the catalogue and pick by hand; it is the bypass, not the only way in.
 
 **This is the answer to "do I have to join a real call to see it?"** — you do not, for anything the
 layout does. Which is most of what goes wrong: the arrangements, the chrome, and every animation
@@ -285,7 +313,12 @@ that way.
   them, and the UI tests in `Example/` now do too. A rename is a breaking change and its test will
   tell you so. Note that `control(for:)` derives a control's identifier from its *icon*, so a button
   borrowing another's glyph must set its own identifier explicitly or the two collide — which
-  `AccessibilityIdentifierTests.distinctness` does not catch, since it only walks icons.
+  `AccessibilityIdentifierTests.distinctness` does not catch, since it only walks icons. **The top
+  bar's buttons set theirs by hand**, because `control(for:)` is called only from
+  `ElementCallControlsView.controlButton` and the top bar does not use it: a constant can exist, be
+  pinned by name in the identifier tests, and still reach no view, so that nothing can find the
+  button. That has now happened twice, to `more` and to `minimize`, and the spelling test cannot see
+  it either time — only a UI test that taps the thing can.
 
 [Swift API Design Guidelines]: https://www.swift.org/documentation/api-design-guidelines/
 

@@ -610,9 +610,16 @@ public final class ElementCallController {
     }
     
     /// Previews and tests only: shows a state without joining anything.
-    func setPreviewState(callData: ElementCallData, room: any ElementCallRoomContextProtocol, connection: ElementCallConnection) {
+    /// `connectedAt` is defaulted because only a joined call normally has one, and it is offered at
+    /// all so the minimized bar's duration timer is reachable without one: it is the single branch
+    /// of that view no preview, snapshot or harness could otherwise draw.
+    func setPreviewState(callData: ElementCallData,
+                         room: any ElementCallRoomContextProtocol,
+                         connection: ElementCallConnection,
+                         connectedAt: Date? = nil) {
         self.callData = callData
         self.room = room
         self.connection = connection
+        self.connectedAt = connectedAt
     }
 }

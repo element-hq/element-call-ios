@@ -57,11 +57,18 @@ public final class ElementCallScreenContext {
     /// which is also the only place they can be: `handler` is fileprivate on purpose, so that a
     /// host cannot reach in and drive the screen behind its own view model's back.
     ///
-    /// Only the reversible ones. Minimize, hang up and dismiss belong to a host and there is
-    /// nothing here to return to, so they stay inert rather than stranding the harness on a dead
-    /// screen.
+    /// Only the reversible ones are applied here. Minimize, hang up and dismiss belong to a host —
+    /// where a minimized call goes, and whether a screen is dismissed, are its decisions — so they
+    /// are handed to `onHostAction` rather than faked, the same way the live view model hands them
+    /// to ``ElementCallController``. That closure is notification travelling outwards, which is why
+    /// it does not weaken the rule above: nothing outside has gained a way to drive the screen.
+    ///
+    /// Passing nil leaves them inert, which used to be the only honest answer: a harness with
+    /// nowhere to return to would have been stranded on a dead screen. A harness that is a host —
+    /// the example app, which has a fixture catalogue to go back to — passes a closure instead.
     public static func harness(state: ElementCallScreenViewState,
-                               style: ElementCallStyle = .stock) -> ElementCallScreenContext {
+                               style: ElementCallStyle = .stock,
+                               onHostAction: ((ElementCallScreenViewAction) -> Void)? = nil) -> ElementCallScreenContext {
         let context = ElementCallScreenContext(viewState: state, style: style)
         // Weakly, or the context owns a closure that owns the context.
         context.handler = { [weak context] action in
@@ -84,7 +91,7 @@ public final class ElementCallScreenContext {
             case .toggleLoudspeaker:
                 context.viewState.isLoudspeaker.toggle()
             case .minimize, .hangUp, .dismiss:
-                break
+                onHostAction?(action)
             }
         }
         return context

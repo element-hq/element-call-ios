@@ -10,112 +10,69 @@ import SwiftUI
 
 /// A call screen with no call behind it, for driving by hand or by a UI test.
 ///
-/// Which arrangement it opens on is read from the launch arguments so a test can start where it
-/// means to, rather than tapping its way there through a menu it does not care about.
+/// It opens on a catalogue of fixtures and minimizes back to it, which is how the Android harness
+/// works and for the same reason: the handover between full screen and minimized is the host's job,
+/// and a harness that cannot leave the call screen cannot show it going wrong.
+///
+/// `-arrangement <name>` skips the catalogue and opens that fixture directly, so a test starts where
+/// it means to rather than tapping its way there through a menu it does not care about. With the
+/// argument present the hierarchy is exactly what it was before the catalogue existed.
 @main
 struct ElementCallExampleApp: App {
     var body: some Scene {
         WindowGroup {
-            ElementCallExampleScreen(arrangement: .fromLaunchArguments())
+            ElementCallExampleRootView(target: .fromLaunchArguments())
         }
     }
 }
 
-/// The states worth having on hand. Each is a shape of the layout rather than a feature: what a test
-/// or a person poking at it needs is a stage with a strip that pages, a one-to-one call, and a
-/// screen share, because those are the three arrangements a tile can be full screen *from*.
-enum ElementCallExampleArrangement: String, CaseIterable {
-    case group
-    case pagedStrip
-    case oneToOne
-    case screenShare
-    case video
+struct ElementCallExampleRootView: View {
+    let target: ElementCallExampleLaunchTarget
     
-    static let launchArgument = "-arrangement"
-    
-    static func fromLaunchArguments() -> ElementCallExampleArrangement {
-        guard let index = ProcessInfo.processInfo.arguments.firstIndex(of: launchArgument),
-              let name = ProcessInfo.processInfo.arguments[safe: index + 1],
-              let arrangement = ElementCallExampleArrangement(rawValue: name) else { return .group }
-        return arrangement
-    }
-    
-    var title: String {
-        switch self {
-        case .group: "Group"
-        case .pagedStrip: "Paged strip"
-        case .oneToOne: "One to one"
-        case .screenShare: "Screen share"
-        case .video: "Moving video"
-        }
-    }
-    
-    /// Whether the tiles should be fed generated frames. Only the video arrangement asks for it, so
-    /// every other one stays a pure layout harness with no timer running behind it.
-    var wantsVideo: Bool {
-        self == .video
-    }
-    
-    /// Built from the same fixtures the snapshots use, so a failure here and a failure there are
-    /// talking about the same people.
-    @MainActor
-    var state: ElementCallScreenViewState {
-        typealias Fixtures = ElementCallPreviewFixtures
-        switch self {
-        case .group:
-            return Fixtures.connected(tiles: Fixtures.group, spotlight: Fixtures.carol.memberID)
-        case .pagedStrip:
-            // Enough people that the strip runs to more than one page: going full screen from page
-            // two and coming back to page two is the thing worth checking.
-            let extras = (1...16).map { Fixtures.tile("Member\($0)") }
-            return Fixtures.connected(tiles: Fixtures.group + extras, spotlight: Fixtures.carol.memberID)
-        case .oneToOne:
-            // Our camera on, so the tile draws its flip button: the one control inside a tile, and
-            // so the one thing that can prove a tap still reaches a button rather than the gesture
-            // wrapped around it.
-            return Fixtures.connected(tiles: [Fixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.bob],
-                                      isDirect: true)
-        case .screenShare:
-            let sharer = Fixtures.tile("Frank", hasVideo: true, isScreenSharing: true)
-            return Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob, sharer], spotlight: sharer.memberID)
-        case .video:
-            // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
-            // Dan has his camera off, because a stage where every tile is a picture is not the one
-            // anybody is in: an avatar is a plain SwiftUI view that resizes on its own, and it is
-            // worth being able to see the two side by side through the same move.
-            // Dan comes second so he lands on the first page of the strip: a small phone fits only
-            // two tiles to a page, and an avatar you have to swipe to reach is one you will forget
-            // to look at.
-            let tiles = ["Alice", "Dan", "Carol", "Bob", "Erin", "Frank"].enumerated().map { index, name in
-                Fixtures.tile(name, isLocal: index == 0, hasVideo: name != "Dan")
-            }
-            return Fixtures.connected(tiles: tiles, spotlight: tiles[2].memberID)
-        }
-    }
-}
-
-struct ElementCallExampleScreen: View {
-    let arrangement: ElementCallExampleArrangement
-    
-    @State private var context: ElementCallScreenContext?
+    @State private var host = ElementCallExampleHost()
     @State private var video = TestPatternVideo()
     
     var body: some View {
         ZStack {
-            if let context {
-                ElementCallHarnessScreen(context: context)
-                    .environment(\.elementCallPreviewVideo, arrangement.wantsVideo ? video.source : nil)
+            // The catalogue is not merely covered while the call is up, it is unmounted. A `List`
+            // losing its scroll position costs nothing, and in exchange the accessibility tree a UI
+            // test walks during a call is the one it walked before any of this existed.
+            if host.session == nil || host.isMinimized {
+                ElementCallExampleCatalogue(target: target) { host.open($0) }
+                    // An inset rather than an overlay: it pushes the list down instead of covering
+                    // its first row, which is what a host does and what makes the point of the
+                    // thing — you can see the catalogue behind the call — actually legible.
+                    .safeAreaInset(edge: .top) {
+                        if let session = host.session {
+                            ElementCallMinimizedBar(controller: session.controller) { host.restore() }
+                        }
+                    }
+            }
+            
+            // Unmounted while minimized rather than left to draw `ElementCallView`'s own minimized
+            // branch. That branch is `Color.clear`, which SwiftUI still hit-tests, so a shipping
+            // host gets away with it and a full-screen one over this catalogue would silently eat
+            // every tap on the list and look like a broken list.
+            if let session = host.session, !host.isMinimized {
+                callScreen(session)
             }
         }
         .onAppear {
-            guard context == nil else { return }
-            context = .harness(state: arrangement.state)
+            guard case .fixture(let fixture) = target, host.session == nil else { return }
+            host.open(fixture)
         }
     }
-}
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
+    
+    @ViewBuilder
+    private func callScreen(_ session: ElementCallExampleHost.Session) -> some View {
+        switch session.presentation {
+        case .harness(let context):
+            ElementCallHarnessScreen(context: context)
+                .environment(\.elementCallPreviewVideo, session.fixture.wantsVideo ? video.source : nil)
+        case .live(let viewModel):
+            // The shipping view, not the harness one: a connecting state is the one thing a real
+            // view model can render without a joined call, so there is no reason to fake it.
+            ElementCallScreen(viewModel: viewModel)
+        }
     }
 }
