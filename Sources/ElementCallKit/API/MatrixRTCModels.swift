@@ -29,6 +29,29 @@ public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
     case microphone, camera, screenShare, screenShareAudio, data
 }
 
+/// What identifies a tile, and equally what identifies a stream: a member, and which of their
+/// streams this is about.
+///
+/// The member alone was the identity for as long as a member could only be one tile. A member
+/// publishing a camera *and* a screen share is two tiles now, drawn at once and ranked separately,
+/// so the member alone names a person rather than a tile — and a `Set` keyed on one silently keeps
+/// one of the two, which is the failure this type exists to make unrepresentable.
+///
+/// It is deliberately one type rather than a tile identity beside a stream key. The bindings have
+/// always addressed a stream by exactly this pair — `videoStream(memberId:kind:)`,
+/// `setConstraints(memberId:kind:)` — and this layer has always had a private struct for it; they
+/// simply never shared a name. Giving them one is what lets the stage hand back something the media
+/// layer can act on without having to guess the kind.
+public nonisolated struct MatrixRTCTileID: Sendable, Hashable {
+    public let memberID: String
+    public let kind: MatrixRTCStreamKind
+    
+    public init(memberID: String, kind: MatrixRTCStreamKind = .camera) {
+        self.memberID = memberID
+        self.kind = kind
+    }
+}
+
 /// How the membership is published, fixed for the lifetime of a session.
 public nonisolated enum MatrixRTCElementCallCompat: String, Sendable, CaseIterable, Codable {
     /// MSC4143 as it stands.
