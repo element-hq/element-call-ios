@@ -96,10 +96,10 @@ struct ElementCallStage: View {
                 // vertical strip and fling it several pages.
                 dragTranslation = 0
             }
-            .onChange(of: releasedMemberIDs(in: stage), initial: true) { _, released in
+            .onChange(of: releasedStreams(in: stage), initial: true) { _, released in
                 // A side effect, so it belongs here rather than in the body: releasing is a message
                 // to the SFU, and the body runs whenever anything at all about the call changes.
-                callProvider()?.setReleasedVideoMembers(released)
+                callProvider()?.setReleasedVideoStreams(released)
             }
         }
     }
@@ -143,9 +143,16 @@ struct ElementCallStage: View {
         .forPage(page, currentPage: currentPage, livePages: livePages)
     }
     
-    private func releasedMemberIDs(in stage: ElementCallStageLayout) -> Set<String> {
-        Set(stage.placements.lazy.filter { visibility(for: $0.page) == .released }.map(\.tile.memberID))
+    /// The streams nothing on the stage is drawing.
+    ///
+    /// A placement names its member's camera, because that is the only stream a tile that is not the
+    /// spotlight ever attaches: the spotlight is unpaged and so never released, and a share reaches
+    /// the screen only through it. When a share becomes a placement of its own this reads
+    /// `\.tile.id` and the mapping here goes.
+    private func releasedStreams(in stage: ElementCallStageLayout) -> Set<MatrixRTCTileID> {
+        let members = Set(stage.placements.lazy.filter { visibility(for: $0.page) == .released }.map(\.tile.memberID))
             .union(stage.hiddenMemberIDs)
+        return Set(members.map { MatrixRTCTileID(memberID: $0, kind: .camera) })
     }
     
     private func pageIndicator(pageCount: Int, axis: Axis) -> some View {
