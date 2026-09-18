@@ -6,8 +6,8 @@
 //
 
 import Combine
-import Foundation
 import ElementCallHost
+import Foundation
 import Testing
 
 /// Where a minimized call goes, which the controller decides and the host carries out.
@@ -28,11 +28,23 @@ struct MinimizeRoutingTests {
         }
         
         func sawMinimizeRequested() -> Bool {
-            actions.contains { if case .minimizeRequested = $0 { true } else { false } }
+            actions.contains {
+                if case .minimizeRequested = $0 {
+                    true
+                } else {
+                    false
+                }
+            }
         }
         
         func sawPictureInPictureUnavailable() -> Bool {
-            actions.contains { if case .pictureInPictureUnavailable = $0 { true } else { false } }
+            actions.contains {
+                if case .pictureInPictureUnavailable = $0 {
+                    true
+                } else {
+                    false
+                }
+            }
         }
     }
     

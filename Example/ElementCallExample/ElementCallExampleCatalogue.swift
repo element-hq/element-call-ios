@@ -58,7 +58,7 @@ struct ElementCallExampleCatalogue: View {
     private func unknownArrangement(_ name: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(name.isEmpty ? "No arrangement given after \(ElementCallExampleFixture.launchArgument)"
-                              : "Unknown arrangement \u{201C}\(name)\u{201D}")
+                : "Unknown arrangement \u{201C}\(name)\u{201D}")
                 .font(.headline)
             Text("Showing the catalogue. Known: \(ElementCallExampleFixture.allCases.map(\.rawValue).joined(separator: ", "))")
                 .font(.caption)
