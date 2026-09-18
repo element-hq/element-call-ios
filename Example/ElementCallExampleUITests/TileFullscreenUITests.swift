@@ -35,6 +35,11 @@ final class TileFullscreenUITests: XCTestCase {
         app.otherElements["elementCall.tile.@\(user):example.com:DEVICE"]
     }
     
+    /// A member's *screen*, which is a second tile beside their camera rather than a state of it.
+    private func share(_ user: String) -> XCUIElement {
+        app.otherElements["elementCall.tile.@\(user):example.com:DEVICE/screenShare"]
+    }
+    
     /// A tile on another page of the strip is still in the hierarchy, just parked a screen's width
     /// away, so `exists` says nothing about which page is in view and a tap on one cannot land.
     /// Hittable is the question worth asking of anything on the strip.
@@ -263,18 +268,52 @@ final class TileFullscreenUITests: XCTestCase {
     
     // MARK: - Screen share
     
-    func testFullScreenOnASharerKeepsTheirScreen() {
+    /// A sharer is two tiles, and the one you double-tap is the one you get.
+    ///
+    /// This used to be a question of *size*: a big tile swapped a sharer's camera for their screen,
+    /// so going full screen on what looked like their camera showed their screen, and there was no
+    /// way to ask for the camera at all. The tile carries its own stream now, so there is nothing
+    /// left to infer.
+    func testASharerIsTwoTilesAndFullScreenTakesTheOneYouTapped() {
         launch("screenShare")
-        let frank = tile("frank")
-        XCTAssertTrue(frank.waitForExistence(timeout: 10))
+        XCTAssertTrue(share("frank").waitForExistence(timeout: 10))
+        XCTAssertTrue(tile("frank").exists, "his camera is on the stage beside his screen")
         
-        frank.doubleTap()
-        frank.tap()
-        
+        share("frank").doubleTap()
+        share("frank").tap()
         XCTAssertTrue(exitButtonAppears())
-        // The chrome names what you are looking at, and a share says so rather than naming them:
-        // the stream kind followed the spotlight alone until full screen taught it to follow size.
-        XCTAssertTrue(app.staticTexts["(Screen share)"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Frank (Screen share)"].waitForExistence(timeout: 2))
+        
+        share("frank").doubleTap()
+        XCTAssertTrue(tile("frank").waitForExistence(timeout: 3))
+        tile("frank").doubleTap()
+        tile("frank").tap()
+        XCTAssertTrue(exitButtonAppears())
+        XCTAssertTrue(app.staticTexts["Frank"].waitForExistence(timeout: 2), "his camera, named as him")
+    }
+    
+    /// The two tiles are addressable apart rather than collapsing into one element — which is what
+    /// `tilesOnScreen` would silently do while the identifier named only the member, since it
+    /// collects them into a `Set`.
+    func testASharersTwoTilesAreCountedAsTwo() {
+        launch("screenShare")
+        let onScreen = waitForAPage()
+        XCTAssertTrue(onScreen.contains(share("frank").identifier))
+        XCTAssertTrue(onScreen.contains(tile("frank").identifier))
+    }
+    
+    /// A sharer's camera paged out of view must not take their screen with it.
+    ///
+    /// The transport releases a stream, and the stage used to ask it to release a *member*: paging
+    /// the camera away therefore unsubscribed the screen filling the spotlight, a few seconds later,
+    /// with a visible re-negotiation to undo. Nothing in-process can see that — the placements are
+    /// all correct — so it takes a running app.
+    func testPagingAwayASharersCameraLeavesTheirScreenDrawing() {
+        launch("sharerOnAPagedStrip")
+        let firstPage = waitForAPage()
+        XCTAssertFalse(firstPage.isEmpty)
+        _ = pageStrip(from: firstPage)
+        XCTAssertTrue(share("frank").isHittable, "the hero is still on screen after the swipe")
     }
     
     // MARK: - Helpers

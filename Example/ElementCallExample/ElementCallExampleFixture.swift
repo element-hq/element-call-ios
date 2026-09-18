@@ -24,6 +24,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case pagedStrip
     case oneToOne
     case screenShare
+    case sharerOnAPagedStrip
     case video
     case joining
     case connectingMedia
@@ -44,7 +45,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     
     var category: Category {
         switch self {
-        case .group, .pagedStrip, .oneToOne, .screenShare, .video: .connected
+        case .group, .pagedStrip, .oneToOne, .screenShare, .sharerOnAPagedStrip, .video: .connected
         case .joining, .connectingMedia, .failed, .ended: .connecting
         }
     }
@@ -59,6 +60,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .pagedStrip: "Paged strip"
         case .oneToOne: "One to one"
         case .screenShare: "Screen share"
+        case .sharerOnAPagedStrip: "Sharer on a paged strip"
         case .video: "Moving video"
         case .joining: "Joining"
         case .connectingMedia: "Connecting media"
@@ -74,7 +76,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .group: "Eight people, one spotlit."
         case .pagedStrip: "Enough people that the strip runs to more than one page."
         case .oneToOne: "A direct call, our camera on, so the tile draws its flip button."
-        case .screenShare: "A remote share holding the spotlight."
+        case .screenShare: "A remote share holding the spotlight, the sharer's camera in the strip."
+        case .sharerOnAPagedStrip: "A sharer's camera pages away from their screen."
         case .video: "The only row fed real frames, some portrait and some landscape."
         case .joining: "Before there is a call to render."
         case .connectingMedia: "Joined, waiting on media."
@@ -104,12 +107,12 @@ enum ElementCallExampleFixture: String, CaseIterable {
         typealias Fixtures = ElementCallPreviewFixtures
         switch self {
         case .group:
-            return .connected(Fixtures.connected(tiles: Fixtures.group, spotlight: Fixtures.carol.memberID))
+            return .connected(Fixtures.connected(tiles: Fixtures.group))
         case .pagedStrip:
             // Enough people that the strip runs to more than one page: going full screen from page
             // two and coming back to page two is the thing worth checking.
             let extras = (1...16).map { Fixtures.tile("Member\($0)") }
-            return .connected(Fixtures.connected(tiles: Fixtures.group + extras, spotlight: Fixtures.carol.memberID))
+            return .connected(Fixtures.connected(tiles: Fixtures.group + extras))
         case .oneToOne:
             // Our camera on, so the tile draws its flip button: the one control inside a tile, and
             // so the one thing that can prove a tap still reaches a button rather than the gesture
@@ -117,8 +120,19 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return .connected(Fixtures.connected(tiles: [Fixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.bob],
                                                  isDirect: true))
         case .screenShare:
-            let sharer = Fixtures.tile("Frank", hasVideo: true, isScreenSharing: true)
-            return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.bob, sharer], spotlight: sharer.memberID))
+            // Frank on **two** tiles: his screen is the hero and takes the spotlight, and his camera
+            // is still in the strip beside everyone else's. That pairing is the whole of what
+            // changed, and it is the one arrangement in which a member-keyed accessibility
+            // identifier, released set or `ForEach` identity is wrong rather than merely redundant.
+            return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank"),
+                                                         Fixtures.tile("Frank", hasVideo: true), Fixtures.bob]))
+        case .sharerOnAPagedStrip:
+            // The sharer's own camera pushed several pages away from their screen. Releasing by
+            // member took the hero down with it a few seconds after a swipe, and only a running app
+            // shows that: the spotlight simply goes black.
+            let extras = (1...16).map { Fixtures.tile("Member\($0)") }
+            return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank")] + extras
+                                                     + [Fixtures.tile("Frank", hasVideo: true)]))
         case .video:
             // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
             // Dan has his camera off, because a stage where every tile is a picture is not the one
@@ -130,7 +144,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
             let tiles = ["Alice", "Dan", "Carol", "Bob", "Erin", "Frank"].enumerated().map { index, name in
                 Fixtures.tile(name, isLocal: index == 0, hasVideo: name != "Dan")
             }
-            return .connected(Fixtures.connected(tiles: tiles, spotlight: tiles[2].memberID))
+            return .connected(Fixtures.connected(tiles: tiles))
         case .joining:
             return .connecting(.joining)
         case .connectingMedia:
