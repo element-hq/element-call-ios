@@ -148,6 +148,122 @@ public nonisolated struct MatrixRTCParticipant: Sendable, Hashable, Identifiable
     }
 }
 
+/// One renderable stream of one membership, as the model ranked it.
+///
+/// A tile rather than a participant, and the difference is the point: a member publishing a camera
+/// and a screen share is **two** tiles, drawn at the same time and ranked separately. The model
+/// derives these from the roster, orders them, and damps the order; the app renders them in the
+/// order given. Re-sorting here would fight damping the model has already applied, at a different
+/// period, and make the strip twitch on every word.
+public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
+    public let id: MatrixRTCTileID
+    public let userID: String
+    public let deviceID: String?
+    /// Ourselves. Not the model's — our own tile arrives on its own surface and is never in the
+    /// ranked list — but the layout needs it, because the thumbnail and "You" are facts about
+    /// *whose* tile this is rather than about the stream.
+    public let isLocal: Bool
+    /// The model marks the tile worth the largest slot: a screen share today, a pin later. It does
+    /// **not** choose a spotlight — what a UI does with its largest slot stays the UI's business.
+    public let isHero: Bool
+    /// This tile's own stream is present and unmuted. Collapses "no camera" and "camera paused",
+    /// because both draw an avatar. On a share tile it is the share.
+    public let hasVideo: Bool
+    /// The *member's* microphone is absent or muted — what a mute icon means. Named for its subject
+    /// because a tile is itself a stream that can be muted, and that state is ``hasVideo``.
+    public let isMicrophoneMuted: Bool
+    public let isSpeaking: Bool
+    public let handRaisedAt: Date?
+    public let isReachable: Bool
+    
+    public var memberID: String { id.memberID }
+    public var kind: MatrixRTCStreamKind { id.kind }
+    public var isScreenShare: Bool { id.kind == .screenShare }
+    
+    public init(id: MatrixRTCTileID,
+                userID: String,
+                deviceID: String? = nil,
+                isLocal: Bool = false,
+                isHero: Bool = false,
+                hasVideo: Bool = false,
+                isMicrophoneMuted: Bool = false,
+                isSpeaking: Bool = false,
+                handRaisedAt: Date? = nil,
+                isReachable: Bool = true) {
+        self.id = id
+        self.userID = userID
+        self.deviceID = deviceID
+        self.isLocal = isLocal
+        self.isHero = isHero
+        self.hasVideo = hasVideo
+        self.isMicrophoneMuted = isMicrophoneMuted
+        self.isSpeaking = isSpeaking
+        self.handRaisedAt = handRaisedAt
+        self.isReachable = isReachable
+    }
+}
+
+/// A tile's place in the ranking: what it is and whether it is a hero, and nothing else.
+///
+/// One of these exists for **every** tile in the call, always — the order is never truncated — so
+/// the set a UI is *not* drawing is computable from it, which is what drives releasing subscriptions.
+/// Detail arrives only for the tiles inside the declared window, which is everything by default.
+public nonisolated struct MatrixRTCTileRef: Sendable, Hashable {
+    public let id: MatrixRTCTileID
+    public let isHero: Bool
+    
+    public init(id: MatrixRTCTileID, isHero: Bool = false) {
+        self.id = id
+        self.isHero = isHero
+    }
+}
+
+/// The model's ranking, and the detail we asked for.
+public nonisolated struct MatrixRTCTileRoster: Sendable, Equatable {
+    /// Every tile in the call, in rank order: hero, then hand raised earliest first, then speaking,
+    /// then video, then join time. **Render in this order. Never re-sort it.**
+    public let order: [MatrixRTCTileRef]
+    /// Joined to ``order`` **by identity, never by index**. A dictionary rather than an array for
+    /// exactly that reason: the two are the same length only while the detail window is the default
+    /// one, and joining by position is a silent wrong answer rather than a crash the day it is not.
+    public let detail: [MatrixRTCTileID: MatrixRTCTile]
+    
+    public init(order: [MatrixRTCTileRef], detail: [MatrixRTCTileID: MatrixRTCTile]) {
+        self.order = order
+        self.detail = detail
+    }
+    
+    /// Every tile in the order, with detail for all of them. What the default window produces, and
+    /// the shape a test or a fixture wants.
+    public init(_ tiles: [MatrixRTCTile]) {
+        self.init(order: tiles.map { MatrixRTCTileRef(id: $0.id, isHero: $0.isHero) },
+                  detail: Dictionary(uniqueKeysWithValues: tiles.map { ($0.id, $0) }))
+    }
+    
+    public static let empty = MatrixRTCTileRoster(order: [], detail: [:])
+    
+    public subscript(id: MatrixRTCTileID) -> MatrixRTCTile? { detail[id] }
+    
+    /// The ranked tiles we hold detail for, in order. The accessor a renderer should use: when the
+    /// window narrows this shortens rather than producing half-built tiles.
+    public var ranked: [MatrixRTCTile] { order.compactMap { detail[$0.id] } }
+}
+
+/// What is true of *us*, beside the roster rather than in it, and changing when we act rather than
+/// when the call moves.
+public nonisolated struct MatrixRTCLocalState: Sendable, Equatable {
+    /// Our own tile. Never in the ranked list, and never a hero.
+    public let tile: MatrixRTCTile
+    /// Derived from publication state — the stream up *and* unmuted — never from what we asked for,
+    /// so it goes false however the share ended.
+    public let isScreenSharing: Bool
+    
+    public init(tile: MatrixRTCTile, isScreenSharing: Bool) {
+        self.tile = tile
+        self.isScreenSharing = isScreenSharing
+    }
+}
+
 public nonisolated struct MatrixRTCSpeakingMember: Sendable, Hashable {
     public let memberID: String
     public let level: Float

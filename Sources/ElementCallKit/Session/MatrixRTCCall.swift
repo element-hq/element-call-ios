@@ -19,7 +19,45 @@ public final class MatrixRTCCall {
     public let localMemberID: String
     
     /// The transport's roster (not the membership projection; the two can legitimately differ).
+    ///
+    /// Kept beside ``tiles`` rather than replaced by it. Tiles are a projection of this, and the
+    /// questions that are about the *call* rather than about what is drawn — is anyone on video,
+    /// what should a single-tile surface show, what did the transport actually report for a member —
+    /// are still answered here, un-joined and one row per membership.
     public private(set) var participants: [MatrixRTCParticipant] = []
+    /// What to draw, in the order to draw it. See ``MatrixRTCTileRoster``.
+    public private(set) var tiles: MatrixRTCTileRoster = .empty
+    /// Our own tile and whether we are sharing our screen; nil until our membership reaches the
+    /// roster. Prefer ``ownTile``, which covers that gap.
+    public private(set) var localState: MatrixRTCLocalState?
+
+    /// Our own tile — and the reason this is not simply `localState?.tile`.
+    ///
+    /// The model publishes local state only once our membership has reached the roster, a moment or
+    /// two after the call connects, and the self view is usually the only picture on screen for that
+    /// moment. Waiting for it would flash an empty stage on every single join. The transport roster
+    /// already has us by then — `start()` sweeps it synchronously — so the same tile is built from
+    /// there until the model publishes its own.
+    ///
+    /// It also keeps "no tiles" meaning "not connected yet". The ranked list is empty when you are
+    /// the only person in the call, and a UI that read emptiness as "nothing to show" would put a
+    /// loading spinner over a live call with no way out of it.
+    public var ownTile: MatrixRTCTile? {
+        if let tile = localState?.tile {
+            return tile
+        }
+        guard let local = participants.first(where: \.isLocal) else { return nil }
+        return MatrixRTCTile(id: MatrixRTCTileID(memberID: local.memberID, kind: .camera),
+                             userID: local.userID,
+                             deviceID: local.deviceID,
+                             isLocal: true,
+                             isHero: false,
+                             hasVideo: local.isPublishing(.camera),
+                             isMicrophoneMuted: !local.isPublishing(.microphone),
+                             isSpeaking: false,
+                             handRaisedAt: local.handRaisedAt,
+                             isReachable: local.isReachable)
+    }
     public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
     public private(set) var receiveStats: [String: MatrixRTCReceiveStats] = [:]
     public private(set) var activeSpeakerIDs: Set<String> = []
@@ -101,10 +139,20 @@ public final class MatrixRTCCall {
     
     /// Starts the event pump **before** anything announces the call as connected (the stream has no
     /// replay), then sweeps the roster for members already publishing.
+    ///
+    /// The tile roster and our own state are pumped separately, one task each: both suspend, and a
+    /// single loop would have to race them and drop whichever it was not awaiting. Both are seeded
+    /// here rather than left to their pumps, which would fill them a turn later — after `connectMedia`
+    /// has already handed the call on. Same reason the event pump starts before anything announces
+    /// the call connected: there is no replay.
     func start() async {
         tasks.append(Task { [weak self] in await self?.pumpEvents() })
+        tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
+        tasks.append(Task { [weak self] in await self?.pumpLocalState() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
         refreshParticipants()
+        apply(mediaSession.roster())
+        apply(mediaSession.localState())
         for participant in participants where !participant.isLocal && participant.stream(.microphone) != nil {
             playAudio(of: participant.memberID)
         }
@@ -501,6 +549,42 @@ public final class MatrixRTCCall {
     
     private var currentInterfaceOrientation: UIInterfaceOrientation {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.interfaceOrientation ?? .portrait
+    }
+    
+    /// The ranked tiles, pushed. Latest-value-wins on the far side, so falling behind costs the
+    /// intermediate rosters rather than building a backlog of superseded ones.
+    private func pumpTileRoster() async {
+        while !Task.isCancelled, let roster = await mediaSession.nextRoster() {
+            apply(roster)
+        }
+        // Three pumps can now observe the session ending and only `pumpEvents` yields `.ended`.
+        // Saying so distinguishes a stage frozen on its last roster from one nobody is updating.
+        MatrixRTCLog.debug("Tile roster pump stopped (hasEnded: \(hasEnded))")
+    }
+    
+    private func pumpLocalState() async {
+        while !Task.isCancelled, let state = await mediaSession.nextLocalState() {
+            apply(state)
+        }
+        MatrixRTCLog.debug("Local state pump stopped (hasEnded: \(hasEnded))")
+    }
+    
+    private func apply(_ roster: FfiTileRoster) {
+        let mapped = MatrixRTCTileRoster(roster, localMemberID: localMemberID)
+        // Bail before assigning, for the reason `refreshParticipants` gives: every tile view reads
+        // this, and per-tile state publishes immediately rather than waiting out the model's
+        // reorder window, so an unconditional write would rebuild the stage on every flicker.
+        guard mapped != tiles else { return }
+        if mapped.order.map(\.id) != tiles.order.map(\.id) {
+            MatrixRTCLog.info("Tiles (\(mapped.order.count)): \(mapped.order.map { "\($0.id.memberID)/\($0.id.kind)\($0.isHero ? " hero" : "")" })")
+        }
+        tiles = mapped
+    }
+    
+    private func apply(_ state: FfiLocalState?) {
+        let mapped = state.map { MatrixRTCLocalState($0, localMemberID: localMemberID) }
+        guard mapped != localState else { return }
+        localState = mapped
     }
     
     private func pumpEvents() async {

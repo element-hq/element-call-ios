@@ -80,6 +80,51 @@ nonisolated extension MatrixRTCParticipant {
     }
 }
 
+nonisolated extension MatrixRTCTileID {
+    init(_ id: FfiTileId) {
+        self.init(memberID: id.memberId, kind: .init(id.kind))
+    }
+}
+
+nonisolated extension MatrixRTCTile {
+    /// `isLocal` is ours to decide: the bindings' tile has no such field, because our own tile only
+    /// ever arrives on the local-state surface and is never in the ranked list. Comparing the member
+    /// rather than trusting the surface keeps the two answers from disagreeing.
+    init(_ tile: FfiCallTile, localMemberID: String) {
+        self.init(id: MatrixRTCTileID(memberID: tile.memberId, kind: .init(tile.kind)),
+                  userID: tile.userId,
+                  deviceID: tile.deviceId,
+                  isLocal: tile.memberId == localMemberID,
+                  isHero: tile.hero,
+                  hasVideo: tile.hasVideo,
+                  isMicrophoneMuted: tile.microphoneMuted,
+                  isSpeaking: tile.speaking,
+                  handRaisedAt: tile.handRaisedAtMs.map { Date(timeIntervalSince1970: Double($0) / 1000) },
+                  isReachable: tile.reachable)
+    }
+}
+
+nonisolated extension MatrixRTCTileRoster {
+    init(_ roster: FfiTileRoster, localMemberID: String) {
+        // Keyed by identity on the way in, so nothing downstream is tempted to join by position.
+        // The two lists are the same length only while the detail window is the default one.
+        var detail = [MatrixRTCTileID: MatrixRTCTile](minimumCapacity: roster.detail.count)
+        for tile in roster.detail {
+            let mapped = MatrixRTCTile(tile, localMemberID: localMemberID)
+            detail[mapped.id] = mapped
+        }
+        self.init(order: roster.order.map { MatrixRTCTileRef(id: .init($0.id), isHero: $0.hero) },
+                  detail: detail)
+    }
+}
+
+nonisolated extension MatrixRTCLocalState {
+    init(_ state: FfiLocalState, localMemberID: String) {
+        self.init(tile: MatrixRTCTile(state.tile, localMemberID: localMemberID),
+                  isScreenSharing: state.isScreenSharing)
+    }
+}
+
 nonisolated extension MatrixRTCReceiveStats {
     init(_ stats: FfiReceiveStats) {
         self.init(packetsReceived: stats.packetsReceived,
