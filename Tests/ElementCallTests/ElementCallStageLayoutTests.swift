@@ -34,6 +34,33 @@ struct ElementCallStageLayoutTests {
     let bob = tile("bob")
     let carol = tile("carol")
     
+    /// The window is anchored to a tile that is actually on screen, in every arrangement that has
+    /// one. A nil here is not a cosmetic gap: the source view is mounted as that tile's background,
+    /// so nil leaves it in no window, and AVKit refuses a source view whose scene is not
+    /// foreground-active — "activation state other than UISceneActivationStateForegroundActive".
+    /// Minimizing then did nothing at all, which is how this was found.
+    @Test
+    func everyArrangementAnchorsThePictureInPictureSource() {
+        // Alone in a group call is the case that failed: the spotlight is never ourselves, so there
+        // was no spotlight tile to hang it on.
+        let alone = ElementCallStageLayout.compute(tiles: [local], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(alone.pictureInPictureMemberID == local.memberID)
+        
+        // And with others present but nobody spotlit, which the same nil would have covered.
+        let unspotlit = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: nil, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(unspotlit.pictureInPictureMemberID != nil)
+        #expect(alone.placements.contains { $0.tile.memberID == alone.pictureInPictureMemberID })
+        #expect(unspotlit.placements.contains { $0.tile.memberID == unspotlit.pictureInPictureMemberID })
+    }
+    
+    /// The spotlight still wins when there is one: the window continues the picture you were
+    /// watching, and the shrink animates from that tile's frame rather than from an arbitrary cell.
+    @Test
+    func theSpotlightIsPreferredAsThePictureInPictureAnchor() {
+        let layout = ElementCallStageLayout.compute(tiles: [local, bob, carol], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)
+        #expect(layout.pictureInPictureMemberID == bob.memberID)
+    }
+    
     static func tile(_ name: String, isLocal: Bool = false) -> ElementCallTile {
         ElementCallTile(memberID: "@\(name):example.com:DEVICE", userID: "@\(name):example.com", displayName: name,
                         avatarURL: nil, isLocal: isLocal, isMicrophoneMuted: false, hasMicrophone: true, hasVideo: false, isScreenSharing: false,
@@ -54,7 +81,10 @@ struct ElementCallStageLayoutTests {
         #expect(only.page == nil)
         #expect(layout.pageCount == 1)
         #expect(layout.pageIndicatorCenter == nil)
-        #expect(layout.pictureInPictureMemberID == nil)
+        // Was pinned as nil, which pinned a bug: with no anchor the Picture in Picture source view
+        // is mounted nowhere, and minimizing while alone failed outright. See
+        // `everyArrangementAnchorsThePictureInPictureSource`.
+        #expect(layout.pictureInPictureMemberID == local.memberID)
         
         // The first person to arrive takes the spotlight and we slide down into the strip.
         let joined = ElementCallStageLayout.compute(tiles: [local, bob], spotlightMemberID: bob.memberID, layout: .group, currentPage: 0, metrics: metrics)

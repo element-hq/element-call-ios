@@ -337,7 +337,15 @@ struct ElementCallStageLayout: Equatable {
                                                        isSpotlight: false,
                                                        page: nil,
                                                        zIndex: 1))
-            return ElementCallStageLayout(placements: placements, pageCount: 1, pageAxis: plan.pageAxis)
+            // The one tile anchors the window. This return omitted it, and it is the exact path a
+            // call takes while you are alone in it: one tile, and a spotlight that is never
+            // ourselves. The source view is mounted as the anchor tile's background, so no anchor
+            // meant no source view in any window, and AVKit refuses one whose scene is not
+            // foreground-active. Minimizing alone did nothing at all.
+            return ElementCallStageLayout(placements: placements,
+                                          pageCount: 1,
+                                          pageAxis: plan.pageAxis,
+                                          pictureInPictureMemberID: only.memberID)
         }
         
         let cellWidth = (plan.stripFrame.width - CGFloat(plan.columns - 1) * Metrics.spacing) / CGFloat(plan.columns)
@@ -385,7 +393,14 @@ struct ElementCallStageLayout: Equatable {
                                                                                            rowsPerPage: rowsPerPage,
                                                                                            cellHeight: cellHeight) : nil,
                                       pageAxis: plan.pageAxis,
-                                      pictureInPictureMemberID: spotlightTile?.memberID)
+                                      // Falls back to any tile rather than going nil. The spotlight
+                                      // is never ourselves, so alone in a group call there is none —
+                                      // and a nil here left the source view unmounted, which AVKit
+                                      // refuses with "the UIScene for the content source has an
+                                      // activation state other than foregroundActive". A view in no
+                                      // window belongs to no scene. Minimizing alone therefore did
+                                      // nothing at all, twice, because the retry fails the same way.
+                                      pictureInPictureMemberID: spotlightTile?.memberID ?? placements.first?.tile.memberID)
     }
     
     /// Portrait has room under the strip for a row of dots. Landscape has none, so they go in the
