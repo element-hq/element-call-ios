@@ -60,7 +60,6 @@ public final class MatrixRTCCall {
     }
     public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
     public private(set) var receiveStats: [String: MatrixRTCReceiveStats] = [:]
-    public private(set) var activeSpeakerIDs: Set<String> = []
     public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
     public private(set) var isMicrophoneMuted = false
     public private(set) var isCameraEnabled = false
@@ -612,9 +611,6 @@ public final class MatrixRTCCall {
             playAudio(of: memberID)
         case .streamStopped(let memberID, .microphone), .participantLeft(let memberID):
             stopPlayback(of: memberID)
-        case .activeSpeakers(let speakers):
-            hasTransportSpeakerEvents = true
-            activeSpeakerIDs = Set(speakers.map(\.memberID))
         case .frameEncryptionState(let memberID, let state):
             if frameEncryption[memberID] != state {
                 MatrixRTCLog.warning("Frame encryption \(state) for \(memberID) (was \(frameEncryption[memberID].map { "\($0)" } ?? "unknown"))")
@@ -673,13 +669,15 @@ public final class MatrixRTCCall {
         participants = refreshed
     }
     
-    /// Above this RMS a member counts as speaking when the transport sends no speaker events.
-    private static let speakingThreshold: Float = 0.02
-    private var hasTransportSpeakerEvents = false
-    
     /// Meters report ten times a second *per member*; published one by one, an eleven-person call
     /// would rebuild every tile over a hundred times a second. Levels are collected here and
     /// published in one batch per sample period, which is all a meter needs.
+    ///
+    /// This is the *level*, not whether somebody is speaking. Those used to be the same code: the
+    /// level was thresholded here to synthesise a speaker set, because the transport's own
+    /// active-speaker events had not been seen through the core. The model ranks on its own signal
+    /// now and publishes `speaking` on each tile, so a locally derived answer would only be a second
+    /// opinion for the ring to disagree with the order about.
     private static let audioLevelSamplePeriod: Duration = .milliseconds(100)
     @ObservationIgnored private var pendingAudioLevels: [String: MatrixRTCAudioLevel] = [:]
     @ObservationIgnored private var audioLevelFlush: Task<Void, Never>?
@@ -707,16 +705,6 @@ public final class MatrixRTCCall {
         // a monotonic `frameCount`, so two flushes for a live member never compare equal and the
         // guard could not fire. Nothing observing this may project it into a view.
         audioLevels = levels
-        
-        // LiveKit's active-speaker updates have not been observed through the core, so
-        // derive them from the decoded audio until they show up.
-        guard !hasTransportSpeakerEvents else { return }
-        let speaking = Set(audioLevels.filter { $0.value.level > Self.speakingThreshold }.keys)
-        if speaking != activeSpeakerIDs {
-            activeSpeakerIDs = speaking
-            let ranked = speaking.sorted { (audioLevels[$0]?.level ?? 0) > (audioLevels[$1]?.level ?? 0) }
-            eventsContinuation.yield(.activeSpeakers(ranked.map { .init(memberID: $0, level: audioLevels[$0]?.level ?? 0) }))
-        }
     }
     
     /// RTCP reports arrive about once a second; polling faster only repeats values.
