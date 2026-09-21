@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.7 - 2026-09-21
+
 **`matrix-rust-rtc` moved to `element-hq`**, pinned at `0.3.0-rc.1` (was `BillCarsonFr` at
 `0.2.0-rc.1`). No API change. If you declare `matrix-rust-rtc` yourself, switch to the new URL in the
 same commit: both spellings share the identity `matrix-rust-rtc`, so declaring them together fails
@@ -89,6 +93,23 @@ button exactly. The bar is where a user reaches for it; the menu is now diagnost
 **The call screen shows the package version**, as a disabled `version: <semver>` row at the foot of
 the overflow menu, so a bug report can quote it — readable as `ElementCallVersion.current` if a host
 wants it elsewhere. It is stamped by the release, so it is exact for any host that resolves a tag.
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* Fix: Cannot enter PIP mode when alone in the call by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/33
+
+⚠️ API Changes
+* Suffix every port protocol with Protocol by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/29
+* Make the settings port a value, and gate screen sharing and diagnostics by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/30
+
+🧱 Build
+* chore: Bump rust-rtc release 0.3.0-rc.1 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/35
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.5...0.1.0-rc.7
 
 ## 0.1.0-rc.5 - 2026-09-16
 
