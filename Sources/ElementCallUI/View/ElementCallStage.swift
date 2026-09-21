@@ -193,7 +193,7 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
     static func tile(_ name: String, isLocal: Bool = false, isMuted: Bool = false, isSpeaking: Bool = false) -> ElementCallTile {
         ElementCallTile(memberID: "@\(name.lowercased()):example.com:DEVICE", userID: "@\(name.lowercased()):example.com", displayName: isLocal ? "You" : name,
                         avatarURL: nil, isLocal: isLocal, isMicrophoneMuted: isMuted, hasMicrophone: true, hasVideo: false, isScreenSharing: false,
-                        isSpeaking: isSpeaking, hasHandRaised: false, isFrontCamera: isLocal, audioLevel: 0, stats: nil)
+                        isSpeaking: isSpeaking, hasHandRaised: false, isFrontCamera: isLocal, stats: nil)
     }
     
     static let local = tile("Alice", isLocal: true)

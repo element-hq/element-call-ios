@@ -64,7 +64,7 @@ struct ElementCallStageLayoutTests {
     static func tile(_ name: String, isLocal: Bool = false) -> ElementCallTile {
         ElementCallTile(memberID: "@\(name):example.com:DEVICE", userID: "@\(name):example.com", displayName: name,
                         avatarURL: nil, isLocal: isLocal, isMicrophoneMuted: false, hasMicrophone: true, hasVideo: false, isScreenSharing: false,
-                        isSpeaking: false, hasHandRaised: false, isFrontCamera: isLocal, audioLevel: 0, stats: nil)
+                        isSpeaking: false, hasHandRaised: false, isFrontCamera: isLocal, stats: nil)
     }
     
     func placement(_ tile: ElementCallTile, in layout: ElementCallStageLayout) throws -> ElementCallTilePlacement {
