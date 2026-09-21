@@ -6,11 +6,10 @@
 //
 
 import ElementCallHost
+@testable import ElementCallUI
 import Foundation
 import Synchronization
 import Testing
-
-@testable import ElementCallUI
 
 /// That the call screen stops republishing when nothing it draws has changed.
 ///
