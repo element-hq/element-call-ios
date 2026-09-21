@@ -2,7 +2,7 @@
 
 A native [MatrixRTC](https://github.com/matrix-org/matrix-spec-proposals/blob/main/proposals/4143-matrix-rtc.md)
 call implementation for iOS: media, session, user interface and the Matrix side, built on
-[matrix-rust-rtc](https://github.com/BillCarsonFr/matrix-rust-rtc).
+[matrix-rust-rtc](https://github.com/element-hq/matrix-rust-rtc).
 
 <p align="center">
   <img src="screenshot.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">

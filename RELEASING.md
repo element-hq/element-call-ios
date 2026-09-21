@@ -181,12 +181,10 @@ Two things follow from element-x-ios's Renovate config, and both are intended:
 A version with a hyphen is marked prerelease automatically: it stays off "latest", Renovate skips it,
 and a host has to pin it deliberately. That is what makes it the right first tag today.
 
-**`Package.swift` depends on `https://github.com/BillCarsonFr/matrix-rust-rtc` at
-`exact: "0.2.0-rc.1"`** — a personal namespace, at a prerelease of its own. A stable tag here would
-publish that edge into element-x-ios's resolved graph as though it were settled, so **the first
-stable release waits for `matrix-rust-rtc` to be published under `element-hq` at a stable version.**
-Until then, release `0.1.0-rc.N`. Cutting the first stable tag is a decision someone makes with this
-paragraph in front of them, not something to drift into.
+**`Package.swift` depends on `https://github.com/element-hq/matrix-rust-rtc` at
+`exact: "0.3.0-rc.1"`**, a prerelease. A stable tag here would publish that edge into element-x-ios's
+resolved graph as though it were settled, so **the first stable release waits for `matrix-rust-rtc` to
+reach a stable version.** Until then, release `0.1.0-rc.N`.
 
 ## Hotfix
 
@@ -257,7 +255,7 @@ green by the time you cut the release.
 
 ## Why there are no artifacts on the release page
 
-Comparing this against a [`matrix-rust-rtc`](https://github.com/BillCarsonFr/matrix-rust-rtc/releases)
+Comparing this against a [`matrix-rust-rtc`](https://github.com/element-hq/matrix-rust-rtc/releases)
 release, the missing `.xcframework.zip` looks like a broken pipeline. It is not.
 
 That repository ships a zip and a checksum because it contains **Rust**: cargo, uniffi and libwebrtc
