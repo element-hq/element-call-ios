@@ -11,6 +11,11 @@ version will actually read it.
 
 ## Unreleased
 
+**`matrix-rust-rtc` moved to `element-hq`**, pinned at `0.3.0-rc.1` (was `BillCarsonFr` at
+`0.2.0-rc.1`). No API change. If you declare `matrix-rust-rtc` yourself, switch to the new URL in the
+same commit: both spellings share the identity `matrix-rust-rtc`, so declaring them together fails
+resolution.
+
 **Every port protocol now ends in `Protocol`.** Requested by the host: element-x-ios suffixes every
 protocol it owns, so the package's ports were the only unsuffixed ones in files that otherwise carry
 the suffix throughout. Seven renames, and nothing but the names changed:
