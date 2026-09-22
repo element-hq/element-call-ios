@@ -182,7 +182,7 @@ A version with a hyphen is marked prerelease automatically: it stays off "latest
 and a host has to pin it deliberately. That is what makes it the right first tag today.
 
 **`Package.swift` depends on `https://github.com/element-hq/matrix-rust-rtc` at
-`exact: "0.3.0-rc.1"`**, a prerelease. A stable tag here would publish that edge into element-x-ios's
+`exact: "0.3.0-rc.2"`**, a prerelease. A stable tag here would publish that edge into element-x-ios's
 resolved graph as though it were settled, so **the first stable release waits for `matrix-rust-rtc` to
 reach a stable version.** Until then, release `0.1.0-rc.N`.
 
