@@ -11,6 +11,23 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.8 - 2026-09-22
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* Fix: Option menu keep getting re-drawn by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/37
+
+🧱 Build
+* chore: Bump rust-rtc to 0.3.0-rc.2 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/38
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.7...0.1.0-rc.8
+
 ## 0.1.0-rc.7 - 2026-09-21
 
 **`matrix-rust-rtc` moved to `element-hq`**, pinned at `0.3.0-rc.1` (was `BillCarsonFr` at
