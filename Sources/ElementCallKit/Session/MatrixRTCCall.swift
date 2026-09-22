@@ -602,6 +602,9 @@ public final class MatrixRTCCall {
             levels[memberID] = level
         }
         pendingAudioLevels.removeAll(keepingCapacity: true)
+        // Deliberately unguarded, unlike `refreshParticipants()` above: `MatrixRTCAudioLevel` carries
+        // a monotonic `frameCount`, so two flushes for a live member never compare equal and the
+        // guard could not fire. Nothing observing this may project it into a view.
         audioLevels = levels
         
         // LiveKit's active-speaker updates have not been observed through the core, so
@@ -632,7 +635,11 @@ public final class MatrixRTCCall {
                     stats[participant.memberID] = .init(audio)
                 }
             }
-            receiveStats = stats
+            // The same guard as `refreshParticipants()` above. Its reach is modest -- the counters
+            // move whenever audio is arriving -- but alone in a call this is empty every second.
+            if stats != receiveStats {
+                receiveStats = stats
+            }
         }
     }
     

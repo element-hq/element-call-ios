@@ -38,7 +38,6 @@ public enum ElementCallPreviewFixtures {
                                isSpeaking: isSpeaking,
                                hasHandRaised: hasHandRaised,
                                isFrontCamera: isLocal,
-                               audioLevel: isSpeaking ? 0.6 : 0,
                                stats: stats)
     }
     

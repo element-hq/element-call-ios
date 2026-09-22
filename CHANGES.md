@@ -11,7 +11,9 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`ElementCallTile.audioLevel` is removed.** No view ever drew it, and projecting it made the call
+screen rebuild ten times a second, which left the top bar's menu dropping taps. Use `isSpeaking` if
+you need to know who is talking.
 
 ## 0.1.0-rc.7 - 2026-09-21
 

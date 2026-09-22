@@ -227,9 +227,10 @@ public final class ElementCallScreenViewModel {
         
         guard let call = controller.call else {
             state.tiles = []
-            context.viewState = state
+            publish(state)
             // The call object is gone once the call ended, so this must come after the state is
-            // published but still run on the ended transition.
+            // published, and run on the ended transition whether or not `publish(_:)` took: a
+            // second wake after the call ended carries an unchanged state, which it declines.
             if case .ended = controller.connection, !hasRequestedDismissal {
                 hasRequestedDismissal = true
             }
@@ -244,29 +245,46 @@ public final class ElementCallScreenViewModel {
         
         state.tiles = call.participants.map { participant in
             let profile = profiles[participant.userID]
-            let stats = call.receiveStats[participant.memberID]
+            let hasMicrophone = participant.isLocal || participant.stream(.microphone) != nil
             return ElementCallTile(memberID: participant.memberID,
                                    userID: participant.userID,
                                    displayName: participant.isLocal ? context.style.strings.you : (profile?.displayName ?? participant.userID),
                                    avatarURL: profile?.avatarURL,
                                    isLocal: participant.isLocal,
                                    isMicrophoneMuted: participant.isLocal ? call.isMicrophoneMuted : !participant.isPublishing(.microphone),
-                                   hasMicrophone: participant.isLocal || participant.stream(.microphone) != nil,
+                                   hasMicrophone: hasMicrophone,
                                    hasVideo: participant.isLocal ? call.isCameraEnabled : participant.isPublishing(.camera),
                                    isScreenSharing: participant.isPublishing(.screenShare),
                                    isSpeaking: call.activeSpeakerIDs.contains(participant.memberID),
                                    hasHandRaised: participant.handRaisedAt != nil,
                                    isFrontCamera: call.isFrontCamera,
-                                   audioLevel: call.audioLevels[participant.memberID]?.level ?? 0,
-                                   stats: controller.isTileStatsVisible
-                                       ? Self.describe(stats,
-                                                       hasMicrophone: participant.isLocal || participant.stream(.microphone) != nil,
-                                                       encryption: call.frameEncryption[participant.memberID],
-                                                       video: call.videoInfo(memberID: participant.memberID),
-                                                       requested: participant.isLocal ? nil : call.requestedVideoConstraints(memberID: participant.memberID))
-                                       : nil)
+                                   stats: stats(for: participant, hasMicrophone: hasMicrophone, in: call))
         }
         
+        publish(state)
+    }
+    
+    /// The overlay's text for one tile, or nil when the overlay is down.
+    ///
+    /// The guard comes before the reads so that, with the overlay down, none of these properties
+    /// enters `refresh()`'s observation access list. `receiveStats` is rewritten every second
+    /// whether anyone is looking or not, so tracking it cost a full screen rebuild per second.
+    private func stats(for participant: MatrixRTCParticipant, hasMicrophone: Bool, in call: MatrixRTCCall) -> String? {
+        guard controller.isTileStatsVisible else { return nil }
+        return Self.describe(call.receiveStats[participant.memberID],
+                             hasMicrophone: hasMicrophone,
+                             encryption: call.frameEncryption[participant.memberID],
+                             video: call.videoInfo(memberID: participant.memberID),
+                             requested: participant.isLocal ? nil : call.requestedVideoConstraints(memberID: participant.memberID))
+    }
+    
+    /// Publishes a projection only when it differs from the one on screen.
+    ///
+    /// `Equatable` alone would not do it: Observation notifies on every set, equal or not. And
+    /// `viewState` is one coarse property that every view reads through, so a wake changing nothing
+    /// invalidated all of them -- the top bar's `Menu` included, under the user's finger.
+    private func publish(_ state: ElementCallScreenViewState) {
+        guard state != context.viewState else { return }
         context.viewState = state
     }
     

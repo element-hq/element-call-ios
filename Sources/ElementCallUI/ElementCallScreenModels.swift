@@ -24,10 +24,11 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public let hasMicrophone: Bool
     public let hasVideo: Bool
     public let isScreenSharing: Bool
+    /// Loud enough to count as talking. A threshold crossing, not a level: nothing continuous
+    /// belongs in a tile, which the whole screen is rebuilt to redraw.
     public let isSpeaking: Bool
     public let hasHandRaised: Bool
     public let isFrontCamera: Bool
-    public let audioLevel: Float
     public let stats: String?
     
     public var id: String {
@@ -56,7 +57,11 @@ public nonisolated struct ElementCallAlert: Identifiable, Equatable, Sendable {
     }
 }
 
-public nonisolated struct ElementCallScreenViewState: Sendable {
+/// `Equatable` so ``ElementCallScreenViewModel`` can decline to republish an unchanged projection.
+/// Never hand-write `==` here: synthesis picks up a new member for free, and a hand-written one
+/// silently stops covering the member somebody adds next -- which is the same failure as the bug
+/// the conformance exists to fix.
+public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     public var roomName: String
     /// Whether the room is a direct chat. False until the room has been read.
     public var isDirect = false
@@ -109,7 +114,6 @@ extension ElementCallTile {
                         isSpeaking: isSpeaking,
                         hasHandRaised: hasHandRaised,
                         isFrontCamera: isFrontCamera,
-                        audioLevel: audioLevel,
                         stats: stats)
     }
 }

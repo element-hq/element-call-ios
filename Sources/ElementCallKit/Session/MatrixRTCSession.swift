@@ -51,6 +51,9 @@ public final class MatrixRTCSession {
     }
     
     func setMemberCount(_ count: Int) {
+        // The screen's projection reads this on every pass, so an unchanged report must not wake it.
+        // The core's count is re-queried after every room-state feed and usually comes back the same.
+        guard count != memberCount else { return }
         memberCount = count
     }
     
