@@ -21,12 +21,12 @@ struct DeferredFulfillment<Value: Sendable> {
     fileprivate let task: Task<Void, Never>
     fileprivate let timeout: Duration
     fileprivate let sourceLocation: SourceLocation
-
+    
     /// The matching value, or a recorded issue at the call site if none arrived in time.
     @discardableResult
     func fulfill() async throws -> Value {
         defer { task.cancel() }
-
+        
         return try await withThrowingTaskGroup(of: Value.self) { group in
             group.addTask { [stream] in
                 for await value in stream {
@@ -40,7 +40,7 @@ struct DeferredFulfillment<Value: Sendable> {
                 throw DeferredFulfillmentError.noOutput
             }
             defer { group.cancelAll() }
-
+            
             do {
                 guard let value = try await group.next() else {
                     throw DeferredFulfillmentError.noOutput
@@ -67,7 +67,7 @@ func deferFulfillment<Value: Sendable>(_ asyncSequence: any AsyncSequence<Value,
                                        sourceLocation: SourceLocation = #_sourceLocation,
                                        until condition: @escaping (Value) -> Bool) -> DeferredFulfillment<Value> {
     let (stream, continuation) = AsyncStream<Value>.makeStream()
-
+    
     let task = Task {
         for await value in asyncSequence where condition(value) {
             continuation.yield(value)
@@ -75,6 +75,6 @@ func deferFulfillment<Value: Sendable>(_ asyncSequence: any AsyncSequence<Value,
         }
         continuation.finish()
     }
-
+    
     return DeferredFulfillment(stream: stream, task: task, timeout: timeout, sourceLocation: sourceLocation)
 }
