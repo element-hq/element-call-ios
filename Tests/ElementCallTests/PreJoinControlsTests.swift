@@ -12,7 +12,6 @@
 @testable import ElementCallUI
 import Foundation
 import MatrixRtc
-import Observation
 import Testing
 
 /// Muting or turning the camera off before the call exists.
@@ -25,14 +24,9 @@ import Testing
 ///
 /// `ElementCallController.fake(connection:)` is exactly the state under test: a room, and no call.
 ///
-/// The tests that wait on a screen iterate `Observations`, so they await the emission rather than
-/// the clock -- the shape element-x-android gets from Turbine's `awaitItem()`, where Molecule makes
-/// the presenter a flow to begin with. That is the reason for the `@available(iOS 26, *)` on them
-/// while the package itself ships to 18: nothing below 26 can observe an `@Observable` as a
-/// sequence, and hand-rolling one on `withObservationTracking` resumes on *willSet*, so it reads
-/// the value it was waiting to see change. **An unavailable test is skipped rather than failed**,
-/// so if the pinned simulator ever moves below 26 these go quiet; the snapshot harness fails loudly
-/// on a simulator that is not the pinned one, which is what would tell you.
+/// The tests that wait on a screen use `deferFulfillment`, the helper the host reads its own tests
+/// with: start watching, act, then fulfil. Watching before the act is the point -- a value that
+/// lands between the two cannot be missed.
 @Suite("Pre-join controls")
 @MainActor
 struct PreJoinControlsTests {
@@ -61,12 +55,11 @@ struct PreJoinControlsTests {
     /// path a tap takes and asserts what the user is looking at: the button has to hold, or they tap
     /// it again and unmute themselves.
     @Test
-    @available(iOS 26, *)
     func aMuteBeforeTheCallExistsReachesTheScreen() async throws {
         let controller = ElementCallController.fake(connection: .joining)
         let viewModel = ElementCallScreenViewModel(controller: controller)
         #expect(!viewModel.context.viewState.isMicrophoneMuted)
-        let muted = deferFulfillment(Observations { viewModel.context.viewState.isMicrophoneMuted }) { $0 }
+        let muted = deferFulfillment(values { viewModel.context.viewState.isMicrophoneMuted }) { $0 }
         
         viewModel.context.send(viewAction: .toggleMicrophone)
         
@@ -77,11 +70,10 @@ struct PreJoinControlsTests {
     /// Only the disabling direction. Enabling goes through `AVCaptureDevice.requestAccess`, which
     /// nothing in process can answer for, whereas `if enabled, ...` skips that branch entirely here.
     @Test
-    @available(iOS 26, *)
     func turningTheCameraOffBeforeTheCallExistsIsRemembered() async throws {
         let controller = ElementCallController.fake(connection: .joining)
         #expect(controller.isCameraEnabled)
-        let disabled = deferFulfillment(Observations { controller.isCameraEnabled }) { !$0 }
+        let disabled = deferFulfillment(values { controller.isCameraEnabled }) { !$0 }
         
         controller.setCameraEnabled(false)
         
@@ -97,12 +89,11 @@ struct PreJoinControlsTests {
     /// wrong handler, or dropping the subscription, is as good a way to lose the mute as the guard
     /// that used to sit inside it.
     @Test
-    @available(iOS 26, *)
     func aSystemMuteBeforeTheCallExistsReachesTheScreen() async throws {
         let (controller, system) = makeJoiningController()
         let viewModel = ElementCallScreenViewModel(controller: controller)
         #expect(!viewModel.context.viewState.isMicrophoneMuted)
-        let muted = deferFulfillment(Observations { viewModel.context.viewState.isMicrophoneMuted }) { $0 }
+        let muted = deferFulfillment(values { viewModel.context.viewState.isMicrophoneMuted }) { $0 }
         
         system.send(.microphoneMuteChanged(isMuted: true))
         

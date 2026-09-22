@@ -16,6 +16,30 @@ import Testing
 /// in element-x-ios, which 65 of its test files read this way. Keeping the shape means a host
 /// engineer reads these tests without learning anything new. Only the async-sequence half is here:
 /// the Combine half needs an `ObservableObject`, and the call screen's state is `@Observable`.
+/// Every value `read` produces, sampled once per scheduling turn.
+///
+/// `Observations` is the event-driven source and reads better, and it is what this used to use. It
+/// samples *between* iterations, though, so a change landing in the gap is never seen, and there is
+/// no bound on how wide that gap gets: suites run in parallel, this all needs the main actor, and
+/// `PreviewTests` holds it for 35 seconds on CI. That is what failed there -- `.noOutput` on a test
+/// whose own duration was 33 seconds, so it had waited and the transition had gone past it.
+///
+/// Re-reading cannot miss a transition because it never waits for one; it asks what the value is
+/// now. Losing the sampling gap is also what lets these tests run below iOS 26, which `Observations`
+/// needs and which would have made them skip silently rather than fail.
+func values<Value: Sendable>(_ read: @escaping () -> Value) -> AsyncStream<Value> {
+    AsyncStream { continuation in
+        let task = Task {
+            while !Task.isCancelled {
+                continuation.yield(read())
+                await Task.yield()
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+    }
+}
+
 struct DeferredFulfillment<Value: Sendable> {
     fileprivate let stream: AsyncStream<Value>
     fileprivate let task: Task<Void, Never>
@@ -60,10 +84,13 @@ enum DeferredFulfillmentError: Error {
 
 /// - Parameters:
 ///   - asyncSequence: what to watch. Consumption starts here rather than in `fulfill()`.
-///   - timeout: how long `fulfill()` waits before recording an issue.
+///   - timeout: how long `fulfill()` waits before recording an issue. Only a bound on a broken
+///     expectation -- a passing test returns the moment the value arrives and never pays it. A
+///     minute, where the host uses ten seconds, because everything waited on here needs the main
+///     actor and `PreviewTests` renders 87 snapshots on that same actor: 35 seconds of it on CI.
 ///   - condition: which emission is the one being waited for.
 func deferFulfillment<Value: Sendable>(_ asyncSequence: any AsyncSequence<Value, Never>,
-                                       timeout: Duration = .seconds(10),
+                                       timeout: Duration = .seconds(60),
                                        sourceLocation: SourceLocation = #_sourceLocation,
                                        until condition: @escaping (Value) -> Bool) -> DeferredFulfillment<Value> {
     let (stream, continuation) = AsyncStream<Value>.makeStream()
