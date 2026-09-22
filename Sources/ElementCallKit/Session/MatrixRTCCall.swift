@@ -38,7 +38,9 @@ public final class MatrixRTCCall {
     public let events: AsyncStream<MatrixRTCCallEvent>
     private let eventsContinuation: AsyncStream<MatrixRTCCallEvent>.Continuation
     
-    private let mediaSession: MediaSession
+    /// The bindings' own protocol rather than the concrete `MediaSession`, so a test can see what
+    /// actually reaches the transport -- which is the only place the publish options are observable.
+    private let mediaSession: any MediaSessionProtocol
     private let audioEngine = CallAudioEngine()
     @ObservationIgnored private lazy var microphone = MicrophoneCapturer(engine: audioEngine) { [weak self] level in
         Task { @MainActor in self?.setAudioLevel(level, for: self?.localMemberID) }
@@ -95,7 +97,7 @@ public final class MatrixRTCCall {
         appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
     }
     
-    init(localMemberID: String, mediaSession: MediaSession) {
+    init(localMemberID: String, mediaSession: any MediaSessionProtocol) {
         self.localMemberID = localMemberID
         self.mediaSession = mediaSession
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
@@ -129,7 +131,10 @@ public final class MatrixRTCCall {
     
     // MARK: - Microphone
     
-    public func publishMicrophone() async throws {
+    /// `muted` goes into the publish itself rather than being applied after it, because the controls
+    /// are on screen while the call is still joining: someone who mutes there would otherwise be
+    /// published live for the moment between the track reaching the transport and the mute doing so.
+    public func publishMicrophone(muted: Bool = false) async throws {
         guard microphoneTrack == nil else { return }
         let track: FfiLocalTrack
         do {
@@ -137,14 +142,16 @@ public final class MatrixRTCCall {
                                                                               audio: FfiAudioSourceConfig(sampleRate: UInt32(AudioFormat.sampleRate),
                                                                                                           numChannels: UInt32(AudioFormat.channelCount)),
                                                                               video: nil,
-                                                                              simulcast: false))
+                                                                              simulcast: false,
+                                                                              muted: muted))
         } catch {
             throw MatrixRTCError.media("Failed to publish the microphone: \(error)")
         }
         microphoneTrack = track
         microphone.start(track: track)
-        // The transport only learns about a mute once there is a track.
-        await setMicrophoneMuted(isMicrophoneMuted)
+        // The transport already knows, from the publish. This is what closes the capturer's own gate
+        // and records the state.
+        await setMicrophoneMuted(muted)
         MatrixRTCLog.info("Publishing microphone as \(localMemberID)")
     }
     
@@ -174,7 +181,8 @@ public final class MatrixRTCCall {
                                                                                       audio: nil,
                                                                                       video: FfiVideoSourceConfig(width: CameraCapturer.captureWidth,
                                                                                                                   height: CameraCapturer.captureHeight),
-                                                                                      simulcast: true))
+                                                                                      simulcast: true,
+                                                                                      muted: false))
                 } catch {
                     throw MatrixRTCError.media("Failed to publish the camera: \(error)")
                 }
@@ -277,7 +285,8 @@ public final class MatrixRTCCall {
                                                                                   audio: nil,
                                                                                   video: FfiVideoSourceConfig(width: UInt32(ScreenShareCapturer.maxLongEdge),
                                                                                                               height: UInt32(ScreenShareCapturer.maxLongEdge * 9 / 16)),
-                                                                                  simulcast: true))
+                                                                                  simulcast: true,
+                                                                                  muted: false))
             } catch {
                 throw MatrixRTCError.media("Failed to publish the screen share: \(error)")
             }

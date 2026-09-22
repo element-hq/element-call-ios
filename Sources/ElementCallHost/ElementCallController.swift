@@ -60,6 +60,23 @@ public final class ElementCallController {
     public private(set) var session: MatrixRTCSession?
     public private(set) var call: MatrixRTCCall?
     
+    /// The user's media intent while there is no call to hold it. The control bar is on screen from
+    /// `.joining` onwards -- it is drawn whenever the screen is maximized, with no gate on the
+    /// connection -- so a tap on mute or camera arrives before `call` does. Those taps used to be
+    /// dropped: the button snapped back on the next refresh and the microphone went up unmuted.
+    private var pendingMicrophoneMuted = false
+    private var pendingCameraEnabled = false
+    
+    /// Computed rather than mirrored, so the call is the single truth the moment it exists and the
+    /// two cannot drift -- `applySystemMute(_:)` writes to the call directly.
+    public var isMicrophoneMuted: Bool {
+        call?.isMicrophoneMuted ?? pendingMicrophoneMuted
+    }
+    
+    public var isCameraEnabled: Bool {
+        call?.isCameraEnabled ?? pendingCameraEnabled
+    }
+    
     /// The system window for a minimized call, audio ones included — an audio call shows the
     /// avatar placeholder. Internal because the host drives it through ``requestMinimize()`` and
     /// ``restore()`` rather than directly.
@@ -166,6 +183,10 @@ public final class ElementCallController {
         self.room = room
         connection = .joining
         isMaximized = true
+        // The starting point for the controls, which are live from here on. A tap before the call
+        // exists overwrites these, and `publishMedia` joins with whatever they end up saying.
+        pendingMicrophoneMuted = false
+        pendingCameraEnabled = !callData.isAudioCall
         
         // The system window has to show something when the member on screen has their camera off.
         // Built here rather than in the view layer because everything it needs, the host's avatars
@@ -231,15 +252,24 @@ public final class ElementCallController {
     /// From the UI: mutes the call and tells the system, whose echo comes back through
     /// ``applySystemMute(_:)``.
     public func setMicrophoneMuted(_ muted: Bool) {
-        guard let roomID = room?.roomID else { return }
+        pendingMicrophoneMuted = muted
         Task { await call?.setMicrophoneMuted(muted) }
-        system.setMicrophoneEnabled(!muted, roomID: roomID)
+        // Only the system needs a room. The intent above is recorded either way, or a mute made
+        // before the call connects is lost.
+        if let roomID = room?.roomID {
+            system.setMicrophoneEnabled(!muted, roomID: roomID)
+        }
     }
     
-    /// From the system call UI, including our own transaction echoing back. Idempotent at the call level.
+    /// From the system call UI, including our own transaction echoing back. Idempotent, which is what
+    /// makes our own echo a no-op.
+    ///
+    /// Guarded on the intent rather than on the call, so that muting from the system UI while we are
+    /// still joining survives the join the same way muting from our own controls does.
     func applySystemMute(_ muted: Bool) {
-        guard let call, call.isMicrophoneMuted != muted else { return }
-        Task { await call.setMicrophoneMuted(muted) }
+        guard isMicrophoneMuted != muted else { return }
+        pendingMicrophoneMuted = muted
+        Task { await call?.setMicrophoneMuted(muted) }
     }
     
     public func setCameraEnabled(_ enabled: Bool) {
@@ -248,6 +278,9 @@ public final class ElementCallController {
                 if enabled, await !requestCameraAccess() {
                     return
                 }
+                // After the gate, so declining the prompt leaves the intent off rather than joining
+                // with a camera the user was never given.
+                pendingCameraEnabled = enabled
                 try await call?.setCameraEnabled(enabled)
             } catch {
                 log(.warning, "could not \(enabled ? "enable" : "disable") the camera: \(error)")
@@ -359,7 +392,7 @@ public final class ElementCallController {
         self.call = call
         bindPictureInPictureIfEnabled(call)
         
-        await publishMedia(on: call, session: session, callData: callData, room: room)
+        await publishMedia(on: call, session: session, room: room)
     }
     
     /// Claims the system call, finds a transport and joins the session, which puts our membership out.
@@ -420,7 +453,6 @@ public final class ElementCallController {
     /// Microphone, then camera for a video call. The call counts as connected once the microphone is up.
     private func publishMedia(on call: MatrixRTCCall,
                               session: MatrixRTCSession,
-                              callData: ElementCallData,
                               room: any ElementCallRoomContextProtocol) async {
         // Where nothing else owns the session, we do: the simulator, and an iOS app on macOS,
         // where the host's system-call port is inert because CallKit is unavailable. Runtime
@@ -437,8 +469,11 @@ public final class ElementCallController {
         // The system usually activated the session while we were still joining.
         startAudioIfReady()
         
+        // `pendingMicrophoneMuted`, not `isMicrophoneMuted`: `self.call` is assigned before this runs,
+        // so the accessor would already be answering from the fresh call -- unmuted -- and would
+        // discard a mute made while joining. The same goes for the camera below.
         do {
-            try await call.publishMicrophone()
+            try await call.publishMicrophone(muted: pendingMicrophoneMuted)
         } catch {
             fail("Microphone failed: \(error)")
             return
@@ -455,7 +490,7 @@ public final class ElementCallController {
             }
         }
         
-        if !callData.isAudioCall, await requestCameraAccess(), !Task.isCancelled {
+        if pendingCameraEnabled, await requestCameraAccess(), !Task.isCancelled {
             try? await call.setCameraEnabled(true)
         }
         guard !Task.isCancelled else {
@@ -621,5 +656,9 @@ public final class ElementCallController {
         self.room = room
         self.connection = connection
         self.connectedAt = connectedAt
+        // The same seed `startCall` makes, so a preview of a connecting call draws the controls a
+        // real one would: the camera reads as on for a video call from the moment it is joining,
+        // which is what it will join with.
+        pendingCameraEnabled = !callData.isAudioCall
     }
 }

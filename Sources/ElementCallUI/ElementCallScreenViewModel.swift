@@ -170,10 +170,12 @@ public final class ElementCallScreenViewModel {
     
     private func process(viewAction: ElementCallScreenViewAction) {
         switch viewAction {
+        // Through the controller rather than the call, which does not exist yet while we are joining
+        // -- and the controls are already on screen and tappable by then.
         case .toggleMicrophone:
-            controller.setMicrophoneMuted(!(controller.call?.isMicrophoneMuted ?? false))
+            controller.setMicrophoneMuted(!controller.isMicrophoneMuted)
         case .toggleCamera:
-            controller.setCameraEnabled(!(controller.call?.isCameraEnabled ?? false))
+            controller.setCameraEnabled(!controller.isCameraEnabled)
         case .switchCamera:
             controller.switchCamera()
         case .toggleScreenShare:
@@ -219,6 +221,10 @@ public final class ElementCallScreenViewModel {
         state.isMaximized = controller.isMaximized
         state.memberCount = controller.session?.memberCount ?? 0
         state.spotlightMemberID = controller.spotlightMemberID
+        // Above the guard below: these two are the only controls that mean anything before there is
+        // a call, and without them a mute tapped while joining draws itself back unmuted.
+        state.isMicrophoneMuted = controller.isMicrophoneMuted
+        state.isCameraEnabled = controller.isCameraEnabled
         
         if let message = controller.errorMessage {
             context.alertInfo = ElementCallAlert(title: context.style.strings.error, message: message)
@@ -237,8 +243,6 @@ public final class ElementCallScreenViewModel {
             return
         }
         
-        state.isMicrophoneMuted = call.isMicrophoneMuted
-        state.isCameraEnabled = call.isCameraEnabled
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
