@@ -63,23 +63,23 @@ final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
         try? await Task.sleep(for: .seconds(3600))
         return nil
     }
-
+    
     /// Parks like `nextEvent()`, for the same reason.
     func nextLocalState() async -> FfiLocalState? {
         try? await Task.sleep(for: .seconds(3600))
         return nil
     }
-
+    
     func roster() -> FfiTileRoster {
         FfiTileRoster(order: [], detail: [])
     }
-
+    
     func localState() -> FfiLocalState? {
         nil
     }
-
+    
     func setDetailWindow(offset: UInt32, len: UInt32, also: [FfiTileId]) { }
-
+    
     func participants() -> [FfiParticipant] {
         []
     }

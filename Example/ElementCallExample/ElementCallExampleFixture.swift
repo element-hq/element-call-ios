@@ -132,7 +132,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
             // shows that: the spotlight simply goes black.
             let extras = (1...16).map { Fixtures.tile("Member\($0)") }
             return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank")] + extras
-                                                     + [Fixtures.tile("Frank", hasVideo: true)]))
+                    + [Fixtures.tile("Frank", hasVideo: true)]))
         case .video:
             // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
             // Dan has his camera off, because a stage where every tile is a picture is not the one

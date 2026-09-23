@@ -176,9 +176,17 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
     public let handRaisedAt: Date?
     public let isReachable: Bool
     
-    public var memberID: String { id.memberID }
-    public var kind: MatrixRTCStreamKind { id.kind }
-    public var isScreenShare: Bool { id.kind == .screenShare }
+    public var memberID: String {
+        id.memberID
+    }
+    
+    public var kind: MatrixRTCStreamKind {
+        id.kind
+    }
+    
+    public var isScreenShare: Bool {
+        id.kind == .screenShare
+    }
     
     public init(id: MatrixRTCTileID,
                 userID: String,
@@ -242,11 +250,15 @@ public nonisolated struct MatrixRTCTileRoster: Sendable, Equatable {
     
     public static let empty = MatrixRTCTileRoster(order: [], detail: [:])
     
-    public subscript(id: MatrixRTCTileID) -> MatrixRTCTile? { detail[id] }
+    public subscript(id: MatrixRTCTileID) -> MatrixRTCTile? {
+        detail[id]
+    }
     
     /// The ranked tiles we hold detail for, in order. The accessor a renderer should use: when the
     /// window narrows this shortens rather than producing half-built tiles.
-    public var ranked: [MatrixRTCTile] { order.compactMap { detail[$0.id] } }
+    public var ranked: [MatrixRTCTile] {
+        order.compactMap { detail[$0.id] }
+    }
 }
 
 /// What is true of *us*, beside the roster rather than in it, and changing when we act rather than

@@ -33,9 +33,17 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public let isHero: Bool
     public let stats: String?
     
-    public var memberID: String { id.memberID }
-    public var kind: MatrixRTCStreamKind { id.kind }
-    public var isScreenShare: Bool { id.kind == .screenShare }
+    public var memberID: String {
+        id.memberID
+    }
+    
+    public var kind: MatrixRTCStreamKind {
+        id.kind
+    }
+    
+    public var isScreenShare: Bool {
+        id.kind == .screenShare
+    }
 }
 
 /// How the tiles are arranged.

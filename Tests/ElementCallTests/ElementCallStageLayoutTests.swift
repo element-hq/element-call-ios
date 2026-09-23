@@ -451,7 +451,7 @@ struct ElementCallStageLayoutTests {
         #expect(layout.placements.first?.tile.memberID == local.memberID)
         #expect(layout.hiddenTileIDs == [bob.id])
     }
-
+    
     // MARK: - A member on two tiles
     
     /// The case no fixture in this file had before, and the reason several member-keyed assumptions
@@ -546,7 +546,7 @@ struct ElementCallStageLayoutTests {
     /// pinned so that whoever translates "page N" into a rank range for the model's detail window
     /// finds it written down.
     @Test
-    func removingTheSpotlightFromTheStripShiftsEveryRankByOne() throws {
+    func removingTheSpotlightFromTheStripShiftsEveryRankByOne() {
         let tiles = [local, carol, bob] + (0..<5).map { Self.tile("m\($0)") }
         let withSpotlight = ElementCallStageLayout.compute(tiles: tiles, spotlightID: carol.id, layout: .group, currentPage: 0, metrics: metrics)
         let without = ElementCallStageLayout.compute(tiles: tiles, spotlightID: nil, layout: .group, currentPage: 0, metrics: metrics)

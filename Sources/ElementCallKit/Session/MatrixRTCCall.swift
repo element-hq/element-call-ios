@@ -30,7 +30,7 @@ public final class MatrixRTCCall {
     /// Our own tile and whether we are sharing our screen; nil until our membership reaches the
     /// roster. Prefer ``ownTile``, which covers that gap.
     public private(set) var localState: MatrixRTCLocalState?
-
+    
     /// Our own tile — and the reason this is not simply `localState?.tile`.
     ///
     /// The model publishes local state only once our membership has reached the roster, a moment or
@@ -58,6 +58,7 @@ public final class MatrixRTCCall {
                              handRaisedAt: local.handRaisedAt,
                              isReachable: local.isReachable)
     }
+    
     public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
     public private(set) var receiveStats: [String: MatrixRTCReceiveStats] = [:]
     public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
@@ -123,6 +124,7 @@ public final class MatrixRTCCall {
         }
         return capturer
     }()
+    
     /// The self view: frames straight from the camera, mirrored for the front one.
     public let localVideo = LocalVideoFanOut()
     
