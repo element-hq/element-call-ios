@@ -11,10 +11,6 @@ version will actually read it.
 
 ## Unreleased
 
-**`MatrixRTCTileRef` carries `userID`.** A tile outside the declared detail window has no
-`MatrixRTCTile`, but its reference now says whose it is, which is what a name and an avatar resolve
-through. Anything constructing a `MatrixRTCTileRef` passes it.
-
 **`ElementCallTile.audioLevel` is removed.** No view ever drew it, and projecting it made the call
 screen rebuild ten times a second, which left the top bar's menu dropping taps. Use `isSpeaking` if
 you need to know who is talking.
@@ -72,6 +68,9 @@ For a host reading the view state:
 - `MatrixRTCCall.setReleasedVideoMembers(_:)` is now `setReleasedVideoStreams(_:)` and takes tile
   identities. Releasing by member took down a sharer's screen when their camera paged away.
 - `MatrixRTCCall.activeSpeakerIDs` is gone; speaking is a field on each tile.
+- `MatrixRTCTileRef` carries `userID`: a tile outside the declared detail window has no
+  `MatrixRTCTile`, but its reference still says whose it is, which is what a name and an avatar
+  resolve through. Anything constructing one passes it.
 - `MatrixRTCCall.pictureInPictureCandidate(spotlightMemberID:)` and
   `pictureInPicturePlaceholderMemberID(spotlightMemberID:)` take `spotlight:` as a tile identity; the
   first returns one too.
