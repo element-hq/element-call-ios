@@ -324,8 +324,8 @@ public final class ElementCallScreenViewModel {
     private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
         let participant = call.participants.first { $0.memberID == tile.memberID }
         let hasMicrophone = tile.isLocal || participant?.stream(.microphone) != nil
-        return describe(call.receiveStats[tile.id],
-                        audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCTileID(memberID: tile.memberID, kind: .microphone)],
+        return describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
+                        audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
                         kind: tile.kind,
                         hasMicrophone: hasMicrophone,
                         encryption: call.frameEncryption[tile.memberID],

@@ -37,11 +37,12 @@ public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
 /// so the member alone names a person rather than a tile — and a `Set` keyed on one silently keeps
 /// one of the two, which is the failure this type exists to make unrepresentable.
 ///
-/// It is deliberately one type rather than a tile identity beside a stream key. The bindings have
-/// always addressed a stream by exactly this pair — `videoStream(memberId:kind:)`,
+/// It is deliberately one type for a tile and the video stream it draws. The bindings have always
+/// addressed a stream by exactly this pair — `videoStream(memberId:kind:)`,
 /// `setConstraints(memberId:kind:)` — and this layer has always had a private struct for it; they
 /// simply never shared a name. Giving them one is what lets the stage hand back something the media
-/// layer can act on without having to guess the kind.
+/// layer can act on without having to guess the kind. What it never names is a microphone: a stream
+/// that is not a tile is a ``MatrixRTCStreamRef``, the same pair without the "renderable" in it.
 public nonisolated struct MatrixRTCTileID: Sendable, Hashable {
     public let memberID: String
     public let kind: MatrixRTCStreamKind
@@ -49,6 +50,24 @@ public nonisolated struct MatrixRTCTileID: Sendable, Hashable {
     public init(memberID: String, kind: MatrixRTCStreamKind = .camera) {
         self.memberID = memberID
         self.kind = kind
+    }
+}
+
+/// One of a member's streams, of any kind: what per-stream statistics are keyed by.
+///
+/// Not a ``MatrixRTCTileID``, on purpose: a tile is a *renderable* stream, camera or screen share,
+/// and this can name a microphone. Build one from a tile with its member and kind.
+public nonisolated struct MatrixRTCStreamRef: Sendable, Hashable {
+    public let memberID: String
+    public let kind: MatrixRTCStreamKind
+    
+    public init(memberID: String, kind: MatrixRTCStreamKind) {
+        self.memberID = memberID
+        self.kind = kind
+    }
+    
+    public init(_ tile: MatrixRTCTileID) {
+        self.init(memberID: tile.memberID, kind: tile.kind)
     }
 }
 

@@ -28,9 +28,9 @@ struct ReceiveStatsPollingTests {
     func aSharersTwoTilesAskForTheCameraTheScreenAndOneMicrophone() {
         let roster = MatrixRTCTileRoster([tile("frank", kind: .screenShare), tile("frank")])
         let streams = MatrixRTCCall.streamsToPoll(tiles: roster, released: [], localMemberID: me)
-        #expect(streams == [MatrixRTCTileID(memberID: "frank", kind: .screenShare),
-                            MatrixRTCTileID(memberID: "frank", kind: .camera),
-                            MatrixRTCTileID(memberID: "frank", kind: .microphone)])
+        #expect(streams == [MatrixRTCStreamRef(memberID: "frank", kind: .screenShare),
+                            MatrixRTCStreamRef(memberID: "frank", kind: .camera),
+                            MatrixRTCStreamRef(memberID: "frank", kind: .microphone)])
     }
     
     /// A released tile is one nobody is drawing, so nothing about it -- not even its owner's audio,
@@ -39,8 +39,8 @@ struct ReceiveStatsPollingTests {
     func aReleasedTileIsNotPolled() {
         let roster = MatrixRTCTileRoster([tile("bob"), tile("carol")])
         let streams = MatrixRTCCall.streamsToPoll(tiles: roster, released: [tile("carol").id], localMemberID: me)
-        #expect(streams == [MatrixRTCTileID(memberID: "bob", kind: .camera),
-                            MatrixRTCTileID(memberID: "bob", kind: .microphone)])
+        #expect(streams == [MatrixRTCStreamRef(memberID: "bob", kind: .camera),
+                            MatrixRTCStreamRef(memberID: "bob", kind: .microphone)])
     }
     
     /// Our own streams have nothing to receive.

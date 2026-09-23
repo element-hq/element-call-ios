@@ -61,9 +61,9 @@ public final class MatrixRTCCall {
     
     public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
     /// RTP receive counters per remote stream: each composed tile's own, and its member's microphone.
-    /// Keyed by ``MatrixRTCTileID``, which names a stream as much as a tile. A stream missing here is
-    /// not yet reported rather than receiving nothing; a stream nobody draws is not polled at all.
-    public private(set) var receiveStats: [MatrixRTCTileID: MatrixRTCReceiveStats] = [:]
+    /// A stream missing here is not yet reported rather than receiving nothing; a stream nobody draws
+    /// is not polled at all.
+    public private(set) var receiveStats: [MatrixRTCStreamRef: MatrixRTCReceiveStats] = [:]
     public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
     public private(set) var isMicrophoneMuted = false
     public private(set) var isCameraEnabled = false
@@ -800,13 +800,13 @@ public final class MatrixRTCCall {
             // One round trip for the streams we draw, not one per member: at two hundred participants
             // the old loop was two hundred sequential awaits a second, for tiles nobody was looking at.
             let streams = Self.streamsToPoll(tiles: tiles, released: releasedVideoStreams, localMemberID: localMemberID)
-            var stats = [MatrixRTCTileID: MatrixRTCReceiveStats]()
+            var stats = [MatrixRTCStreamRef: MatrixRTCReceiveStats]()
             if !streams.isEmpty {
                 let answered = await mediaSession.receiveStatsFor(streams: streams.map { FfiStreamRef(memberId: $0.memberID, kind: $0.kind.ffi) })
                 for entry in answered {
                     // Null until the first RTCP report, which is not the same as zero.
                     if let counters = entry.stats {
-                        stats[MatrixRTCTileID(memberID: entry.memberId, kind: .init(entry.kind))] = .init(counters)
+                        stats[MatrixRTCStreamRef(memberID: entry.memberId, kind: .init(entry.kind))] = .init(counters)
                     }
                 }
             }
@@ -821,13 +821,13 @@ public final class MatrixRTCCall {
     /// The streams one stats sample asks about: every remote tile we are drawing -- the order minus
     /// what ``setReleasedVideoStreams(_:)`` has released -- then one microphone per member among
     /// them. In that order, without repeats, so the answer reads as the stage does.
-    static func streamsToPoll(tiles: MatrixRTCTileRoster, released: Set<MatrixRTCTileID>, localMemberID: String) -> [MatrixRTCTileID] {
+    static func streamsToPoll(tiles: MatrixRTCTileRoster, released: Set<MatrixRTCTileID>, localMemberID: String) -> [MatrixRTCStreamRef] {
         let drawn = tiles.order.map(\.id).filter { $0.memberID != localMemberID && !released.contains($0) }
         var seen = Set<String>()
-        let microphones = drawn.compactMap { tile -> MatrixRTCTileID? in
-            seen.insert(tile.memberID).inserted ? MatrixRTCTileID(memberID: tile.memberID, kind: .microphone) : nil
+        let microphones = drawn.compactMap { tile -> MatrixRTCStreamRef? in
+            seen.insert(tile.memberID).inserted ? MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone) : nil
         }
-        return drawn + microphones
+        return drawn.map(MatrixRTCStreamRef.init) + microphones
     }
     
     private func setTransportMuted(_ kind: MatrixRTCStreamKind, muted: Bool) async {
