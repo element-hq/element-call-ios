@@ -47,7 +47,7 @@ public final class MatrixRTCCall {
             return tile
         }
         guard let local = participants.first(where: \.isLocal) else { return nil }
-        return MatrixRTCTile(id: MatrixRTCTileID(memberID: local.memberID, kind: .camera),
+        return MatrixRTCTile(id: MatrixRTCTileID(memberID: local.memberID, kind: .person),
                              userID: local.userID,
                              deviceID: local.deviceID,
                              isLocal: true,
@@ -110,7 +110,7 @@ public final class MatrixRTCCall {
             guard let self else { return }
             localVideo.offer(frame)
             if let info = localVideoMeter.record(frame) {
-                Task { @MainActor in self.videoInfos[MatrixRTCTileID(memberID: self.localMemberID, kind: .camera)] = info }
+                Task { @MainActor in self.videoInfos[MatrixRTCStreamRef(memberID: self.localMemberID, kind: .camera)] = info }
             }
         }
         capturer.onInterruption = { [weak self] interrupted in
@@ -135,8 +135,8 @@ public final class MatrixRTCCall {
     private let localVideoMeter = VideoFrameMeter()
     private var cameraTrack: FfiLocalTrack?
     private var playbackSinks = [String: AudioPlaybackSink]()
-    private var videoSources = [MatrixRTCTileID: RemoteVideoSource]()
-    private var appliedConstraints = [MatrixRTCTileID: MatrixRTCVideoConstraints]()
+    private var videoSources = [MatrixRTCStreamRef: RemoteVideoSource]()
+    private var appliedConstraints = [MatrixRTCStreamRef: MatrixRTCVideoConstraints]()
     /// Streams that are released rather than merely paused. Held per stream rather than per member
     /// because a member can be two tiles: paging a sharer's camera away must not take the screen
     /// share filling the spotlight with it, which is exactly what walking both kinds per member did.
@@ -144,10 +144,10 @@ public final class MatrixRTCCall {
     private var tasks = [Task<Void, Never>]()
     
     /// Size and frame rate of the streams being drawn (or captured), refreshed about once a second.
-    private var videoInfos = [MatrixRTCTileID: MatrixRTCVideoInfo]()
+    private var videoInfos = [MatrixRTCStreamRef: MatrixRTCVideoInfo]()
     
     public func videoInfo(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoInfo? {
-        videoInfos[MatrixRTCTileID(memberID: memberID, kind: kind)]
+        videoInfos[MatrixRTCStreamRef(memberID: memberID, kind: kind)]
     }
     
     /// Upright aspect ratio of a stream seen so far, so a surface can be sized before its first frame.
@@ -157,7 +157,7 @@ public final class MatrixRTCCall {
     
     /// What was last asked of the SFU for a stream.
     public func requestedVideoConstraints(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoConstraints? {
-        appliedConstraints[MatrixRTCTileID(memberID: memberID, kind: kind)]
+        appliedConstraints[MatrixRTCStreamRef(memberID: memberID, kind: kind)]
     }
     
     init(localMemberID: String, mediaSession: any MediaSessionProtocol) {
@@ -304,7 +304,7 @@ public final class MatrixRTCCall {
                 return MatrixRTCTileID(memberID: participant.memberID, kind: .screenShare)
             }
             if participant.isPublishing(.camera) {
-                return MatrixRTCTileID(memberID: participant.memberID, kind: .camera)
+                return MatrixRTCTileID(memberID: participant.memberID, kind: .person)
             }
             return nil
         }
@@ -312,14 +312,14 @@ public final class MatrixRTCCall {
         // member's streams was meant: it only has to check the one it names is still publishing.
         if let spotlight,
            let participant = participants.first(where: { $0.memberID == spotlight.memberID && !$0.isLocal }),
-           participant.isPublishing(spotlight.kind) {
+           participant.isPublishing(spotlight.kind.videoStreamKind) {
             return spotlight
         }
         if let remote = participants.filter({ !$0.isLocal }).compactMap(candidate(for:)).first {
             return remote
         }
         if isLocalCameraAvailable {
-            return MatrixRTCTileID(memberID: localMemberID, kind: .camera)
+            return MatrixRTCTileID(memberID: localMemberID, kind: .person)
         }
         return nil
     }
@@ -443,7 +443,7 @@ public final class MatrixRTCCall {
     
     /// Attaches a tile's slot to the member's stream, opening the decoder on first attach.
     public func attachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
-        let key = MatrixRTCTileID(memberID: memberID, kind: kind)
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         let source = videoSources[key] ?? {
             let mediaSession = mediaSession
             let source = RemoteVideoSource {
@@ -462,7 +462,9 @@ public final class MatrixRTCCall {
         // A tile only attaches once it is on screen, so whatever the stage last decided about this
         // stream is out of date the moment we get here: drop the release before asking for it, or
         // the diff below would immediately take it away again.
-        releasedVideoStreams.remove(key)
+        if let tile = key.tileID {
+            releasedVideoStreams.remove(tile)
+        }
         // A tile that comes back after the stream went idle (or was released) needs the SFU sending
         // again; the tile's own size report refines this shortly after.
         let applied = appliedConstraints[key]
@@ -472,23 +474,23 @@ public final class MatrixRTCCall {
     }
     
     public func detachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
-        videoSources[MatrixRTCTileID(memberID: memberID, kind: kind)]?.detach(slot)
+        videoSources[MatrixRTCStreamRef(memberID: memberID, kind: kind)]?.detach(slot)
         reportDrawnSize(nil, slot: slot, memberID: memberID, kind: kind)
     }
     
     /// Drawn sizes per surface, so the SFU is asked for the largest of everything currently showing
     /// a stream rather than for whichever surface happened to lay out last.
-    private var drawnSizes = [MatrixRTCTileID: [UUID: CGSize]]()
+    private var drawnSizes = [MatrixRTCStreamRef: [UUID: CGSize]]()
     /// Streams paused and waiting out ``releaseLinger`` before they are released.
     private var pendingReleases = [MatrixRTCTileID: Task<Void, Never>]()
     
     /// A surface reports how big it draws a stream (nil when it stops drawing it).
     public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         guard memberID != localMemberID else { return }
-        let key = MatrixRTCTileID(memberID: memberID, kind: kind)
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         // A surface that is still laid out but released (Picture in Picture keeps one alive) must
         // not re-subscribe the stream behind the stage's back.
-        guard !releasedVideoStreams.contains(key) else { return }
+        guard key.tileID.map({ !releasedVideoStreams.contains($0) }) ?? true else { return }
         var sizes = drawnSizes[key] ?? [:]
         sizes[slot.id] = size
         drawnSizes[key] = sizes.isEmpty ? nil : sizes
@@ -510,7 +512,7 @@ public final class MatrixRTCCall {
                                                     pixelSize: constraints.pixelSize.map { size in
                                                         CGSize(width: (size.width / 16).rounded() * 16, height: (size.height / 16).rounded() * 16)
                                                     })
-        let key = MatrixRTCTileID(memberID: memberID, kind: kind)
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         guard appliedConstraints[key] != constraints else { return }
         appliedConstraints[key] = constraints
         MatrixRTCLog.info("Constraints for \(memberID) (\(kind)): enabled=\(constraints.isEnabled) visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
@@ -572,15 +574,15 @@ public final class MatrixRTCCall {
             // maximum for whoever draws the stream next. One tile at a time while paging; a
             // whole call at once now that a tile can go full screen.
             if isReleased {
-                drawnSizes[tile] = nil
+                drawnSizes[MatrixRTCStreamRef(tile)] = nil
             }
-            let applied = appliedConstraints[tile]
+            let applied = appliedConstraints[MatrixRTCStreamRef(tile)]
             // Both directions land on paused. Leaving stops there because it is the tile's own
             // attach that says it is being drawn again and at what size; arriving stops there
             // because the release is the step below.
             setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
                                 memberID: tile.memberID,
-                                kind: tile.kind)
+                                kind: tile.kind.videoStreamKind)
             guard isReleased else { continue }
             pendingReleases[tile] = Task { [weak self] in
                 try? await Task.sleep(for: Self.releaseLinger)
@@ -595,10 +597,10 @@ public final class MatrixRTCCall {
         pendingReleases[tile] = nil
         // It may have come back while this was waiting, in which case the cancel above raced us.
         guard releasedVideoStreams.contains(tile) else { return }
-        let applied = appliedConstraints[tile]
+        let applied = appliedConstraints[MatrixRTCStreamRef(tile)]
         setVideoConstraints(.init(isEnabled: false, isVisible: false, pixelSize: applied?.pixelSize),
                             memberID: tile.memberID,
-                            kind: tile.kind)
+                            kind: tile.kind.videoStreamKind)
     }
     
     // MARK: - Teardown

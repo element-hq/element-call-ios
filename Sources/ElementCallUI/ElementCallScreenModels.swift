@@ -37,7 +37,7 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
         id.memberID
     }
     
-    public var kind: MatrixRTCStreamKind {
+    public var kind: MatrixRTCTileKind {
         id.kind
     }
     

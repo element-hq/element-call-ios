@@ -100,7 +100,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         }
         videoView.onPixelSizeChange = { [weak self] size in
             guard let self, let call, let attached else { return }
-            call.reportDrawnSize(size, slot: videoView.slot, memberID: attached.memberID, kind: attached.kind)
+            call.reportDrawnSize(size, slot: videoView.slot, memberID: attached.memberID, kind: attached.kind.videoStreamKind)
         }
     }
     
@@ -161,7 +161,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     @discardableResult
     private func applyPreferredSizeForCurrentSource() -> MatrixRTCTileID? {
         let candidate = call?.pictureInPictureCandidate(spotlight: spotlightProvider?())
-        if let call, let candidate, let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
+        if let call, let candidate, let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind.videoStreamKind) {
             applyPreferredSize(aspect: aspect)
         } else if candidate == nil {
             // Nobody has video, so the window will show the avatar placeholder. Without this it
@@ -336,13 +336,13 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         guard candidate != attached else { return }
         detach()
         guard let candidate else { return }
-        if let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind) {
+        if let aspect = call.videoAspect(memberID: candidate.memberID, kind: candidate.kind.videoStreamKind) {
             applyPreferredSize(aspect: aspect)
         }
         if candidate.memberID == call.localMemberID {
             call.localVideo.attach(videoView.slot)
         } else {
-            call.attachVideo(videoView.slot, memberID: candidate.memberID, kind: candidate.kind)
+            call.attachVideo(videoView.slot, memberID: candidate.memberID, kind: candidate.kind.videoStreamKind)
         }
         attached = candidate
         logger?.log(.info, "picture in picture showing \(candidate.memberID) (\(candidate.kind))")
@@ -353,7 +353,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
         if attached.memberID == call.localMemberID {
             call.localVideo.detach(videoView.slot)
         } else {
-            call.detachVideo(videoView.slot, memberID: attached.memberID, kind: attached.kind)
+            call.detachVideo(videoView.slot, memberID: attached.memberID, kind: attached.kind.videoStreamKind)
         }
         self.attached = nil
         videoView.clear()

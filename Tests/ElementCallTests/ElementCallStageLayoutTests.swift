@@ -62,7 +62,7 @@ struct ElementCallStageLayoutTests {
         #expect(layout.pictureInPictureTileID == bob.id)
     }
     
-    static func tile(_ name: String, kind: MatrixRTCStreamKind = .camera, isLocal: Bool = false, isHero: Bool = false) -> ElementCallTile {
+    static func tile(_ name: String, kind: MatrixRTCTileKind = .person, isLocal: Bool = false, isHero: Bool = false) -> ElementCallTile {
         ElementCallTile(id: MatrixRTCTileID(memberID: "@\(name):example.com:DEVICE", kind: kind),
                         userID: "@\(name):example.com",
                         displayName: name,

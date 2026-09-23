@@ -130,7 +130,7 @@ struct ElementCallTileView: View {
                 // face and letterboxing every cell makes a grid look like a contact sheet.
                 AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : 0) { fit in
                     ElementCallVideoView(memberID: tile.memberID,
-                                         kind: tile.kind,
+                                         kind: tile.kind.videoStreamKind,
                                          isLocal: tile.isLocal,
                                          callProvider: callProvider,
                                          presentation: presentation(fit: fit),

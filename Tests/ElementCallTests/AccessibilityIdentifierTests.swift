@@ -40,7 +40,7 @@ nonisolated struct AccessibilityIdentifierTests {
     func tile() {
         #expect(ElementCallAccessibilityIdentifiers.tile(memberID: "@bob:example.com:DEVICE")
             == "elementCall.tile.@bob:example.com:DEVICE")
-        #expect(ElementCallAccessibilityIdentifiers.tile(MatrixRTCTileID(memberID: "@bob:example.com:DEVICE", kind: .camera))
+        #expect(ElementCallAccessibilityIdentifiers.tile(MatrixRTCTileID(memberID: "@bob:example.com:DEVICE", kind: .person))
             == "elementCall.tile.@bob:example.com:DEVICE")
         #expect(ElementCallAccessibilityIdentifiers.tile(MatrixRTCTileID(memberID: "@bob:example.com:DEVICE", kind: .screenShare))
             == "elementCall.tile.@bob:example.com:DEVICE/screenShare")

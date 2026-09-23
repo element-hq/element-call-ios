@@ -49,7 +49,7 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     /// more on screen than there was, which a rig counting tiles to count people will notice.
     public static func tile(_ id: MatrixRTCTileID) -> String {
         switch id.kind {
-        case .camera: "\(prefix).tile.\(id.memberID)"
+        case .person: "\(prefix).tile.\(id.memberID)"
         default: "\(prefix).tile.\(id.memberID)/\(id.kind)"
         }
     }
@@ -57,7 +57,7 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     /// A member's camera tile, by member ID. Kept because it is what an external rig calls, and
     /// because "Bob's tile" has always meant his camera.
     public static func tile(memberID: String) -> String {
-        tile(MatrixRTCTileID(memberID: memberID, kind: .camera))
+        tile(MatrixRTCTileID(memberID: memberID, kind: .person))
     }
     
     /// The control that shows a given icon. Derived rather than hand-written at each call site so a

@@ -329,13 +329,13 @@ public final class ElementCallScreenViewModel {
                         kind: tile.kind,
                         hasMicrophone: hasMicrophone,
                         encryption: call.frameEncryption[tile.memberID],
-                        video: call.videoInfo(memberID: tile.memberID, kind: tile.kind),
-                        requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind))
+                        video: call.videoInfo(memberID: tile.memberID, kind: tile.kind.videoStreamKind),
+                        requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind))
     }
     
     private static func describe(_ stats: MatrixRTCReceiveStats?,
                                  audio: MatrixRTCReceiveStats?,
-                                 kind: MatrixRTCStreamKind,
+                                 kind: MatrixRTCTileKind,
                                  hasMicrophone: Bool,
                                  encryption: MatrixRTCFrameEncryptionState?,
                                  video: MatrixRTCVideoInfo?,

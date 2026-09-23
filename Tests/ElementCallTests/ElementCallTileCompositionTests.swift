@@ -21,7 +21,7 @@ import Testing
 struct ElementCallTileCompositionTests {
     private let me = MatrixRTCTileID(memberID: "@alice:example.com:ME")
     
-    private func tile(_ name: String, kind: MatrixRTCStreamKind = .camera, isLocal: Bool = false, isHero: Bool = false, isSpeaking: Bool = false) -> MatrixRTCTile {
+    private func tile(_ name: String, kind: MatrixRTCTileKind = .person, isLocal: Bool = false, isHero: Bool = false, isSpeaking: Bool = false) -> MatrixRTCTile {
         MatrixRTCTile(id: MatrixRTCTileID(memberID: isLocal ? me.memberID : "@\(name):example.com:DEVICE", kind: kind),
                       userID: "@\(name):example.com",
                       isLocal: isLocal,

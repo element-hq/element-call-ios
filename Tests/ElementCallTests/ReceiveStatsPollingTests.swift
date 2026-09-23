@@ -14,7 +14,7 @@ import Testing
 struct ReceiveStatsPollingTests {
     private let me = "@alice:example.com:ME"
     
-    private func tile(_ member: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCTile {
+    private func tile(_ member: String, kind: MatrixRTCTileKind = .person) -> MatrixRTCTile {
         MatrixRTCTile(id: MatrixRTCTileID(memberID: member, kind: kind),
                       userID: "@\(member):example.com",
                       isLocal: false,

@@ -18,7 +18,7 @@ nonisolated struct PictureInPictureCandidateTests {
         let participants = [participant("bob", camera: true, screenShare: true), participant("carol", camera: true)]
         let share = MatrixRTCTileID(memberID: "bob", kind: .screenShare)
         #expect(MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: share) == share)
-        let camera = MatrixRTCTileID(memberID: "bob", kind: .camera)
+        let camera = MatrixRTCTileID(memberID: "bob", kind: .person)
         #expect(MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: camera) == camera)
     }
     
@@ -26,7 +26,7 @@ nonisolated struct PictureInPictureCandidateTests {
     func fallsBackToAnyRemoteVideoWhenTheSpotlightHasNone() {
         let participants = [participant("bob"), participant("carol", camera: true)]
         let candidate = MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: MatrixRTCTileID(memberID: "bob"))
-        #expect(candidate == MatrixRTCTileID(memberID: "carol", kind: .camera))
+        #expect(candidate == MatrixRTCTileID(memberID: "carol", kind: .person))
     }
     
     /// A share can stop while the window is continuing it, and the stage takes a moment to catch up.
@@ -37,13 +37,13 @@ nonisolated struct PictureInPictureCandidateTests {
         let participants = [participant("bob", camera: true), participant("carol", camera: true)]
         let goneShare = MatrixRTCTileID(memberID: "bob", kind: .screenShare)
         let candidate = MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: goneShare)
-        #expect(candidate == MatrixRTCTileID(memberID: "bob", kind: .camera))
+        #expect(candidate == MatrixRTCTileID(memberID: "bob", kind: .person))
     }
     
     @Test
     func fallsBackToOwnCameraOnlyWhenAvailable() {
         let participants = [participant("bob"), participant(me, isLocal: true, camera: true)]
-        #expect(MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: nil) == MatrixRTCTileID(memberID: me, kind: .camera))
+        #expect(MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: true, spotlight: nil) == MatrixRTCTileID(memberID: me, kind: .person))
         #expect(MatrixRTCCall.pictureInPictureCandidate(participants: participants, localMemberID: me, isLocalCameraAvailable: false, spotlight: nil) == nil)
     }
     

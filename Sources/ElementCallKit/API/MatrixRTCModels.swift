@@ -29,8 +29,7 @@ public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
     case microphone, camera, screenShare, screenShareAudio, data
 }
 
-/// What identifies a tile, and equally what identifies a stream: a member, and which of their
-/// streams this is about.
+/// What identifies a tile: a member, and whether this is them or a screen they are sharing.
 ///
 /// The member alone was the identity for as long as a member could only be one tile. A member
 /// publishing a camera *and* a screen share is two tiles now, drawn at once and ranked separately,
@@ -45,11 +44,28 @@ public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
 /// that is not a tile is a ``MatrixRTCStreamRef``, the same pair without the "renderable" in it.
 public nonisolated struct MatrixRTCTileID: Sendable, Hashable {
     public let memberID: String
-    public let kind: MatrixRTCStreamKind
+    public let kind: MatrixRTCTileKind
     
-    public init(memberID: String, kind: MatrixRTCStreamKind = .camera) {
+    public init(memberID: String, kind: MatrixRTCTileKind = .person) {
         self.memberID = memberID
         self.kind = kind
+    }
+}
+
+/// What a tile is: a person, or a screen they are sharing.
+///
+/// Not a ``MatrixRTCStreamKind``. A person tile draws the member's camera and carries their
+/// microphone state; a share tile draws the screen. Which stream a tile draws is ``videoStreamKind``,
+/// so nothing guesses it — and a microphone can never be spelled as a tile.
+public nonisolated enum MatrixRTCTileKind: Sendable, Hashable {
+    case person, screenShare
+    
+    /// The stream this kind of tile draws: what the media plane is addressed by.
+    public var videoStreamKind: MatrixRTCStreamKind {
+        switch self {
+        case .person: .camera
+        case .screenShare: .screenShare
+        }
     }
 }
 
@@ -66,8 +82,19 @@ public nonisolated struct MatrixRTCStreamRef: Sendable, Hashable {
         self.kind = kind
     }
     
+    /// The stream a tile draws.
     public init(_ tile: MatrixRTCTileID) {
-        self.init(memberID: tile.memberID, kind: tile.kind)
+        self.init(memberID: tile.memberID, kind: tile.kind.videoStreamKind)
+    }
+    
+    /// The tile this stream is drawn on, if it is one: a camera is a person's tile, a screen share
+    /// its own. A microphone is nobody's tile.
+    public var tileID: MatrixRTCTileID? {
+        switch kind {
+        case .camera: MatrixRTCTileID(memberID: memberID, kind: .person)
+        case .screenShare: MatrixRTCTileID(memberID: memberID, kind: .screenShare)
+        default: nil
+        }
     }
 }
 
@@ -199,7 +226,7 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
         id.memberID
     }
     
-    public var kind: MatrixRTCStreamKind {
+    public var kind: MatrixRTCTileKind {
         id.kind
     }
     

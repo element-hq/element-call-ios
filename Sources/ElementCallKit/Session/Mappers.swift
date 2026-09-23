@@ -80,6 +80,22 @@ nonisolated extension MatrixRTCParticipant {
     }
 }
 
+nonisolated extension MatrixRTCTileKind {
+    init(_ kind: FfiTileKind) {
+        switch kind {
+        case .person: self = .person
+        case .screenShare: self = .screenShare
+        }
+    }
+    
+    var ffi: FfiTileKind {
+        switch self {
+        case .person: .person
+        case .screenShare: .screenShare
+        }
+    }
+}
+
 nonisolated extension MatrixRTCTileID {
     init(_ id: FfiTileId) {
         self.init(memberID: id.memberId, kind: .init(id.kind))

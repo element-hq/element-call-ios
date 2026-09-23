@@ -60,8 +60,9 @@ Three consequences worth checking a rig for:
 
 For a host reading the view state:
 
-- `ElementCallTile.id` is `ElementCallTileID`-shaped (`MatrixRTCTileID`: a `memberID` and a `kind`)
-  rather than a `String`. `tile.memberID` still gives you the member.
+- `ElementCallTile.id` is a `MatrixRTCTileID`: a `memberID` and a `MatrixRTCTileKind`, `.person` or
+  `.screenShare` — what the tile *is*, not which stream. The stream a tile draws is
+  `kind.videoStreamKind`. `tile.memberID` still gives you the member.
 - `ElementCallTile.isScreenSharing` is gone — `tile.kind == .screenShare`, or `tile.isScreenShare`.
 - `ElementCallTile.hasMicrophone` and `.isFrontCamera` are gone. The core does not supply them per
   tile and nothing drew them. The equivalents are still on the call:

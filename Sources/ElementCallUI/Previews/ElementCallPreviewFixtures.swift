@@ -17,7 +17,7 @@ import Foundation
 /// initialiser is internal, so there is no other way to make one from outside.
 public enum ElementCallPreviewFixtures {
     public static func tile(_ name: String,
-                            kind: MatrixRTCStreamKind = .camera,
+                            kind: MatrixRTCTileKind = .person,
                             isLocal: Bool = false,
                             isMuted: Bool = false,
                             hasVideo: Bool = false,
