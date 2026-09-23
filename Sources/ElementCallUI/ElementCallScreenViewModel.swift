@@ -324,7 +324,8 @@ public final class ElementCallScreenViewModel {
     private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
         let participant = call.participants.first { $0.memberID == tile.memberID }
         let hasMicrophone = tile.isLocal || participant?.stream(.microphone) != nil
-        return describe(call.receiveStats[tile.memberID],
+        return describe(call.receiveStats[tile.id],
+                        audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCTileID(memberID: tile.memberID, kind: .microphone)],
                         kind: tile.kind,
                         hasMicrophone: hasMicrophone,
                         encryption: call.frameEncryption[tile.memberID],
@@ -333,6 +334,7 @@ public final class ElementCallScreenViewModel {
     }
     
     private static func describe(_ stats: MatrixRTCReceiveStats?,
+                                 audio: MatrixRTCReceiveStats?,
                                  kind: MatrixRTCStreamKind,
                                  hasMicrophone: Bool,
                                  encryption: MatrixRTCFrameEncryptionState?,
@@ -361,12 +363,19 @@ public final class ElementCallScreenViewModel {
         if let encryption {
             lines.append("e2ee: \(encryption)")
         }
+        // This tile's own stream: the camera's or the screen's counters.
         if let stats {
             lines.append("pkts \(stats.packetsReceived) lost \(stats.packetsLost)")
             lines.append("frames \(stats.framesDecoded) dropped \(stats.framesDropped)")
-            if let concealed = stats.concealedFraction {
-                lines.append(String(format: "concealed %.0f%%", concealed * 100))
+        }
+        // The member's microphone, on their camera tile only: "concealed" is the one number that tells
+        // audio that is silent from audio that is fabricated.
+        if let audio {
+            var line = "mic pkts \(audio.packetsReceived) lost \(audio.packetsLost)"
+            if let concealed = audio.concealedFraction {
+                line += String(format: " concealed %.0f%%", concealed * 100)
             }
+            lines.append(line)
         }
         return lines.joined(separator: "\n")
     }

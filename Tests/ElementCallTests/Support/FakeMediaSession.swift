@@ -88,6 +88,10 @@ final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
         nil
     }
     
+    func receiveStatsFor(streams: [FfiStreamRef]) async -> [FfiStreamStats] {
+        []
+    }
+    
     func setConstraints(memberId: String, kind: FfiStreamKind, constraints: FfiMediaConstraints) { }
     func unpublish(kind: FfiStreamKind) async throws { }
     func videoStream(memberId: String, kind: FfiStreamKind) -> VideoFrameStream? {

@@ -11,6 +11,13 @@ version will actually read it.
 
 ## Unreleased
 
+**`MatrixRTCCall.receiveStats` is keyed by `MatrixRTCTileID`, per stream, and covers only what is
+drawn.** It used to be keyed by member ID and hold the microphone counters alone, so a share tile showed
+its owner's audio and "frames dropped" was always zero. It now holds each drawn tile's own stream and its
+member's microphone (`MatrixRTCTileID(memberID:, kind: .microphone)`), read in one core round trip a
+second for the tiles on the stage rather than one await per member. Tiles released by
+`setReleasedVideoStreams(_:)` are not polled.
+
 **`ElementCallTile.audioLevel` is removed.** No view ever drew it, and projecting it made the call
 screen rebuild ten times a second, which left the top bar's menu dropping taps. Use `isSpeaking` if
 you need to know who is talking.
