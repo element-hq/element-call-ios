@@ -11,9 +11,22 @@ version will actually read it.
 
 ## Unreleased
 
-**`ElementCallTile.audioLevel` is removed.** No view ever drew it, and projecting it made the call
-screen rebuild ten times a second, which left the top bar's menu dropping taps. Use `isSpeaking` if
-you need to know who is talking.
+_Nothing yet._
+
+## 0.1.0-rc.8 - 2026-09-22
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* Fix: Option menu keep getting re-drawn by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/37
+
+🧱 Build
+* chore: Bump rust-rtc to 0.3.0-rc.2 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/38
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.7...0.1.0-rc.8
 
 ## 0.1.0-rc.7 - 2026-09-21
 
