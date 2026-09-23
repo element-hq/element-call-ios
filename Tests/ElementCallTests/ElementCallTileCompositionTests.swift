@@ -133,6 +133,20 @@ struct ElementCallTileCompositionTests {
         #expect(state.layout == .group)
     }
     
+    /// A tile outside the detail window has no record, only a reference — and the reference has to
+    /// be enough to draw an avatar with a name, which both resolve through the user ID. Without it
+    /// an out-of-window tile is not a degraded tile but an empty one.
+    @Test
+    func aReferenceOutsideTheWindowStillNamesItsUser() {
+        let bob = tile("bob")
+        let windowed = MatrixRTCTileRoster(order: MatrixRTCTileRoster([bob, tile("carol")]).order,
+                                           detail: [bob.id: bob])
+        #expect(windowed.detail.count == 1)
+        let outside = windowed.order.last
+        #expect(outside?.id == tile("carol").id)
+        #expect(outside?.userID == "@carol:example.com")
+    }
+    
     /// Our own share still makes no tile at all, so it cannot turn a direct call into a group one —
     /// which is what the one-to-one rule has always claimed and now depends on the model for.
     @Test

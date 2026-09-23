@@ -211,17 +211,22 @@ public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
     }
 }
 
-/// A tile's place in the ranking: what it is and whether it is a hero, and nothing else.
+/// A tile's place in the ranking: what it is, whose it is, and whether it is a hero — and nothing
+/// about what the member is doing.
 ///
 /// One of these exists for **every** tile in the call, always — the order is never truncated — so
 /// the set a UI is *not* drawing is computable from it, which is what drives releasing subscriptions.
-/// Detail arrives only for the tiles inside the declared window, which is everything by default.
+/// Detail arrives only for the tiles inside the declared window, which is everything by default; a
+/// tile outside it still has ``userID``, which is what a name and an avatar resolve through, so it
+/// draws as an avatar tile rather than an empty one.
 public nonisolated struct MatrixRTCTileRef: Sendable, Hashable {
     public let id: MatrixRTCTileID
+    public let userID: String
     public let isHero: Bool
     
-    public init(id: MatrixRTCTileID, isHero: Bool = false) {
+    public init(id: MatrixRTCTileID, userID: String, isHero: Bool = false) {
         self.id = id
+        self.userID = userID
         self.isHero = isHero
     }
 }
@@ -244,7 +249,7 @@ public nonisolated struct MatrixRTCTileRoster: Sendable, Equatable {
     /// Every tile in the order, with detail for all of them. What the default window produces, and
     /// the shape a test or a fixture wants.
     public init(_ tiles: [MatrixRTCTile]) {
-        self.init(order: tiles.map { MatrixRTCTileRef(id: $0.id, isHero: $0.isHero) },
+        self.init(order: tiles.map { MatrixRTCTileRef(id: $0.id, userID: $0.userID, isHero: $0.isHero) },
                   detail: Dictionary(uniqueKeysWithValues: tiles.map { ($0.id, $0) }))
     }
     

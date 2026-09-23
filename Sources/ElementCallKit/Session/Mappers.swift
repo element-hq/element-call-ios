@@ -113,7 +113,7 @@ nonisolated extension MatrixRTCTileRoster {
             let mapped = MatrixRTCTile(tile, localMemberID: localMemberID)
             detail[mapped.id] = mapped
         }
-        self.init(order: roster.order.map { MatrixRTCTileRef(id: .init($0.id), isHero: $0.hero) },
+        self.init(order: roster.order.map { MatrixRTCTileRef(id: .init($0.id), userID: $0.userId, isHero: $0.hero) },
                   detail: detail)
     }
 }
