@@ -181,8 +181,6 @@ nonisolated extension MatrixRTCCallEvent {
             self = .streamMuted(memberID: memberId, kind: .init(kind))
         case .streamUnmuted(let memberId, let kind):
             self = .streamUnmuted(memberID: memberId, kind: .init(kind))
-        case .activeSpeakers(let speakers):
-            self = .activeSpeakers(speakers.map { .init(memberID: $0.memberId, level: $0.level) })
         case .keyImported(let memberId, let keyIndex):
             self = .keyImported(memberID: memberId, keyIndex: keyIndex)
         case .frameEncryptionState(let memberId, let state, _):

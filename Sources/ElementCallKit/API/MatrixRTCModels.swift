@@ -327,11 +327,6 @@ public nonisolated struct MatrixRTCLocalState: Sendable, Equatable {
     }
 }
 
-public nonisolated struct MatrixRTCSpeakingMember: Sendable, Hashable {
-    public let memberID: String
-    public let level: Float
-}
-
 public nonisolated enum MatrixRTCFrameEncryptionState: Sendable, Hashable {
     case ok, missingKey, decryptionFailed, encryptionFailed, internalError
 }
@@ -348,7 +343,6 @@ public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
     case streamStopped(memberID: String, kind: MatrixRTCStreamKind)
     case streamMuted(memberID: String, kind: MatrixRTCStreamKind)
     case streamUnmuted(memberID: String, kind: MatrixRTCStreamKind)
-    case activeSpeakers([MatrixRTCSpeakingMember])
     case keyImported(memberID: String, keyIndex: UInt8)
     case keyDiscarded(memberID: String, reason: String)
     case frameEncryptionState(memberID: String, state: MatrixRTCFrameEncryptionState)

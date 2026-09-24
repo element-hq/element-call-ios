@@ -11,6 +11,11 @@ version will actually read it.
 
 ## Unreleased
 
+**`MatrixRTCCallEvent.activeSpeakers` and `MatrixRTCSpeakingMember` are removed.** Speaking is
+`MatrixRTCTile.isSpeaking`. `MatrixRTCCall.participants` is now pushed by the core rather than re-read
+after every event, and remote audio playback follows it rather than `streamStarted`/`streamStopped`, so a
+lagging event consumer can no longer leave anyone silent.
+
 **`MatrixRTCCall.receiveStats` is keyed by `MatrixRTCStreamRef(memberID:, kind:)`, per stream, and
 covers only what is drawn.** It used to be keyed by member ID and hold the microphone counters alone, so
 a share tile showed its owner's audio and "frames dropped" was always zero. It now holds each drawn

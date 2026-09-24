@@ -178,13 +178,47 @@ public final class MatrixRTCCall {
         tasks.append(Task { [weak self] in await self?.pumpEvents() })
         tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
         tasks.append(Task { [weak self] in await self?.pumpLocalState() })
+        tasks.append(Task { [weak self] in await self?.pumpParticipants() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
-        refreshParticipants()
+        apply(participants: mediaSession.participants())
         apply(mediaSession.roster())
         apply(mediaSession.localState())
-        for participant in participants where !participant.isLocal && participant.stream(.microphone) != nil {
-            playAudio(of: participant.memberID)
+    }
+    
+    /// The participant roster, pushed by the core with the latest value winning: nothing to re-read
+    /// after an event, and a lagging event consumer can never leave it stale.
+    private func pumpParticipants() async {
+        while !Task.isCancelled, let participants = await mediaSession.nextParticipants() {
+            apply(participants: participants)
         }
+    }
+    
+    /// Who we play follows the roster, not the event stream: a remote member with a microphone
+    /// stream has a sink, a member without one does not. A missed `streamStarted` can therefore never
+    /// leave someone silent, and a missed `participantLeft` never leaks their sink.
+    private func apply(participants ffiParticipants: [FfiParticipant]) {
+        let refreshed = ffiParticipants.map(MatrixRTCParticipant.init)
+        // Bail before assigning: `participants` is observed by every tile, so an unconditional write
+        // would rebuild the whole stage for nothing.
+        guard refreshed != participants else { return }
+        if Set(refreshed.map(\.memberID)) != Set(participants.map(\.memberID)) {
+            MatrixRTCLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
+        }
+        participants = refreshed
+        let wanted = Self.microphoneMembers(refreshed, localMemberID: localMemberID)
+        for memberID in playbackSinks.keys where !wanted.contains(memberID) {
+            stopPlayback(of: memberID)
+        }
+        for memberID in wanted where playbackSinks[memberID] == nil {
+            playAudio(of: memberID)
+        }
+    }
+    
+    /// The remote members we should be playing: everyone else publishing a microphone stream, muted or not.
+    static func microphoneMembers(_ participants: [MatrixRTCParticipant], localMemberID: String) -> Set<String> {
+        Set(participants
+            .filter { $0.memberID != localMemberID && !$0.isLocal && $0.stream(.microphone) != nil }
+            .map(\.memberID))
     }
     
     // MARK: - Audio device
@@ -681,17 +715,12 @@ public final class MatrixRTCCall {
             let event = MatrixRTCCallEvent(ffiEvent)
             handle(event)
             eventsContinuation.yield(event)
-            refreshParticipants()
         }
         MatrixRTCLog.debug("Media event pump stopped")
     }
     
     private func handle(_ event: MatrixRTCCallEvent) {
         switch event {
-        case .streamStarted(let memberID, .microphone) where memberID != localMemberID:
-            playAudio(of: memberID)
-        case .streamStopped(let memberID, .microphone), .participantLeft(let memberID):
-            stopPlayback(of: memberID)
         case .frameEncryptionState(let memberID, let state):
             if frameEncryption[memberID] != state {
                 MatrixRTCLog.warning("Frame encryption \(state) for \(memberID) (was \(frameEncryption[memberID].map { "\($0)" } ?? "unknown"))")
@@ -713,8 +742,7 @@ public final class MatrixRTCCall {
         }
     }
     
-    /// `streamStarted` and the initial roster sweep both fire for a member already publishing; the
-    /// dictionary claim keeps a member from being played twice, slightly out of step.
+    /// Reached from the roster only; the dictionary claim keeps a member from being played twice.
     private func playAudio(of memberID: String) {
         guard memberID != localMemberID, playbackSinks[memberID] == nil else { return }
         guard let stream = mediaSession.audioStream(memberId: memberID, kind: .microphone) else {
@@ -736,18 +764,6 @@ public final class MatrixRTCCall {
         for key in videoSources.keys where key.memberID == memberID {
             videoSources.removeValue(forKey: key)?.close()
         }
-    }
-    
-    private func refreshParticipants() {
-        let refreshed = mediaSession.participants().map(MatrixRTCParticipant.init)
-        // Bail before assigning rather than after: this is now called on a timer as well as on
-        // every event, and `participants` is observed by every tile, so an unconditional write
-        // would rebuild the whole stage once a second for nothing.
-        guard refreshed != participants else { return }
-        if Set(refreshed.map(\.memberID)) != Set(participants.map(\.memberID)) {
-            MatrixRTCLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
-        }
-        participants = refreshed
     }
     
     /// Meters report ten times a second *per member*; published one by one, an eleven-person call
@@ -792,13 +808,6 @@ public final class MatrixRTCCall {
     private func pollReceiveStats() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
-            // The roster is re-read here, not only after an event. The snapshot taken at join can
-            // report a member's camera as unmuted before the transport has learned otherwise, and
-            // if that member then does nothing, no event ever arrives to correct it: joining a
-            // call where somebody already has their camera off left their tile black for as long
-            // as they stayed still. Observed against Element Web, and it repaired itself the
-            // moment they toggled their camera, which is what identified the stale read.
-            refreshParticipants()
             // One round trip for the streams we draw, not one per member: at two hundred participants
             // the old loop was two hundred sequential awaits a second, for tiles nobody was looking at.
             let streams = Self.streamsToPoll(tiles: tiles, released: releasedVideoStreams, localMemberID: localMemberID)
