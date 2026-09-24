@@ -550,9 +550,14 @@ public final class ElementCallController {
     /// person, so it goes through the participant list to find the user first. Falls back to a
     /// bare profile, because a member can be in the call before their room membership has loaded.
     public func profile(forMemberID memberID: String) -> ElementCallMemberProfile? {
-        guard let participant = call?.participants.first(where: { $0.memberID == memberID }) else { return nil }
-        return room?.memberProfiles[participant.userID]
-            ?? ElementCallMemberProfile(userID: participant.userID, displayName: nil, avatarURL: nil)
+        guard let call else { return nil }
+        // The tile roster's references carry the user id for exactly this; our own tile is beside it.
+        let userID = call.tiles.order.first { $0.id.memberID == memberID }?.userID
+            ?? (call.ownTile?.memberID == memberID ? call.ownTile?.userID : nil)
+            ?? call.participants.first { $0.memberID == memberID }?.userID
+        guard let userID else { return nil }
+        return room?.memberProfiles[userID]
+            ?? ElementCallMemberProfile(userID: userID, displayName: nil, avatarURL: nil)
     }
     
     /// Forwards the caller's position rather than its own, or every line in this file would be

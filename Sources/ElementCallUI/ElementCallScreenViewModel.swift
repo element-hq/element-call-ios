@@ -322,12 +322,9 @@ public final class ElementCallScreenViewModel {
     
     /// The stats overlay's text for one tile, from everything the call knows about that stream.
     private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
-        let participant = call.participants.first { $0.memberID == tile.memberID }
-        let hasMicrophone = tile.isLocal || participant?.stream(.microphone) != nil
         return describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
                         audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
                         kind: tile.kind,
-                        hasMicrophone: hasMicrophone,
                         encryption: call.frameEncryption[tile.memberID],
                         video: call.videoInfo(memberID: tile.memberID, kind: tile.kind.videoStreamKind),
                         requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind))
@@ -336,18 +333,10 @@ public final class ElementCallScreenViewModel {
     private static func describe(_ stats: MatrixRTCReceiveStats?,
                                  audio: MatrixRTCReceiveStats?,
                                  kind: MatrixRTCTileKind,
-                                 hasMicrophone: Bool,
                                  encryption: MatrixRTCFrameEncryptionState?,
                                  video: MatrixRTCVideoInfo?,
                                  requested: MatrixRTCVideoConstraints?) -> String {
         var lines = [String]()
-        // The badge says muted for this too; here "they muted" and "we were never given their
-        // audio" are different answers, and the far end hears them fine in the second case. Only on
-        // a camera tile: a screen has no microphone of its own, and the line on both of a sharer's
-        // tiles reads as two faults rather than one.
-        if kind != .screenShare, !hasMicrophone {
-            lines.append("NO MIC STREAM")
-        }
         if let video {
             lines.append("\(video.width)x\(video.height) @ \(video.framesPerSecond) fps")
         } else {

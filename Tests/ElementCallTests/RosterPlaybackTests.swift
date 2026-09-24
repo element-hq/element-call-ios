@@ -9,30 +9,25 @@
 import Foundation
 import Testing
 
-/// Who gets a playback sink is a function of the roster, pinned here because it used to be a
+/// Who gets a playback sink is a function of the tile roster, pinned here because it used to be a
 /// function of the event stream -- and a lagged event stream silenced people.
 struct RosterPlaybackTests {
     private let me = "@alice:example.com:ME"
     
-    private func participant(_ id: String, isLocal: Bool = false, streams: [MatrixRTCStreamKind] = [.microphone]) -> MatrixRTCParticipant {
-        MatrixRTCParticipant(memberID: id,
-                             userID: "@\(id):example.com",
-                             deviceID: nil,
-                             isLocal: isLocal,
-                             isReachable: true,
-                             streams: streams.map { MatrixRTCStreamState(kind: $0, isMuted: $0 == .microphone && id == "muted") },
-                             handRaisedAt: nil)
+    private func ref(_ member: String, kind: MatrixRTCTileKind = .person) -> MatrixRTCTileRef {
+        MatrixRTCTileRef(id: MatrixRTCTileID(memberID: member, kind: kind), userID: "@\(member):example.com", isHero: kind == .screenShare)
     }
     
+    /// A sharer is two tiles and one voice: their person tile is the candidate, their screen is not.
     @Test
-    func everyoneElseWithAMicrophoneIsPlayedMutedOrNot() {
-        let roster = [participant(me, isLocal: true), participant("talking"), participant("muted"), participant("silent", streams: [.camera])]
-        #expect(MatrixRTCCall.microphoneMembers(roster, localMemberID: me) == ["talking", "muted"])
+    func everyRemotePersonTileIsACandidateOnce() {
+        let order = [ref("frank", kind: .screenShare), ref("frank"), ref("bob")]
+        #expect(MatrixRTCCall.playbackCandidates(order, localMemberID: me) == ["frank", "bob"])
     }
     
-    /// Our own row can arrive before the core marks it local; the id is what keeps us from hearing ourselves.
+    /// The order never holds our own tile, but the id guard holds even if it did.
     @Test
-    func weAreNeverPlayedBackEvenBeforeTheRosterMarksUsLocal() {
-        #expect(MatrixRTCCall.microphoneMembers([participant(me)], localMemberID: me).isEmpty)
+    func weAreNeverACandidate() {
+        #expect(MatrixRTCCall.playbackCandidates([ref(me)], localMemberID: me).isEmpty)
     }
 }

@@ -12,9 +12,12 @@ version will actually read it.
 ## Unreleased
 
 **`MatrixRTCCallEvent.activeSpeakers` and `MatrixRTCSpeakingMember` are removed.** Speaking is
-`MatrixRTCTile.isSpeaking`. `MatrixRTCCall.participants` is now pushed by the core rather than re-read
-after every event, and remote audio playback follows it rather than `streamStarted`/`streamStopped`, so a
-lagging event consumer can no longer leave anyone silent.
+`MatrixRTCTile.isSpeaking`. Remote audio playback follows the tile roster's `order` rather than
+`streamStarted`/`streamStopped`, so a lagging event consumer can no longer leave anyone silent.
+`MatrixRTCCall.participants` is read once at connect and no longer kept live; `hasVideo`,
+`pictureInPictureCandidate` and `pictureInPicturePlaceholderMemberID` read the tile roster instead, and the
+two static forms take `tiles:` rather than `participants:`. The stats overlay's `NO MIC STREAM` line is
+gone; the Kit still logs once, at warning, when a member's microphone cannot be opened.
 
 **`MatrixRTCCall.receiveStats` is keyed by `MatrixRTCStreamRef(memberID:, kind:)`, per stream, and
 covers only what is drawn.** It used to be keyed by member ID and hold the microphone counters alone, so
