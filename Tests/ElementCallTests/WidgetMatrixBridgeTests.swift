@@ -224,25 +224,23 @@ nonisolated struct WidgetMatrixBridgeTests {
     }
     
     @Test
-    func senderDeviceIsInferredFromTheMembershipWhenTheKeyNamesNone() async throws {
+    func senderDeviceIsNilWhenTheKeyNamesNone() async throws {
         let bridge = try await negotiated(makeBridge())
         var messages = bridge.toDeviceMessages().makeAsyncIterator()
+        // Bob's live membership names his one device; the key must still not borrow it.
         var membership = stateEvent(key: "_@bob:example.org_BOBDEVICE_m.call", eventID: "$m", content: ["memberships": [["device_id": "BOBDEVICE", "application": "m.call"]]])
         membership["sender"] = "@bob:example.org"
-        var bare = stateEvent(key: "_@carol:example.org_CARDEV_m.call", eventID: "$c", content: ["memberships": []])
-        bare["sender"] = "@carol:example.org"
-        channel.push(toWidget(action: "update_state", requestID: "s", data: ["state": [membership, bare]]))
+        channel.push(toWidget(action: "update_state", requestID: "s", data: ["state": [membership]]))
         _ = try await nextSent()
         
-        for sender in ["@bob:example.org", "@carol:example.org", "@dave:example.org"] {
+        for sender in ["@bob:example.org", "@dave:example.org"] {
             channel.push(toWidget(action: "send_to_device", requestID: sender, data: ["type": "io.element.call.encryption_keys",
                                                                                       "sender": sender,
                                                                                       "encrypted": true,
                                                                                       "content": ["keys": [["index": 0, "key": "k"]]]]))
             _ = try await nextSent()
         }
-        #expect(try #require(await messages.next()).senderDeviceID == "BOBDEVICE")
-        #expect(try #require(await messages.next()).senderDeviceID == "CARDEV")
+        #expect(try #require(await messages.next()).senderDeviceID == nil)
         #expect(try #require(await messages.next()).senderDeviceID == nil)
     }
     
