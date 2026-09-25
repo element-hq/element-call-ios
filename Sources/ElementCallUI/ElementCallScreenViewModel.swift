@@ -26,13 +26,34 @@ public final class ElementCallScreenContext {
     /// A tile rather than a member, because a sharer is two tiles and the whole point of the gesture
     /// is that it takes you to the one you double-tapped.
     public var fullscreenTileID: MatrixRTCTileID?
+    /// The hero the user swiped the spotlight to, when there are several. Here for the same reason
+    /// `fullscreenTileID` is: which hero you are looking at is a way of looking rather than a fact
+    /// about the call, and `refresh()` rebuilds `viewState` wholesale. Followed by identity — a hero
+    /// arriving ahead of it in the stack does not change what is shown — and cleared by the view
+    /// model once it is no longer a hero, so a share that stops and restarts does not jump back in
+    /// front of whatever the user has moved on to.
+    public var shownHeroID: MatrixRTCTileID? {
+        didSet {
+            // A harness has no view model to resolve it on the next refresh, so it applies the
+            // one transition a swipe asks for, the way its handler applies the toggles. In hero
+            // mode there is no held speaker to lose, so the rule's memory is nil here honestly.
+            guard isHarness, shownHeroID != oldValue else { return }
+            viewState.spotlightID = ElementCallSpotlight.choose(tiles: viewState.tiles, shownHeroID: shownHeroID, lastSpeakerID: nil).tileID
+        }
+    }
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
+    /// Asks the stage to scroll to an offset, in points from the top of the content. For a harness
+    /// playing a scenario's `scroll` frames; a host never needs it. Each request carries its own
+    /// identity, so asking for the same offset twice scrolls twice.
+    public var scrollRequest: ElementCallScrollRequest?
     /// Colours, fonts, icons, avatars and text, all supplied by the host.
     public let style: ElementCallStyle
     
     fileprivate var handler: ((ElementCallScreenViewAction) -> Void)?
+    /// Built by ``harness(state:style:onHostAction:)``: transitions are faked here, not projected.
+    fileprivate var isHarness = false
     
     fileprivate init(viewState: ElementCallScreenViewState, style: ElementCallStyle) {
         self.viewState = viewState
@@ -73,6 +94,7 @@ public final class ElementCallScreenContext {
                                style: ElementCallStyle = .stock,
                                onHostAction: ((ElementCallScreenViewAction) -> Void)? = nil) -> ElementCallScreenContext {
         let context = ElementCallScreenContext(viewState: state, style: style)
+        context.isHarness = true
         // Weakly, or the context owns a closure that owns the context.
         context.handler = { [weak context] action in
             guard let context else { return }
@@ -105,6 +127,16 @@ public final class ElementCallScreenContext {
     }
 }
 
+/// One request to scroll the stage. See ``ElementCallScreenContext/scrollRequest``.
+public nonisolated struct ElementCallScrollRequest: Equatable, Sendable {
+    public let offset: CGFloat
+    public let id = UUID()
+    
+    public init(offset: CGFloat) {
+        self.offset = offset
+    }
+}
+
 /// Projects the session-scoped ``ElementCallController`` into a view state. The controller owns the
 /// call; this only renders it and forwards taps.
 ///
@@ -130,6 +162,11 @@ public final class ElementCallScreenViewModel {
     private var cancellables = Set<AnyCancellable>()
     private var profiles: [String: ElementCallMemberProfile] = [:]
     private var hasRequestedDismissal = false
+    /// Who the spotlight showed last in listen mode, so it keeps showing them while nobody speaks
+    /// rather than emptying or falling back to the head of the ranking (003 R7). Nil whenever the
+    /// call is not in listen mode, which is what makes a hero appearing or the call shrinking clear
+    /// it (R3, R9).
+    private var lastSpeakerID: MatrixRTCTileID?
     
     public init(controller: ElementCallController) {
         self.controller = controller
@@ -235,6 +272,9 @@ public final class ElementCallScreenViewModel {
         
         guard let call = controller.call else {
             state.tiles = []
+            state.spotlightID = nil
+            lastSpeakerID = nil
+            controller.setSpotlightTile(nil)
             publish(state)
             // The call object is gone once the call ended, so this must come after the state is
             // published, and run on the ended transition whether or not `publish(_:)` took: a
@@ -249,7 +289,7 @@ public final class ElementCallScreenViewModel {
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
         
-        state.tiles = Self.tiles(ranked: call.tiles.ranked,
+        state.tiles = Self.tiles(roster: call.tiles,
                                  own: call.ownTile,
                                  profiles: profiles,
                                  youLabel: context.style.strings.you,
@@ -260,6 +300,21 @@ public final class ElementCallScreenViewModel {
                                  // `receiveStats` is rewritten every second whether anyone is looking
                                  // or not, so tracking it cost a full screen rebuild per second.
                                  stats: controller.isTileStatsVisible ? { Self.stats(for: $0, in: call) } : { _ in nil })
+        
+        let spotlight = ElementCallSpotlight.choose(tiles: state.tiles,
+                                                    shownHeroID: context.shownHeroID,
+                                                    lastSpeakerID: lastSpeakerID)
+        state.spotlightID = spotlight.tileID
+        lastSpeakerID = if case .speaker(let id) = spotlight { id } else { nil }
+        // The user's pick is followed by identity for as long as it is a hero; the moment the
+        // choice lands elsewhere it is stale, and keeping it would bring that hero straight back
+        // to the front if it ever returned.
+        if let shown = context.shownHeroID, spotlight != .hero(shown) {
+            context.shownHeroID = nil
+        }
+        // The window continues what the stage shows, so the controller learns it from here rather
+        // than deriving its own answer from the ranking; the setter declines an equal value.
+        controller.setSpotlightTile(spotlight.tileID)
         
         publish(state)
     }
@@ -287,14 +342,39 @@ public final class ElementCallScreenViewModel {
     /// video, then join time, damped by the model. Sorting here would fight that damping at a
     /// different period and make the strip twitch on every word.
     ///
+    /// **The order, not `ranked`.** Under a declared detail window `ranked` drops every tile the
+    /// window does not cover, silently: the count is wrong, the set of streams to release is
+    /// computed against the wrong complement, and the grid shortens as you scroll. It compiles and
+    /// passes every fixture, because every fixture has detail for everything. So the composition
+    /// walks the order and builds a tile from each **reference**, with detail joined by identity
+    /// where the window delivered it. A reference alone is a name and an avatar (the user ID
+    /// resolves both) with nothing live: no video, not speaking, unmuted, no hand — never a blank.
+    ///
     /// Static and pure so it can be tested: `refresh()` needs a live call and cannot be.
-    static func tiles(ranked: [MatrixRTCTile],
+    static func tiles(roster: MatrixRTCTileRoster,
                       own: MatrixRTCTile?,
                       profiles: [String: ElementCallMemberProfile],
                       youLabel: String,
                       isLocalMicrophoneMuted: Bool,
                       localHasVideo: Bool,
                       stats: (MatrixRTCTile) -> String? = { _ in nil }) -> [ElementCallTile] {
+        func tile(_ ref: MatrixRTCTileRef) -> ElementCallTile {
+            if let detail = roster.detail[ref.id] {
+                return tile(detail)
+            }
+            let profile = profiles[ref.userID]
+            return ElementCallTile(id: ref.id,
+                                   userID: ref.userID,
+                                   displayName: profile?.displayName ?? ref.userID,
+                                   avatarURL: profile?.avatarURL,
+                                   isLocal: false,
+                                   isMicrophoneMuted: false,
+                                   hasVideo: false,
+                                   isSpeaking: false,
+                                   hasHandRaised: false,
+                                   isHero: ref.isHero,
+                                   stats: nil)
+        }
         func tile(_ tile: MatrixRTCTile) -> ElementCallTile {
             let profile = profiles[tile.userID]
             return ElementCallTile(id: tile.id,
@@ -317,7 +397,7 @@ public final class ElementCallScreenViewModel {
                                    isHero: tile.isLocal ? false : tile.isHero,
                                    stats: stats(tile))
         }
-        return (own.map { [tile($0)] } ?? []) + ranked.map(tile)
+        return (own.map { [tile($0)] } ?? []) + roster.order.map(tile)
     }
     
     /// The stats overlay's text for one tile, from everything the call knows about that stream.

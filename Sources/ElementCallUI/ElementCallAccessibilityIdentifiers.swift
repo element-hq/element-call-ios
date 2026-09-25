@@ -32,6 +32,15 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     /// buttons answering to one identifier.
     public static let exitFullscreen = "\(prefix).exitFullscreen"
     public static let more = "\(prefix).more"
+    /// The hero stack's "1 of 3" pill on the spotlight. Set by hand on the view, like the top bar's
+    /// buttons: it does not go through `control(for:)`. The dots under the spotlight have none on
+    /// purpose: they are hidden from accessibility, so an identifier there would be a constant that
+    /// reaches no element.
+    public static let heroIndicator = "\(prefix).heroIndicator"
+    /// The arrows on the landscape spotlight's edges, which step the stack there instead of the
+    /// portrait dots. Set by hand, like the pill.
+    public static let heroPrevious = "\(prefix).heroPrevious"
+    public static let heroNext = "\(prefix).heroNext"
     
     // MARK: Structure
     

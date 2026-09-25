@@ -15,6 +15,7 @@ import SwiftUI
 struct ElementCallExampleCatalogue: View {
     let target: ElementCallExampleLaunchTarget
     let onPick: (ElementCallExampleFixture) -> Void
+    let onPickScenario: (ElementCallExampleScenario) -> Void
     
     var body: some View {
         List {
@@ -26,6 +27,22 @@ struct ElementCallExampleCatalogue: View {
                     ForEach(ElementCallExampleFixture.fixtures(in: category), id: \.self) { fixture in
                         row(fixture)
                     }
+                }
+            }
+            Section("Scenarios") {
+                ForEach(ElementCallExampleScenario.all) { scenario in
+                    Button {
+                        onPickScenario(scenario)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(scenario.name).font(.body)
+                            Text(scenario.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("example.scenario.\(scenario.name)")
                 }
             }
         }

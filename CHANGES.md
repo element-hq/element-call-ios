@@ -11,6 +11,26 @@ version will actually read it.
 
 ## Unreleased
 
+**`ElementCallLayout` and `ElementCallScreenViewState.layout` are removed, and
+`ElementCallScreenViewState.spotlightID` is stored rather than computed.** The one-to-one arrangement
+(the other person full-bleed, ourselves as a thumbnail) is retired by the call layout spec: two people
+share the stage equally, in direct rooms too. The spotlight is no longer "the hero, else the head of
+the ranking": with nobody sharing and at most ten remote members there is no spotlight and every tile
+is the same size; above ten the spotlight follows the speaker. `ElementCallController.spotlightTileID`
+is written by the screen through `setSpotlightTile(_:)` and is nil whenever there is no spotlight, so
+a host reading it for Picture in Picture gets the window's own fallback rather than a guess.
+
+**The layout drives the core's cost controls.** `MatrixRTCCall.setDetailWindow(_:)` declares a
+`MatrixRTCDetailWindow` (a rank range plus explicit tiles) and `setVideoVisibility(paused:released:)`
+replaces `setReleasedVideoStreams(_:)` as the way the stage names what it is not showing; the old
+method remains as a shorthand. A host that drew the stage itself would have to declare both.
+`ElementCallScreenContext.shownHeroID` is the hero the user swiped to and `scrollRequest` asks the
+stage for an offset (for a harness; a host never needs it); the
+`elementCall.heroIndicator` identifier is new and public like the others. The harness types
+`MatrixRTCScenario`, `MatrixRTCScriptedSession`, `MatrixRTCScenarioPlayer` and `MatrixRTCManualClock`
+ship in `ElementCallKit` for the example app and the scenario tests, and `ElementCallController.fake`
+can carry a scripted call.
+
 **`MatrixRTCCallEvent.activeSpeakers` and `MatrixRTCSpeakingMember` are removed.** Speaking is
 `MatrixRTCTile.isSpeaking`. Remote audio playback follows the tile roster's `order` rather than
 `streamStarted`/`streamStopped`, so a lagging event consumer can no longer leave anyone silent.

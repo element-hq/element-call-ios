@@ -38,7 +38,7 @@ struct ElementCallExampleRootView: View {
             // losing its scroll position costs nothing, and in exchange the accessibility tree a UI
             // test walks during a call is the one it walked before any of this existed.
             if host.session == nil || host.isMinimized {
-                ElementCallExampleCatalogue(target: target) { host.open($0) }
+                ElementCallExampleCatalogue(target: target, onPick: { host.open($0) }, onPickScenario: { host.open($0) })
                     // An inset rather than an overlay: it pushes the list down instead of covering
                     // its first row, which is what a host does and what makes the point of the
                     // thing — you can see the catalogue behind the call — actually legible.
@@ -58,8 +58,12 @@ struct ElementCallExampleRootView: View {
             }
         }
         .onAppear {
-            guard case .fixture(let fixture) = target, host.session == nil else { return }
-            host.open(fixture)
+            guard host.session == nil else { return }
+            switch target {
+            case .fixture(let fixture): host.open(fixture)
+            case .scenario(let scenario): host.open(scenario)
+            case .catalogue, .unknown: break
+            }
         }
     }
     
@@ -68,11 +72,20 @@ struct ElementCallExampleRootView: View {
         switch session.presentation {
         case .harness(let context):
             ElementCallHarnessScreen(context: context)
-                .environment(\.elementCallPreviewVideo, session.fixture.wantsVideo ? video.source : nil)
+                .environment(\.elementCallPreviewVideo, session.fixture?.wantsVideo == true ? video.source : nil)
         case .live(let viewModel):
             // The shipping view, not the harness one: a connecting state is the one thing a real
             // view model can render without a joined call, so there is no reason to fake it.
             ElementCallScreen(viewModel: viewModel)
+        case .scripted(let viewModel, let playback):
+            // The shipping view over a scripted call: tiles marked with video draw the test
+            // pattern, because the scripted session has no pictures of its own.
+            ElementCallScreen(viewModel: viewModel)
+                .environment(\.elementCallPreviewVideo, video.source)
+                .overlay(alignment: .top) {
+                    ElementCallExampleScenarioScrubber(playback: playback)
+                        .padding(.top, 60)
+                }
         }
     }
 }

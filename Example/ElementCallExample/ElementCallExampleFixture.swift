@@ -25,6 +25,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case oneToOne
     case screenShare
     case sharerOnAPagedStrip
+    case twoShares
     case video
     case joining
     case connectingMedia
@@ -45,7 +46,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     
     var category: Category {
         switch self {
-        case .group, .pagedStrip, .oneToOne, .screenShare, .sharerOnAPagedStrip, .video: .connected
+        case .group, .pagedStrip, .oneToOne, .screenShare, .sharerOnAPagedStrip, .twoShares, .video: .connected
         case .joining, .connectingMedia, .failed, .ended: .connecting
         }
     }
@@ -57,10 +58,11 @@ enum ElementCallExampleFixture: String, CaseIterable {
     var title: String {
         switch self {
         case .group: "Group"
-        case .pagedStrip: "Paged strip"
+        case .pagedStrip: "Long grid"
         case .oneToOne: "One to one"
         case .screenShare: "Screen share"
-        case .sharerOnAPagedStrip: "Sharer on a paged strip"
+        case .sharerOnAPagedStrip: "Sharer on a long grid"
+        case .twoShares: "Two screen shares"
         case .video: "Moving video"
         case .joining: "Joining"
         case .connectingMedia: "Connecting media"
@@ -73,11 +75,12 @@ enum ElementCallExampleFixture: String, CaseIterable {
     /// catalogue is where it stops being invisible to anyone who is not reading this file.
     var detail: String {
         switch self {
-        case .group: "Eight people, one spotlit."
-        case .pagedStrip: "Enough people that the strip runs to more than one page."
+        case .group: "Eight people, nobody a hero: a grid, no spotlight."
+        case .pagedStrip: "Twenty-four people: listen mode spotlights the speaker over a grid that scrolls."
         case .oneToOne: "A direct call, our camera on, so the tile draws its flip button."
-        case .screenShare: "A remote share holding the spotlight, the sharer's camera in the strip."
-        case .sharerOnAPagedStrip: "A sharer's camera pages away from their screen."
+        case .screenShare: "A remote share holding the spotlight, the sharer's camera in the grid."
+        case .sharerOnAPagedStrip: "A sharer's camera scrolls away from their screen."
+        case .twoShares: "Two heroes stacked in the spotlight; swipe it sideways to switch."
         case .video: "The only row fed real frames, some portrait and some landscape."
         case .joining: "Before there is a call to render."
         case .connectingMedia: "Joined, waiting on media."
@@ -109,8 +112,9 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .group:
             return .connected(Fixtures.connected(tiles: Fixtures.group))
         case .pagedStrip:
-            // Enough people that the strip runs to more than one page: going full screen from page
-            // two and coming back to page two is the thing worth checking.
+            // Enough people that the grid scrolls, and enough remote members for listen mode: going
+            // full screen from a scrolled grid and coming back to the same offset is the thing
+            // worth checking.
             let extras = (1...16).map { Fixtures.tile("Member\($0)") }
             return .connected(Fixtures.connected(tiles: Fixtures.group + extras))
         case .oneToOne:
@@ -127,20 +131,20 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank"),
                                                          Fixtures.tile("Frank", hasVideo: true), Fixtures.bob]))
         case .sharerOnAPagedStrip:
-            // The sharer's own camera pushed several pages away from their screen. Releasing by
-            // member took the hero down with it a few seconds after a swipe, and only a running app
-            // shows that: the spotlight simply goes black.
+            // The sharer's own camera pushed a long scroll away from their screen. Releasing by
+            // member took the hero down with it a few seconds after a scroll, and only a running
+            // app shows that: the spotlight simply goes black.
             let extras = (1...16).map { Fixtures.tile("Member\($0)") }
             return .connected(Fixtures.connected(tiles: [Fixtures.alice, Fixtures.share("Frank")] + extras
                     + [Fixtures.tile("Frank", hasVideo: true)]))
+        case .twoShares:
+            return .connected(Fixtures.connected(tiles: Fixtures.twoSharesGroup))
         case .video:
             // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
             // Dan has his camera off, because a stage where every tile is a picture is not the one
             // anybody is in: an avatar is a plain SwiftUI view that resizes on its own, and it is
             // worth being able to see the two side by side through the same move.
-            // Dan comes second so he lands on the first page of the strip: a small phone fits only
-            // two tiles to a page, and an avatar you have to swipe to reach is one you will forget
-            // to look at.
+            // Dan comes second so he lands in the first row.
             let tiles = ["Alice", "Dan", "Carol", "Bob", "Erin", "Frank"].enumerated().map { index, name in
                 Fixtures.tile(name, isLocal: index == 0, hasVideo: name != "Dan")
             }
@@ -161,6 +165,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
 enum ElementCallExampleLaunchTarget {
     case catalogue
     case fixture(ElementCallExampleFixture)
+    /// A scenario file by name, `-arrangement 002_listen_mode`.
+    case scenario(ElementCallExampleScenario)
     /// The flag was passed with something that is not a fixture. Deliberately not folded into
     /// ``catalogue``: the old behaviour was to quietly substitute `.group`, so `-arrangement
     /// pagedStrp` ran the strip tests against an eight-person stage and failed with "this tile is
@@ -172,8 +178,13 @@ enum ElementCallExampleLaunchTarget {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: ElementCallExampleFixture.launchArgument) else { return .catalogue }
         guard let name = arguments[safe: index + 1] else { return .unknown("") }
-        guard let fixture = ElementCallExampleFixture(rawValue: name) else { return .unknown(name) }
-        return .fixture(fixture)
+        if let fixture = ElementCallExampleFixture(rawValue: name) {
+            return .fixture(fixture)
+        }
+        if let scenario = ElementCallExampleScenario.named(name) {
+            return .scenario(scenario)
+        }
+        return .unknown(name)
     }
 }
 

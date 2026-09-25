@@ -138,10 +138,14 @@ public final class MatrixRTCCall {
     private var membersWithoutMicrophone = Set<String>()
     private var videoSources = [MatrixRTCStreamRef: RemoteVideoSource]()
     private var appliedConstraints = [MatrixRTCStreamRef: MatrixRTCVideoConstraints]()
+    private var appliedDetailWindow: MatrixRTCDetailWindow?
     /// Streams that are released rather than merely paused. Held per stream rather than per member
-    /// because a member can be two tiles: paging a sharer's camera away must not take the screen
+    /// because a member can be two tiles: scrolling a sharer's camera away must not take the screen
     /// share filling the spotlight with it, which is exactly what walking both kinds per member did.
     private var releasedVideoStreams = Set<MatrixRTCTileID>()
+    /// Streams the stage has composed but is not showing: within a scroll of the screen, so kept
+    /// subscribed but not sent, and never released by the linger (003 R56, R58).
+    private var pausedVideoStreams = Set<MatrixRTCTileID>()
     private var tasks = [Task<Void, Never>]()
     
     /// Size and frame rate of the streams being drawn (or captured), refreshed about once a second.
@@ -161,9 +165,15 @@ public final class MatrixRTCCall {
         appliedConstraints[MatrixRTCStreamRef(memberID: memberID, kind: kind)]
     }
     
-    init(localMemberID: String, mediaSession: any MediaSessionProtocol) {
+    /// What the call's own timers run on: the share intent timeout, the release linger, the audio
+    /// level flush and the stats poll. Injected so a scenario can walk through a linger in one
+    /// step; the continuous clock everywhere a session makes the call.
+    private let clock: any Clock<Duration>
+    
+    init(localMemberID: String, mediaSession: any MediaSessionProtocol, clock: any Clock<Duration> = ContinuousClock()) {
         self.localMemberID = localMemberID
         self.mediaSession = mediaSession
+        self.clock = clock
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
     }
     
@@ -440,8 +450,9 @@ public final class MatrixRTCCall {
             screenShareIntentDeadline = nil
             return
         }
+        let clock = clock
         screenShareIntentDeadline = Task { [weak self] in
-            try? await Task.sleep(for: Self.screenShareIntentTimeout)
+            try? await clock.sleep(for: Self.screenShareIntentTimeout)
             guard !Task.isCancelled, let self, pendingScreenShare != nil else { return }
             MatrixRTCLog.warning("Screen share intent was never confirmed by the core; deferring to its state")
             setPendingScreenShare(nil)
@@ -462,12 +473,12 @@ public final class MatrixRTCCall {
         let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         let source = videoSources[key] ?? {
             let mediaSession = mediaSession
-            let source = RemoteVideoSource {
+            let source = RemoteVideoSource(open: {
                 mediaSession.videoStream(memberId: memberID, kind: kind.ffi).map(VideoFrameStreamBox.init)
-            } onIdle: { [weak self] in
+            }, onIdle: { [weak self] in
                 // Nobody draws it any more: stop asking the SFU for it.
                 Task { @MainActor in self?.setVideoConstraints(.init(isVisible: false, pixelSize: nil), memberID: memberID, kind: kind) }
-            }
+            }, clock: clock)
             source.onVideoInfo = { [weak self] info in
                 Task { @MainActor in self?.videoInfos[key] = info }
             }
@@ -482,10 +493,12 @@ public final class MatrixRTCCall {
             releasedVideoStreams.remove(tile)
         }
         // A tile that comes back after the stream went idle (or was released) needs the SFU sending
-        // again; the tile's own size report refines this shortly after.
+        // again; the tile's own size report refines this shortly after. A tile mounting into the
+        // paused band is subscribed but not sent: it is the stage that says when it is looked at.
         let applied = appliedConstraints[key]
+        let isPaused = key.tileID.map { pausedVideoStreams.contains($0) } ?? false
         if applied == nil || applied?.isVisible == false || applied?.isEnabled == false {
-            setVideoConstraints(.init(isVisible: true, pixelSize: applied?.pixelSize), memberID: memberID, kind: kind)
+            setVideoConstraints(.init(isVisible: !isPaused, pixelSize: applied?.pixelSize), memberID: memberID, kind: kind)
         }
     }
     
@@ -504,9 +517,18 @@ public final class MatrixRTCCall {
     public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         guard memberID != localMemberID else { return }
         let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
-        // A surface that is still laid out but released (Picture in Picture keeps one alive) must
-        // not re-subscribe the stream behind the stage's back.
-        guard key.tileID.map({ !releasedVideoStreams.contains($0) }) ?? true else { return }
+        // A surface that is still laid out but paused or released (a paused tile keeps its view
+        // mounted so its last picture is there when it scrolls in; Picture in Picture keeps one
+        // alive) must not re-subscribe the stream behind the stage's back. The size is kept, so
+        // the stream comes back at the right size when the stage says so.
+        guard let tile = key.tileID, !releasedVideoStreams.contains(tile), !pausedVideoStreams.contains(tile) else {
+            if size != nil, let tile = key.tileID, pausedVideoStreams.contains(tile) {
+                var sizes = drawnSizes[key] ?? [:]
+                sizes[slot.id] = size
+                drawnSizes[key] = sizes
+            }
+            return
+        }
         var sizes = drawnSizes[key] ?? [:]
         sizes[slot.id] = size
         drawnSizes[key] = sizes.isEmpty ? nil : sizes
@@ -551,64 +573,104 @@ public final class MatrixRTCCall {
     /// the call's bandwidth.
     private static let releaseLinger = Duration.seconds(3)
     
-    /// The streams the stage is no longer drawing: paged far enough away, or hidden because one tile
-    /// has the whole screen.
+    /// The streams the stage is no longer drawing, hidden because they are more than a viewport
+    /// away or because one tile has the whole screen. Nothing is paused.
+    public func setReleasedVideoStreams(_ tileIDs: Set<MatrixRTCTileID>) {
+        setVideoVisibility(paused: [], released: tileIDs)
+    }
+    
+    /// What the stage is not showing, in the two ways the core tells apart (003 R48, R56, R58).
     ///
     /// **Per stream, not per member, and that is the whole point.** This used to take member IDs and
     /// walk both kinds for each, which was right for exactly as long as a member was one tile. A
     /// member publishing a camera and a screen share is two tiles that are drawn in different places
     /// and go off screen at different times: their share is the hero in the spotlight while their
-    /// camera can be pages away in the strip. Releasing "the member" then takes down the picture
-    /// everybody is looking at, three seconds after a swipe, and nothing catches it — it compiles,
+    /// camera can be a scroll away in the grid. Releasing "the member" then takes down the picture
+    /// everybody is looking at, three seconds after a scroll, and nothing catches it — it compiles,
     /// and no fixture in the test suite has one member on two tiles.
     ///
-    /// Getting there takes two steps, and the difference between them is the whole reason the core
-    /// draws a line between paused and released. Pausing is immediate and resumes instantly;
-    /// releasing frees the subscription but costs a visible re-negotiation to undo. So a stream
-    /// named here is **paused at once and released only if it is still named a few seconds
-    /// later**: going full screen and straight back out, or swiping past a page, then costs nothing,
-    /// while settling on one tile still gives a thirty-person call its bandwidth back.
+    /// **Paused** streams are within a scroll of the screen: subscribed but not sent, so they resume
+    /// the instant they are looked at and their tile keeps its last picture meanwhile. They are never
+    /// released by the linger. **Released** streams are further away, or hidden: paused at once and
+    /// released only if still named a few seconds later, because releasing frees the subscription
+    /// but costs a visible re-negotiation to undo. Going full screen and straight back out, or a
+    /// tile bouncing at the edge of the band, then costs nothing, while settling somewhere still
+    /// gives a two-hundred-person call its bandwidth back.
     ///
-    /// This is a set rather than a per-tile call so there is one place that knows what is released.
-    /// An earlier shape had each tile release itself on the way out, and members who left while off
+    /// A stream leaving both sets while its tile is still mounted is asked for again at the size
+    /// that tile last reported: a paused tile does not re-attach when it scrolls back in, so its
+    /// own attach cannot be what says it is being drawn again.
+    ///
+    /// Sets rather than per-tile calls so there is one place that knows what is not shown. An
+    /// earlier shape had each tile release itself on the way out, and members who left while off
     /// screen were never restored, because the tile that owed them the call had gone.
-    public func setReleasedVideoStreams(_ tileIDs: Set<MatrixRTCTileID>) {
-        let released = tileIDs.filter { $0.memberID != localMemberID }
-        guard released != releasedVideoStreams else { return }
+    public func setVideoVisibility(paused pausedIDs: Set<MatrixRTCTileID>, released releasedIDs: Set<MatrixRTCTileID>) {
+        let released = releasedIDs.filter { $0.memberID != localMemberID }
+        let paused = pausedIDs.filter { $0.memberID != localMemberID }.subtracting(released)
+        guard released != releasedVideoStreams || paused != pausedVideoStreams else { return }
         // Only the streams that changed side need a round trip; setVideoConstraints de-duplicates
-        // the rest anyway, but a big call would otherwise walk every stream on every swipe.
-        let changed = released.symmetricDifference(releasedVideoStreams)
+        // the rest anyway, but a big call would otherwise walk every stream on every scroll.
+        let changed = released.symmetricDifference(releasedVideoStreams).union(paused.symmetricDifference(pausedVideoStreams))
         releasedVideoStreams = released
+        pausedVideoStreams = paused
         for tile in changed {
             // Whichever way this stream just went, any release still waiting on it is stale.
             pendingReleases.removeValue(forKey: tile)?.cancel()
-            let isReleased = released.contains(tile)
-            // A surface going away reports a nil size, and `reportDrawnSize` drops that report
-            // when the stream is already released. Releasing and unmounting happen in one pass
-            // and in no defined order, so whenever the release lands first the departing
-            // surface's size would stay here for the rest of the call and go on inflating the
-            // maximum for whoever draws the stream next. One tile at a time while paging; a
-            // whole call at once now that a tile can go full screen.
-            if isReleased {
-                drawnSizes[MatrixRTCStreamRef(tile)] = nil
+            let key = MatrixRTCStreamRef(tile)
+            let applied = appliedConstraints[key]
+            if released.contains(tile) {
+                // A surface going away reports a nil size, and `reportDrawnSize` drops that report
+                // when the stream is already released. Releasing and unmounting happen in one pass
+                // and in no defined order, so whenever the release lands first the departing
+                // surface's size would stay here for the rest of the call and go on inflating the
+                // maximum for whoever draws the stream next.
+                drawnSizes[key] = nil
+                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
+                                    memberID: tile.memberID,
+                                    kind: tile.kind.videoStreamKind)
+                let clock = clock
+                pendingReleases[tile] = Task { [weak self] in
+                    try? await clock.sleep(for: Self.releaseLinger)
+                    guard !Task.isCancelled else { return }
+                    self?.release(tile)
+                }
+            } else if paused.contains(tile) {
+                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
+                                    memberID: tile.memberID,
+                                    kind: tile.kind.videoStreamKind)
+            } else if let largest = drawnSizes[key]?.values.max(by: { $0.width * $0.height < $1.width * $1.height }) {
+                // Back on screen with its view still mounted: nothing else will ask for it.
+                setVideoConstraints(.init(isEnabled: true, isVisible: true, pixelSize: largest),
+                                    memberID: tile.memberID,
+                                    kind: tile.kind.videoStreamKind)
             }
-            let applied = appliedConstraints[MatrixRTCStreamRef(tile)]
-            // Both directions land on paused. Leaving stops there because it is the tile's own
-            // attach that says it is being drawn again and at what size; arriving stops there
-            // because the release is the step below.
-            setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
-                                memberID: tile.memberID,
-                                kind: tile.kind.videoStreamKind)
-            guard isReleased else { continue }
-            pendingReleases[tile] = Task { [weak self] in
-                try? await Task.sleep(for: Self.releaseLinger)
-                guard !Task.isCancelled else { return }
-                self?.release(tile)
-            }
+            // Otherwise it is the tile's own attach that says it is being drawn again and at
+            // what size.
         }
     }
     
-    /// The second step of ``setReleasedVideoStreams(_:)``, once the stream has stayed unwatched.
+    /// Declares which tiles the layout wants full records for (003 R52, R55). The core republishes
+    /// the roster on every declaration, so an equal window must never reach it: the layout
+    /// recomputes on every scroll and most passes land on the same rows.
+    public func setDetailWindow(_ window: MatrixRTCDetailWindow) {
+        guard window != appliedDetailWindow else { return }
+        appliedDetailWindow = window
+        MatrixRTCLog.info("Detail window ranks \(window.ranks.lowerBound)..<\(window.ranks.upperBound) also \(window.also.map { "\($0.memberID)/\($0.kind)" })")
+        let mediaSession = mediaSession
+        let also = window.also.map { FfiTileId(memberId: $0.memberID, kind: $0.kind.ffi) }
+        Task.detached(priority: .utility) {
+            mediaSession.setDetailWindow(offset: UInt32(clamping: window.ranks.lowerBound),
+                                         len: UInt32(clamping: window.ranks.count),
+                                         also: also)
+        }
+    }
+    
+    /// The last window declared, for a dump or a test.
+    public var detailWindow: MatrixRTCDetailWindow? {
+        appliedDetailWindow
+    }
+    
+    /// The second step of ``setVideoVisibility(paused:released:)``, once the stream has stayed unwatched.
     private func release(_ tile: MatrixRTCTileID) {
         pendingReleases[tile] = nil
         // It may have come back while this was waiting, in which case the cancel above raced us.
@@ -771,8 +833,9 @@ public final class MatrixRTCCall {
         guard let memberID else { return }
         pendingAudioLevels[memberID] = level
         guard audioLevelFlush == nil else { return }
+        let clock = clock
         audioLevelFlush = Task { [weak self] in
-            try? await Task.sleep(for: Self.audioLevelSamplePeriod)
+            try? await clock.sleep(for: Self.audioLevelSamplePeriod)
             guard !Task.isCancelled else { return }
             self?.flushAudioLevels()
         }
@@ -795,7 +858,7 @@ public final class MatrixRTCCall {
     /// RTCP reports arrive about once a second; polling faster only repeats values.
     private func pollReceiveStats() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(1))
+            try? await clock.sleep(for: .seconds(1))
             // One round trip for the streams we draw, not one per member: at two hundred participants
             // the old loop was two hundred sequential awaits a second, for tiles nobody was looking at.
             let streams = Self.streamsToPoll(tiles: tiles, released: releasedVideoStreams, localMemberID: localMemberID)
