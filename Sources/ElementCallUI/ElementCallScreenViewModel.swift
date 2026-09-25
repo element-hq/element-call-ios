@@ -322,12 +322,12 @@ public final class ElementCallScreenViewModel {
     
     /// The stats overlay's text for one tile, from everything the call knows about that stream.
     private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
-        return describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
-                        audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
-                        kind: tile.kind,
-                        encryption: call.frameEncryption[tile.memberID],
-                        video: call.videoInfo(memberID: tile.memberID, kind: tile.kind.videoStreamKind),
-                        requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind))
+        describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
+                 audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
+                 kind: tile.kind,
+                 encryption: call.frameEncryption[tile.memberID],
+                 video: call.videoInfo(memberID: tile.memberID, kind: tile.kind.videoStreamKind),
+                 requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind))
     }
     
     private static func describe(_ stats: MatrixRTCReceiveStats?,
