@@ -19,10 +19,51 @@ public final class MatrixRTCCall {
     public let localMemberID: String
     
     /// The transport's roster (not the membership projection; the two can legitimately differ).
+    ///
+    /// Kept beside ``tiles`` rather than replaced by it. Tiles are a projection of this, and the
+    /// questions that are about the *call* rather than about what is drawn — is anyone on video,
+    /// what should a single-tile surface show, what did the transport actually report for a member —
+    /// are still answered here, un-joined and one row per membership.
     public private(set) var participants: [MatrixRTCParticipant] = []
+    /// What to draw, in the order to draw it. See ``MatrixRTCTileRoster``.
+    public private(set) var tiles: MatrixRTCTileRoster = .empty
+    /// Our own tile and whether we are sharing our screen; nil until our membership reaches the
+    /// roster. Prefer ``ownTile``, which covers that gap.
+    public private(set) var localState: MatrixRTCLocalState?
+    
+    /// Our own tile — and the reason this is not simply `localState?.tile`.
+    ///
+    /// The model publishes local state only once our membership has reached the roster, a moment or
+    /// two after the call connects, and the self view is usually the only picture on screen for that
+    /// moment. Waiting for it would flash an empty stage on every single join. The transport roster
+    /// already has us by then — `start()` sweeps it synchronously — so the same tile is built from
+    /// there until the model publishes its own.
+    ///
+    /// It also keeps "no tiles" meaning "not connected yet". The ranked list is empty when you are
+    /// the only person in the call, and a UI that read emptiness as "nothing to show" would put a
+    /// loading spinner over a live call with no way out of it.
+    public var ownTile: MatrixRTCTile? {
+        if let tile = localState?.tile {
+            return tile
+        }
+        guard let local = participants.first(where: \.isLocal) else { return nil }
+        return MatrixRTCTile(id: MatrixRTCTileID(memberID: local.memberID, kind: .person),
+                             userID: local.userID,
+                             deviceID: local.deviceID,
+                             isLocal: true,
+                             isHero: false,
+                             hasVideo: local.isPublishing(.camera),
+                             isMicrophoneMuted: !local.isPublishing(.microphone),
+                             isSpeaking: false,
+                             handRaisedAt: local.handRaisedAt,
+                             isReachable: local.isReachable)
+    }
+    
     public private(set) var audioLevels: [String: MatrixRTCAudioLevel] = [:]
-    public private(set) var receiveStats: [String: MatrixRTCReceiveStats] = [:]
-    public private(set) var activeSpeakerIDs: Set<String> = []
+    /// RTP receive counters per remote stream: each composed tile's own, and its member's microphone.
+    /// A stream missing here is not yet reported rather than receiving nothing; a stream nobody draws
+    /// is not polled at all.
+    public private(set) var receiveStats: [MatrixRTCStreamRef: MatrixRTCReceiveStats] = [:]
     public private(set) var frameEncryption: [String: MatrixRTCFrameEncryptionState] = [:]
     public private(set) var isMicrophoneMuted = false
     public private(set) var isCameraEnabled = false
@@ -30,7 +71,25 @@ public final class MatrixRTCCall {
     /// track is muted at the transport meanwhile so peers see camera-off rather than a frozen frame.
     public private(set) var isCameraInterrupted = false
     public private(set) var isFrontCamera = true
-    public private(set) var isScreenSharing = false
+    /// Whether a screen share is actually up.
+    ///
+    /// The core's answer, derived from publication state — the stream up *and* unmuted — rather than
+    /// from what we asked for. That is the point of it: our intent can be wrong, and a share that
+    /// failed to come up used to leave this true for the rest of the call.
+    ///
+    /// ``pendingScreenShare`` is the exception, and it is not a nicety. We publish, start capture,
+    /// and unmute only once capture is live (`setScreenShareEnabled`), so between the tap and the
+    /// unmute the core is correctly saying *false* — through a second or more of publishing and a
+    /// system consent prompt. A banner that appears a second after the button reads as a broken
+    /// button. The intent is dropped the instant the core agrees, and on a deadline if it never
+    /// does, so it can only ever shorten the truth, never outlive it.
+    public var isScreenSharing: Bool {
+        pendingScreenShare ?? localState?.isScreenSharing ?? false
+    }
+    
+    private var pendingScreenShare: Bool?
+    @ObservationIgnored private var screenShareIntentDeadline: Task<Void, Never>?
+    private static let screenShareIntentTimeout = Duration.seconds(10)
     public private(set) var isMediaDegraded = false
     public private(set) var hasEnded = false
     
@@ -51,7 +110,7 @@ public final class MatrixRTCCall {
             guard let self else { return }
             localVideo.offer(frame)
             if let info = localVideoMeter.record(frame) {
-                Task { @MainActor in self.videoInfos[VideoStreamKey(memberID: self.localMemberID, kind: .camera)] = info }
+                Task { @MainActor in self.videoInfos[MatrixRTCStreamRef(memberID: self.localMemberID, kind: .camera)] = info }
             }
         }
         capturer.onInterruption = { [weak self] interrupted in
@@ -60,7 +119,15 @@ public final class MatrixRTCCall {
         return capturer
     }()
     
-    private let screenShare = ScreenShareCapturer()
+    /// Lazy so the handler can capture `self`, the way the camera capturer above does.
+    @ObservationIgnored private lazy var screenShare: ScreenShareCapturer = {
+        let capturer = ScreenShareCapturer()
+        capturer.setOnUnexpectedStop { [weak self] in
+            Task { @MainActor in await self?.handleScreenShareStopped() }
+        }
+        return capturer
+    }()
+    
     /// The self view: frames straight from the camera, mirrored for the front one.
     public let localVideo = LocalVideoFanOut()
     
@@ -68,23 +135,20 @@ public final class MatrixRTCCall {
     private let localVideoMeter = VideoFrameMeter()
     private var cameraTrack: FfiLocalTrack?
     private var playbackSinks = [String: AudioPlaybackSink]()
-    private var videoSources = [VideoStreamKey: RemoteVideoSource]()
-    private var appliedConstraints = [VideoStreamKey: MatrixRTCVideoConstraints]()
-    /// Members whose video is released rather than merely paused. Held as member IDs because that
-    /// is what the stage knows: a tile it has paged far away wants neither camera nor screen share.
-    private var releasedVideoMembers = Set<String>()
+    private var membersWithoutMicrophone = Set<String>()
+    private var videoSources = [MatrixRTCStreamRef: RemoteVideoSource]()
+    private var appliedConstraints = [MatrixRTCStreamRef: MatrixRTCVideoConstraints]()
+    /// Streams that are released rather than merely paused. Held per stream rather than per member
+    /// because a member can be two tiles: paging a sharer's camera away must not take the screen
+    /// share filling the spotlight with it, which is exactly what walking both kinds per member did.
+    private var releasedVideoStreams = Set<MatrixRTCTileID>()
     private var tasks = [Task<Void, Never>]()
     
-    private struct VideoStreamKey: Hashable {
-        let memberID: String
-        let kind: MatrixRTCStreamKind
-    }
-    
     /// Size and frame rate of the streams being drawn (or captured), refreshed about once a second.
-    private var videoInfos = [VideoStreamKey: MatrixRTCVideoInfo]()
+    private var videoInfos = [MatrixRTCStreamRef: MatrixRTCVideoInfo]()
     
     public func videoInfo(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoInfo? {
-        videoInfos[VideoStreamKey(memberID: memberID, kind: kind)]
+        videoInfos[MatrixRTCStreamRef(memberID: memberID, kind: kind)]
     }
     
     /// Upright aspect ratio of a stream seen so far, so a surface can be sized before its first frame.
@@ -94,7 +158,7 @@ public final class MatrixRTCCall {
     
     /// What was last asked of the SFU for a stream.
     public func requestedVideoConstraints(memberID: String, kind: MatrixRTCStreamKind = .camera) -> MatrixRTCVideoConstraints? {
-        appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
+        appliedConstraints[MatrixRTCStreamRef(memberID: memberID, kind: kind)]
     }
     
     init(localMemberID: String, mediaSession: any MediaSessionProtocol) {
@@ -105,13 +169,50 @@ public final class MatrixRTCCall {
     
     /// Starts the event pump **before** anything announces the call as connected (the stream has no
     /// replay), then sweeps the roster for members already publishing.
+    ///
+    /// The tile roster and our own state are pumped separately, one task each: both suspend, and a
+    /// single loop would have to race them and drop whichever it was not awaiting. Both are seeded
+    /// here rather than left to their pumps, which would fill them a turn later — after `connectMedia`
+    /// has already handed the call on. Same reason the event pump starts before anything announces
+    /// the call connected: there is no replay.
     func start() async {
         tasks.append(Task { [weak self] in await self?.pumpEvents() })
+        tasks.append(Task { [weak self] in await self?.pumpTileRoster() })
+        tasks.append(Task { [weak self] in await self?.pumpLocalState() })
         tasks.append(Task { [weak self] in await self?.pollReceiveStats() })
-        refreshParticipants()
-        for participant in participants where !participant.isLocal && participant.stream(.microphone) != nil {
-            playAudio(of: participant.memberID)
+        seedParticipants()
+        apply(mediaSession.roster())
+        apply(mediaSession.localState())
+    }
+    
+    /// The transport's roster, read once: it is the whole call every time, which is the cost the tile
+    /// roster's detail window exists to avoid, so it is never pumped or re-read per event. What it
+    /// seeds is our own row, for the tile we draw before the core publishes our local state.
+    private func seedParticipants() {
+        participants = mediaSession.participants().map(MatrixRTCParticipant.init)
+        MatrixRTCLog.info("Media roster \(participants.count): \(participants.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
+    }
+    
+    /// Who we play follows the tile roster, not the event stream: every remote person tile is a
+    /// candidate, and a candidate we have no sink for is opened on each roster -- `audioStream`
+    /// answers nil at once for a member with no microphone track, so the retries cost nothing and a
+    /// microphone that appears later is picked up on the roster it changes. Anyone gone from the
+    /// order loses their sink. A missed `streamStarted` can therefore never leave someone silent, and
+    /// a missed `participantLeft` never leaks a sink.
+    private func reconcilePlayback() {
+        let wanted = Self.playbackCandidates(tiles.order, localMemberID: localMemberID)
+        for memberID in playbackSinks.keys where !wanted.contains(memberID) {
+            stopPlayback(of: memberID)
         }
+        for memberID in wanted where playbackSinks[memberID] == nil {
+            playAudio(of: memberID)
+        }
+    }
+    
+    /// Whose audio we try to play: every remote person tile in the order. Whether they have a
+    /// microphone, opening it tells us.
+    static func playbackCandidates(_ order: [MatrixRTCTileRef], localMemberID: String) -> Set<String> {
+        Set(order.filter { $0.id.kind == .person && $0.id.memberID != localMemberID }.map(\.id.memberID))
     }
     
     // MARK: - Audio device
@@ -206,59 +307,56 @@ public final class MatrixRTCCall {
     
     /// Anyone (us included) has video worth showing.
     public var hasVideo: Bool {
-        (isCameraEnabled && !isCameraInterrupted) || participants.contains { !$0.isLocal && ($0.isPublishing(.camera) || $0.isPublishing(.screenShare)) }
+        (isCameraEnabled && !isCameraInterrupted) || tiles.detail.values.contains { $0.hasVideo }
     }
     
-    /// What a single-tile surface (Picture in Picture) should show: the spotlight member's screen share
-    /// or camera, else the first remote member with video, else our own camera.
-    public func pictureInPictureCandidate(spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
-        Self.pictureInPictureCandidate(participants: participants,
+    /// What a single-tile surface (Picture in Picture) should show: the spotlight tile if it still
+    /// has a picture, else the highest-ranked remote tile with video, else our own camera.
+    ///
+    /// Reads the tile roster: it is the one surface kept live for the whole call, and its order puts
+    /// a shared screen first, which is what a window with room for one thing should show.
+    public func pictureInPictureCandidate(spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
+        Self.pictureInPictureCandidate(tiles: tiles,
                                        localMemberID: localMemberID,
                                        isLocalCameraAvailable: isCameraEnabled && !isCameraInterrupted,
-                                       spotlightMemberID: spotlightMemberID)
+                                       spotlight: spotlight)
     }
     
-    public nonisolated static func pictureInPictureCandidate(participants: [MatrixRTCParticipant],
+    public nonisolated static func pictureInPictureCandidate(tiles: MatrixRTCTileRoster,
                                                              localMemberID: String,
                                                              isLocalCameraAvailable: Bool,
-                                                             spotlightMemberID: String?) -> (memberID: String, kind: MatrixRTCStreamKind)? {
-        func candidate(for participant: MatrixRTCParticipant) -> (memberID: String, kind: MatrixRTCStreamKind)? {
-            if participant.isPublishing(.screenShare) {
-                return (participant.memberID, .screenShare)
-            }
-            if participant.isPublishing(.camera) {
-                return (participant.memberID, .camera)
-            }
-            return nil
+                                                             spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
+        // The spotlight names its own stream, so this only has to check the one it names still has
+        // a picture -- a share can stop while the window is continuing it.
+        if let spotlight, spotlight.memberID != localMemberID, tiles.detail[spotlight]?.hasVideo == true {
+            return spotlight
         }
-        if let spotlightMemberID, let spotlight = participants.first(where: { $0.memberID == spotlightMemberID && !$0.isLocal }),
-           let candidate = candidate(for: spotlight) {
-            return candidate
-        }
-        if let remote = participants.filter({ !$0.isLocal }).compactMap(candidate(for:)).first {
-            return remote
+        if let remote = tiles.order.first(where: { tiles.detail[$0.id]?.hasVideo == true }) {
+            return remote.id
         }
         if isLocalCameraAvailable {
-            return (localMemberID, .camera)
+            return MatrixRTCTileID(memberID: localMemberID, kind: .person)
         }
         return nil
     }
     
     /// Who the single-tile surface should *name* when nobody has video and it falls back to an
-    /// avatar. Separate from ``pictureInPictureCandidate(spotlightMemberID:)``, which answers what
-    /// stream to show and returns nil in exactly that case.
-    public func pictureInPicturePlaceholderMemberID(spotlightMemberID: String?) -> String? {
-        Self.pictureInPicturePlaceholderMemberID(participants: participants, spotlightMemberID: spotlightMemberID)
+    /// avatar. Separate from ``pictureInPictureCandidate(spotlight:)``, which answers what stream to
+    /// show and returns nil in exactly that case.
+    ///
+    /// A member rather than a tile, because this names a person.
+    public func pictureInPicturePlaceholderMemberID(spotlight: MatrixRTCTileID?) -> String? {
+        Self.pictureInPicturePlaceholderMemberID(tiles: tiles, spotlight: spotlight)
     }
     
-    public nonisolated static func pictureInPicturePlaceholderMemberID(participants: [MatrixRTCParticipant],
-                                                                       spotlightMemberID: String?) -> String? {
-        // The spotlight can be us — it is only excluded when picking a stream — and showing the
-        // user their own avatar in the window tells them nothing about who they are talking to.
-        if let spotlightMemberID, participants.contains(where: { $0.memberID == spotlightMemberID && !$0.isLocal }) {
-            return spotlightMemberID
+    public nonisolated static func pictureInPicturePlaceholderMemberID(tiles: MatrixRTCTileRoster,
+                                                                       spotlight: MatrixRTCTileID?) -> String? {
+        // The order never holds our own tile, so a spotlight found in it is somebody else -- showing
+        // the user their own avatar would tell them nothing about who they are talking to.
+        if let spotlight, tiles.order.contains(where: { $0.id.memberID == spotlight.memberID }) {
+            return spotlight.memberID
         }
-        return participants.first { !$0.isLocal }?.memberID
+        return tiles.order.first?.id.memberID
     }
     
     private func handleCameraInterruption(_ interrupted: Bool) async {
@@ -278,6 +376,7 @@ public final class MatrixRTCCall {
     /// drawing an empty tile for a share that ended.
     public func setScreenShareEnabled(_ enabled: Bool) async throws {
         guard isScreenSharing != enabled else { return }
+        setPendingScreenShare(enabled)
         if enabled {
             let track: FfiLocalTrack
             do {
@@ -294,6 +393,9 @@ public final class MatrixRTCCall {
                 try await screenShare.start(track: track)
             } catch {
                 try? await mediaSession.unpublish(kind: .screenShare)
+                // The intent goes back now rather than waiting out the deadline: the banner should
+                // not sit there for ten seconds after a share that never started.
+                setPendingScreenShare(nil)
                 throw error
             }
             await setTransportMuted(.screenShare, muted: false)
@@ -305,15 +407,59 @@ public final class MatrixRTCCall {
                 MatrixRTCLog.warning("Could not unpublish the screen share: \(error)")
             }
         }
-        isScreenSharing = enabled
-        MatrixRTCLog.info("Screen share \(enabled ? "started" : "stopped") for \(localMemberID)")
+        MatrixRTCLog.info("Screen share \(enabled ? "started" : "stopped") requested for \(localMemberID)")
+        reconcileScreenShare()
+    }
+    
+    /// ReplayKit stopped without us asking — Control Centre, another app taking the recorder, a
+    /// restriction. The publication is still up, so the core still reports us as sharing, because
+    /// from the transport's point of view we are: it cannot see ReplayKit and learns a share ended
+    /// only because we unpublished.
+    ///
+    /// Retracting the publication is the only thing that makes both true again. Unpublish rather
+    /// than mute, for the same reason stopping deliberately does: a screen has no "off" state a mute
+    /// could stand for, so peers would go on drawing an empty tile — and under the tile model that
+    /// tile is a hero, sitting in the largest slot every one of them has.
+    private func handleScreenShareStopped() async {
+        guard isScreenSharing || pendingScreenShare == true else { return }
+        MatrixRTCLog.info("Screen capture ended without us asking; unpublishing the share")
+        setPendingScreenShare(false)
+        await screenShare.stop()
+        do {
+            try await mediaSession.unpublish(kind: .screenShare)
+        } catch {
+            MatrixRTCLog.warning("Could not unpublish after an unexpected screen capture stop: \(error)")
+        }
+        reconcileScreenShare()
+    }
+    
+    private func setPendingScreenShare(_ pending: Bool?) {
+        screenShareIntentDeadline?.cancel()
+        pendingScreenShare = pending
+        guard pending != nil else {
+            screenShareIntentDeadline = nil
+            return
+        }
+        screenShareIntentDeadline = Task { [weak self] in
+            try? await Task.sleep(for: Self.screenShareIntentTimeout)
+            guard !Task.isCancelled, let self, pendingScreenShare != nil else { return }
+            MatrixRTCLog.warning("Screen share intent was never confirmed by the core; deferring to its state")
+            setPendingScreenShare(nil)
+        }
+    }
+    
+    /// Drops the optimistic value once the core says the same thing, so from then on there is one
+    /// answer rather than two that can drift.
+    private func reconcileScreenShare() {
+        guard let pendingScreenShare, pendingScreenShare == localState?.isScreenSharing else { return }
+        setPendingScreenShare(nil)
     }
     
     // MARK: - Remote video
     
     /// Attaches a tile's slot to the member's stream, opening the decoder on first attach.
     public func attachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
-        let key = VideoStreamKey(memberID: memberID, kind: kind)
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         let source = videoSources[key] ?? {
             let mediaSession = mediaSession
             let source = RemoteVideoSource {
@@ -330,9 +476,11 @@ public final class MatrixRTCCall {
         }()
         source.attach(slot)
         // A tile only attaches once it is on screen, so whatever the stage last decided about this
-        // member is out of date the moment we get here: drop the release before asking for the
-        // stream, or the diff below would immediately take it away again.
-        releasedVideoMembers.remove(memberID)
+        // stream is out of date the moment we get here: drop the release before asking for it, or
+        // the diff below would immediately take it away again.
+        if let tile = key.tileID {
+            releasedVideoStreams.remove(tile)
+        }
         // A tile that comes back after the stream went idle (or was released) needs the SFU sending
         // again; the tile's own size report refines this shortly after.
         let applied = appliedConstraints[key]
@@ -342,23 +490,23 @@ public final class MatrixRTCCall {
     }
     
     public func detachVideo(_ slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
-        videoSources[VideoStreamKey(memberID: memberID, kind: kind)]?.detach(slot)
+        videoSources[MatrixRTCStreamRef(memberID: memberID, kind: kind)]?.detach(slot)
         reportDrawnSize(nil, slot: slot, memberID: memberID, kind: kind)
     }
     
     /// Drawn sizes per surface, so the SFU is asked for the largest of everything currently showing
     /// a stream rather than for whichever surface happened to lay out last.
-    private var drawnSizes = [VideoStreamKey: [UUID: CGSize]]()
-    /// Members paused and waiting out ``releaseLinger`` before they are released.
-    private var pendingReleases = [String: Task<Void, Never>]()
+    private var drawnSizes = [MatrixRTCStreamRef: [UUID: CGSize]]()
+    /// Streams paused and waiting out ``releaseLinger`` before they are released.
+    private var pendingReleases = [MatrixRTCTileID: Task<Void, Never>]()
     
     /// A surface reports how big it draws a stream (nil when it stops drawing it).
     public func reportDrawnSize(_ size: CGSize?, slot: VideoFrameSlot, memberID: String, kind: MatrixRTCStreamKind = .camera) {
         guard memberID != localMemberID else { return }
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         // A surface that is still laid out but released (Picture in Picture keeps one alive) must
         // not re-subscribe the stream behind the stage's back.
-        guard !releasedVideoMembers.contains(memberID) else { return }
-        let key = VideoStreamKey(memberID: memberID, kind: kind)
+        guard key.tileID.map({ !releasedVideoStreams.contains($0) }) ?? true else { return }
         var sizes = drawnSizes[key] ?? [:]
         sizes[slot.id] = size
         drawnSizes[key] = sizes.isEmpty ? nil : sizes
@@ -380,7 +528,7 @@ public final class MatrixRTCCall {
                                                     pixelSize: constraints.pixelSize.map { size in
                                                         CGSize(width: (size.width / 16).rounded() * 16, height: (size.height / 16).rounded() * 16)
                                                     })
-        let key = VideoStreamKey(memberID: memberID, kind: kind)
+        let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         guard appliedConstraints[key] != constraints else { return }
         appliedConstraints[key] = constraints
         MatrixRTCLog.info("Constraints for \(memberID) (\(kind)): enabled=\(constraints.isEnabled) visible=\(constraints.isVisible) size=\(constraints.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")")
@@ -403,69 +551,72 @@ public final class MatrixRTCCall {
     /// the call's bandwidth.
     private static let releaseLinger = Duration.seconds(3)
     
-    /// The members the stage is no longer drawing: paged far enough away, or hidden because one tile
-    /// has the whole screen. For both the camera and a screen share, since neither is being shown.
+    /// The streams the stage is no longer drawing: paged far enough away, or hidden because one tile
+    /// has the whole screen.
+    ///
+    /// **Per stream, not per member, and that is the whole point.** This used to take member IDs and
+    /// walk both kinds for each, which was right for exactly as long as a member was one tile. A
+    /// member publishing a camera and a screen share is two tiles that are drawn in different places
+    /// and go off screen at different times: their share is the hero in the spotlight while their
+    /// camera can be pages away in the strip. Releasing "the member" then takes down the picture
+    /// everybody is looking at, three seconds after a swipe, and nothing catches it — it compiles,
+    /// and no fixture in the test suite has one member on two tiles.
     ///
     /// Getting there takes two steps, and the difference between them is the whole reason the core
     /// draws a line between paused and released. Pausing is immediate and resumes instantly;
-    /// releasing frees the subscription but costs a visible re-negotiation to undo. So a member
-    /// named here is **paused at once and released only if they are still named a few seconds
+    /// releasing frees the subscription but costs a visible re-negotiation to undo. So a stream
+    /// named here is **paused at once and released only if it is still named a few seconds
     /// later**: going full screen and straight back out, or swiping past a page, then costs nothing,
     /// while settling on one tile still gives a thirty-person call its bandwidth back.
     ///
-    /// This is a set rather than a per-tile call so there is one place that knows which members are
-    /// released. An earlier shape had each tile release itself on the way out, and members who left
-    /// while off screen were never restored, because the tile that owed them the call had gone.
-    public func setReleasedVideoMembers(_ memberIDs: Set<String>) {
-        let released = memberIDs.subtracting([localMemberID])
-        guard released != releasedVideoMembers else { return }
-        // Only the members that changed side need a round trip; setVideoConstraints de-duplicates
-        // the rest anyway, but a big call would otherwise walk every member on every swipe.
-        let changed = released.symmetricDifference(releasedVideoMembers)
-        releasedVideoMembers = released
-        for memberID in changed {
-            // Whichever way this member just went, any release still waiting on them is stale.
-            pendingReleases.removeValue(forKey: memberID)?.cancel()
-            let isReleased = released.contains(memberID)
-            for kind in [MatrixRTCStreamKind.camera, .screenShare] {
-                let key = VideoStreamKey(memberID: memberID, kind: kind)
-                // A surface going away reports a nil size, and `reportDrawnSize` drops that report
-                // when the member is already released. Releasing and unmounting happen in one pass
-                // and in no defined order, so whenever the release lands first the departing
-                // surface's size would stay here for the rest of the call and go on inflating the
-                // maximum for whoever draws the stream next. One tile at a time while paging; a
-                // whole call at once now that a tile can go full screen.
-                if isReleased {
-                    drawnSizes[key] = nil
-                }
-                let applied = appliedConstraints[key]
-                // Both directions land on paused. Leaving stops there because it is the tile's own
-                // attach that says it is being drawn again and at what size; arriving stops there
-                // because the release is the step below.
-                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
-                                    memberID: memberID,
-                                    kind: kind)
+    /// This is a set rather than a per-tile call so there is one place that knows what is released.
+    /// An earlier shape had each tile release itself on the way out, and members who left while off
+    /// screen were never restored, because the tile that owed them the call had gone.
+    public func setReleasedVideoStreams(_ tileIDs: Set<MatrixRTCTileID>) {
+        let released = tileIDs.filter { $0.memberID != localMemberID }
+        guard released != releasedVideoStreams else { return }
+        // Only the streams that changed side need a round trip; setVideoConstraints de-duplicates
+        // the rest anyway, but a big call would otherwise walk every stream on every swipe.
+        let changed = released.symmetricDifference(releasedVideoStreams)
+        releasedVideoStreams = released
+        for tile in changed {
+            // Whichever way this stream just went, any release still waiting on it is stale.
+            pendingReleases.removeValue(forKey: tile)?.cancel()
+            let isReleased = released.contains(tile)
+            // A surface going away reports a nil size, and `reportDrawnSize` drops that report
+            // when the stream is already released. Releasing and unmounting happen in one pass
+            // and in no defined order, so whenever the release lands first the departing
+            // surface's size would stay here for the rest of the call and go on inflating the
+            // maximum for whoever draws the stream next. One tile at a time while paging; a
+            // whole call at once now that a tile can go full screen.
+            if isReleased {
+                drawnSizes[MatrixRTCStreamRef(tile)] = nil
             }
+            let applied = appliedConstraints[MatrixRTCStreamRef(tile)]
+            // Both directions land on paused. Leaving stops there because it is the tile's own
+            // attach that says it is being drawn again and at what size; arriving stops there
+            // because the release is the step below.
+            setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
+                                memberID: tile.memberID,
+                                kind: tile.kind.videoStreamKind)
             guard isReleased else { continue }
-            pendingReleases[memberID] = Task { [weak self] in
+            pendingReleases[tile] = Task { [weak self] in
                 try? await Task.sleep(for: Self.releaseLinger)
                 guard !Task.isCancelled else { return }
-                self?.release(memberID)
+                self?.release(tile)
             }
         }
     }
     
-    /// The second step of ``setReleasedVideoMembers(_:)``, once the member has stayed unwatched.
-    private func release(_ memberID: String) {
-        pendingReleases[memberID] = nil
-        // They may have come back while this was waiting, in which case the cancel above raced us.
-        guard releasedVideoMembers.contains(memberID) else { return }
-        for kind in [MatrixRTCStreamKind.camera, .screenShare] {
-            let applied = appliedConstraints[VideoStreamKey(memberID: memberID, kind: kind)]
-            setVideoConstraints(.init(isEnabled: false, isVisible: false, pixelSize: applied?.pixelSize),
-                                memberID: memberID,
-                                kind: kind)
-        }
+    /// The second step of ``setReleasedVideoStreams(_:)``, once the stream has stayed unwatched.
+    private func release(_ tile: MatrixRTCTileID) {
+        pendingReleases[tile] = nil
+        // It may have come back while this was waiting, in which case the cancel above raced us.
+        guard releasedVideoStreams.contains(tile) else { return }
+        let applied = appliedConstraints[MatrixRTCStreamRef(tile)]
+        setVideoConstraints(.init(isEnabled: false, isVisible: false, pixelSize: applied?.pixelSize),
+                            memberID: tile.memberID,
+                            kind: tile.kind.videoStreamKind)
     }
     
     // MARK: - Teardown
@@ -484,7 +635,7 @@ public final class MatrixRTCCall {
         playbackSinks.removeAll()
         videoSources.values.forEach { $0.close() }
         videoSources.removeAll()
-        releasedVideoMembers.removeAll()
+        releasedVideoStreams.removeAll()
         // Stops the engine *and* detaches every node in one hop. Each `stop()` above only flips a
         // flag and enqueues its detach, so the whole audio teardown costs this actor microseconds
         // rather than blocking it on graph reconfiguration — which is what the render thread used
@@ -504,25 +655,55 @@ public final class MatrixRTCCall {
         UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.interfaceOrientation ?? .portrait
     }
     
+    /// The ranked tiles, pushed. Latest-value-wins on the far side, so falling behind costs the
+    /// intermediate rosters rather than building a backlog of superseded ones.
+    private func pumpTileRoster() async {
+        while !Task.isCancelled, let roster = await mediaSession.nextRoster() {
+            apply(roster)
+        }
+        // Three pumps can now observe the session ending and only `pumpEvents` yields `.ended`.
+        // Saying so distinguishes a stage frozen on its last roster from one nobody is updating.
+        MatrixRTCLog.debug("Tile roster pump stopped (hasEnded: \(hasEnded))")
+    }
+    
+    private func pumpLocalState() async {
+        while !Task.isCancelled, let state = await mediaSession.nextLocalState() {
+            apply(state)
+        }
+        MatrixRTCLog.debug("Local state pump stopped (hasEnded: \(hasEnded))")
+    }
+    
+    private func apply(_ roster: FfiTileRoster) {
+        let mapped = MatrixRTCTileRoster(roster, localMemberID: localMemberID)
+        // Bail before assigning, for the reason `refreshParticipants` gives: every tile view reads
+        // this, and per-tile state publishes immediately rather than waiting out the model's
+        // reorder window, so an unconditional write would rebuild the stage on every flicker.
+        guard mapped != tiles else { return }
+        if mapped.order.map(\.id) != tiles.order.map(\.id) {
+            MatrixRTCLog.info("Tiles (\(mapped.order.count)): \(mapped.order.map { "\($0.id.memberID)/\($0.id.kind)\($0.isHero ? " hero" : "")" })")
+        }
+        tiles = mapped
+        reconcilePlayback()
+    }
+    
+    private func apply(_ state: FfiLocalState?) {
+        let mapped = state.map { MatrixRTCLocalState($0, localMemberID: localMemberID) }
+        guard mapped != localState else { return }
+        localState = mapped
+        reconcileScreenShare()
+    }
+    
     private func pumpEvents() async {
         while !Task.isCancelled, let ffiEvent = await mediaSession.nextEvent() {
             let event = MatrixRTCCallEvent(ffiEvent)
             handle(event)
             eventsContinuation.yield(event)
-            refreshParticipants()
         }
         MatrixRTCLog.debug("Media event pump stopped")
     }
     
     private func handle(_ event: MatrixRTCCallEvent) {
         switch event {
-        case .streamStarted(let memberID, .microphone) where memberID != localMemberID:
-            playAudio(of: memberID)
-        case .streamStopped(let memberID, .microphone), .participantLeft(let memberID):
-            stopPlayback(of: memberID)
-        case .activeSpeakers(let speakers):
-            hasTransportSpeakerEvents = true
-            activeSpeakerIDs = Set(speakers.map(\.memberID))
         case .frameEncryptionState(let memberID, let state):
             if frameEncryption[memberID] != state {
                 MatrixRTCLog.warning("Frame encryption \(state) for \(memberID) (was \(frameEncryption[memberID].map { "\($0)" } ?? "unknown"))")
@@ -544,14 +725,18 @@ public final class MatrixRTCCall {
         }
     }
     
-    /// `streamStarted` and the initial roster sweep both fire for a member already publishing; the
-    /// dictionary claim keeps a member from being played twice, slightly out of step.
+    /// Reached from the roster only; the dictionary claim keeps a member from being played twice.
     private func playAudio(of memberID: String) {
         guard memberID != localMemberID, playbackSinks[memberID] == nil else { return }
         guard let stream = mediaSession.audioStream(memberId: memberID, kind: .microphone) else {
-            MatrixRTCLog.warning("Cannot open the audio stream for \(memberID)")
+            // Said once: a member the SFU relays to everyone else but whose microphone never reaches
+            // our roster used to look exactly like a quiet participant. The next roster tries again.
+            if membersWithoutMicrophone.insert(memberID).inserted {
+                MatrixRTCLog.warning("\(memberID) publishes no microphone stream, so they cannot be heard here")
+            }
             return
         }
+        membersWithoutMicrophone.remove(memberID)
         let sink = AudioPlaybackSink(memberID: memberID, engine: audioEngine) { [weak self] memberID, level in
             Task { @MainActor in self?.setAudioLevel(level, for: memberID) }
         }
@@ -569,25 +754,15 @@ public final class MatrixRTCCall {
         }
     }
     
-    private func refreshParticipants() {
-        let refreshed = mediaSession.participants().map(MatrixRTCParticipant.init)
-        // Bail before assigning rather than after: this is now called on a timer as well as on
-        // every event, and `participants` is observed by every tile, so an unconditional write
-        // would rebuild the whole stage once a second for nothing.
-        guard refreshed != participants else { return }
-        if Set(refreshed.map(\.memberID)) != Set(participants.map(\.memberID)) {
-            MatrixRTCLog.info("Media roster \(refreshed.count): \(refreshed.map { "\($0.memberID)\($0.isLocal ? " (self)" : "")" })")
-        }
-        participants = refreshed
-    }
-    
-    /// Above this RMS a member counts as speaking when the transport sends no speaker events.
-    private static let speakingThreshold: Float = 0.02
-    private var hasTransportSpeakerEvents = false
-    
     /// Meters report ten times a second *per member*; published one by one, an eleven-person call
     /// would rebuild every tile over a hundred times a second. Levels are collected here and
     /// published in one batch per sample period, which is all a meter needs.
+    ///
+    /// This is the *level*, not whether somebody is speaking. Those used to be the same code: the
+    /// level was thresholded here to synthesise a speaker set, because the transport's own
+    /// active-speaker events had not been seen through the core. The model ranks on its own signal
+    /// now and publishes `speaking` on each tile, so a locally derived answer would only be a second
+    /// opinion for the ring to disagree with the order about.
     private static let audioLevelSamplePeriod: Duration = .milliseconds(100)
     @ObservationIgnored private var pendingAudioLevels: [String: MatrixRTCAudioLevel] = [:]
     @ObservationIgnored private var audioLevelFlush: Task<Void, Never>?
@@ -615,33 +790,23 @@ public final class MatrixRTCCall {
         // a monotonic `frameCount`, so two flushes for a live member never compare equal and the
         // guard could not fire. Nothing observing this may project it into a view.
         audioLevels = levels
-        
-        // LiveKit's active-speaker updates have not been observed through the core, so
-        // derive them from the decoded audio until they show up.
-        guard !hasTransportSpeakerEvents else { return }
-        let speaking = Set(audioLevels.filter { $0.value.level > Self.speakingThreshold }.keys)
-        if speaking != activeSpeakerIDs {
-            activeSpeakerIDs = speaking
-            let ranked = speaking.sorted { (audioLevels[$0]?.level ?? 0) > (audioLevels[$1]?.level ?? 0) }
-            eventsContinuation.yield(.activeSpeakers(ranked.map { .init(memberID: $0, level: audioLevels[$0]?.level ?? 0) }))
-        }
     }
     
     /// RTCP reports arrive about once a second; polling faster only repeats values.
     private func pollReceiveStats() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(1))
-            // The roster is re-read here, not only after an event. The snapshot taken at join can
-            // report a member's camera as unmuted before the transport has learned otherwise, and
-            // if that member then does nothing, no event ever arrives to correct it: joining a
-            // call where somebody already has their camera off left their tile black for as long
-            // as they stayed still. Observed against Element Web, and it repaired itself the
-            // moment they toggled their camera, which is what identified the stale read.
-            refreshParticipants()
-            var stats = [String: MatrixRTCReceiveStats]()
-            for participant in participants where !participant.isLocal {
-                if let audio = await mediaSession.receiveStats(memberId: participant.memberID, kind: .microphone) {
-                    stats[participant.memberID] = .init(audio)
+            // One round trip for the streams we draw, not one per member: at two hundred participants
+            // the old loop was two hundred sequential awaits a second, for tiles nobody was looking at.
+            let streams = Self.streamsToPoll(tiles: tiles, released: releasedVideoStreams, localMemberID: localMemberID)
+            var stats = [MatrixRTCStreamRef: MatrixRTCReceiveStats]()
+            if !streams.isEmpty {
+                let answered = await mediaSession.receiveStatsFor(streams: streams.map { FfiStreamRef(memberId: $0.memberID, kind: $0.kind.ffi) })
+                for entry in answered {
+                    // Null until the first RTCP report, which is not the same as zero.
+                    if let counters = entry.stats {
+                        stats[MatrixRTCStreamRef(memberID: entry.memberId, kind: .init(entry.kind))] = .init(counters)
+                    }
                 }
             }
             // The same guard as `refreshParticipants()` above. Its reach is modest -- the counters
@@ -650,6 +815,18 @@ public final class MatrixRTCCall {
                 receiveStats = stats
             }
         }
+    }
+    
+    /// The streams one stats sample asks about: every remote tile we are drawing -- the order minus
+    /// what ``setReleasedVideoStreams(_:)`` has released -- then one microphone per member among
+    /// them. In that order, without repeats, so the answer reads as the stage does.
+    static func streamsToPoll(tiles: MatrixRTCTileRoster, released: Set<MatrixRTCTileID>, localMemberID: String) -> [MatrixRTCStreamRef] {
+        let drawn = tiles.order.map(\.id).filter { $0.memberID != localMemberID && !released.contains($0) }
+        var seen = Set<String>()
+        let microphones = drawn.compactMap { tile -> MatrixRTCStreamRef? in
+            seen.insert(tile.memberID).inserted ? MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone) : nil
+        }
+        return drawn.map(MatrixRTCStreamRef.init) + microphones
     }
     
     private func setTransportMuted(_ kind: MatrixRTCStreamKind, muted: Bool) async {

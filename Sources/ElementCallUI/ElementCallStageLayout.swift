@@ -5,6 +5,7 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
+import ElementCallKit
 import SwiftUI
 
 /// Where one tile sits on the stage and how it draws itself there.
@@ -18,7 +19,7 @@ struct ElementCallTilePlacement: Identifiable, Equatable {
     var page: Int?
     var zIndex: Double
     
-    var id: String {
+    var id: MatrixRTCTileID {
         tile.id
     }
 }
@@ -143,33 +144,37 @@ struct ElementCallStageLayout: Equatable {
     var pageIndicatorCenter: CGPoint?
     /// Which way the strip pages, and so which way a swipe is read and the dots stack.
     var pageAxis: Axis = .horizontal
-    /// Whose tile hosts the Picture in Picture source view: the picture the window continues.
-    var pictureInPictureMemberID: String?
-    /// Members the arrangement leaves out altogether, which today means everyone but the one tile
+    /// Which tile hosts the Picture in Picture source view: the picture the window continues. A
+    /// tile rather than a member, because when somebody shares it is their *screen* the window
+    /// continues, and their camera is a different picture elsewhere on the same stage.
+    var pictureInPictureTileID: MatrixRTCTileID?
+    /// Tiles the arrangement leaves out altogether, which today means everything but the one tile
     /// filling the screen. The stage releases them: it derives the released set from the placements,
     /// and a single placement would otherwise compute the empty set and un-release the whole call at
     /// the very moment nobody is looking at it. **Declared last** because the memberwise initialiser
     /// follows declaration order and the arrangements below call it with trailing labels.
-    var hiddenMemberIDs: Set<String> = []
+    var hiddenTileIDs: Set<MatrixRTCTileID> = []
     
     static func compute(tiles: [ElementCallTile],
-                        spotlightMemberID: String?,
-                        fullscreenMemberID: String? = nil,
+                        spotlightID: MatrixRTCTileID?,
+                        fullscreenID: MatrixRTCTileID? = nil,
                         layout: ElementCallLayout,
                         currentPage: Int,
                         metrics: Metrics) -> ElementCallStageLayout {
         guard !tiles.isEmpty else {
             return ElementCallStageLayout(placements: [], pageCount: 0)
         }
-        // A member who has left is no longer in `tiles`, and the arrangement falls back on its own
-        // rather than showing an empty screen. The screen clears the stale id when it notices.
-        if let fullscreenMemberID, let tile = tiles.first(where: { $0.memberID == fullscreenMemberID }) {
-            return fullscreen(tile: tile, others: tiles.filter { $0.memberID != fullscreenMemberID }, metrics: metrics)
+        // A tile that has gone is no longer in `tiles` — its member left, or their share stopped —
+        // and the arrangement falls back on its own rather than showing an empty screen. The screen
+        // clears the stale id when it notices. A share stopping is the new half of that: it used to
+        // leave you full screen on the sharer's camera, which is not what you asked to look at.
+        if let fullscreenID, let tile = tiles.first(where: { $0.id == fullscreenID }) {
+            return fullscreen(tile: tile, others: tiles.filter { $0.id != fullscreenID }, metrics: metrics)
         }
         if layout == .oneToOne, let local = tiles.first(where: \.isLocal) {
             return oneToOne(local: local, remote: tiles.first { !$0.isLocal }, metrics: metrics)
         }
-        return group(tiles: tiles, spotlightMemberID: spotlightMemberID, currentPage: currentPage, metrics: metrics)
+        return group(tiles: tiles, spotlightID: spotlightID, currentPage: currentPage, metrics: metrics)
     }
     
     // MARK: - Full screen
@@ -195,8 +200,8 @@ struct ElementCallStageLayout: Equatable {
                                                                      page: nil,
                                                                      zIndex: fullscreenZIndex)],
                                pageCount: 1,
-                               pictureInPictureMemberID: tile.memberID,
-                               hiddenMemberIDs: Set(others.map(\.memberID)))
+                               pictureInPictureTileID: tile.id,
+                               hiddenTileIDs: Set(others.map(\.id)))
     }
     
     // MARK: - One-to-one
@@ -233,7 +238,7 @@ struct ElementCallStageLayout: Equatable {
                                                        page: nil,
                                                        zIndex: 2))
         }
-        return ElementCallStageLayout(placements: placements, pageCount: 1, pictureInPictureMemberID: main.memberID)
+        return ElementCallStageLayout(placements: placements, pageCount: 1, pictureInPictureTileID: main.id)
     }
     
     /// Sized from the area's short side so it is the same share of the screen whichever way the
@@ -311,9 +316,9 @@ struct ElementCallStageLayout: Equatable {
     /// The spotlight, and everyone else in pages of a grid beside or beneath it so tiles keep their
     /// size however big the call gets. Alone (the spotlight is never ourselves) our own tile stands
     /// in the spotlight slot and slides into its cell as the first person arrives.
-    private static func group(tiles: [ElementCallTile], spotlightMemberID: String?, currentPage: Int, metrics: Metrics) -> ElementCallStageLayout {
+    private static func group(tiles: [ElementCallTile], spotlightID: MatrixRTCTileID?, currentPage: Int, metrics: Metrics) -> ElementCallStageLayout {
         var placements: [ElementCallTilePlacement] = []
-        let spotlightTile = tiles.first { $0.memberID == spotlightMemberID }
+        let spotlightTile = tiles.first { $0.id == spotlightID }
         let plan = plan(metrics: metrics, hasSpotlight: spotlightTile != nil)
         
         if let spotlight = spotlightTile {
@@ -325,7 +330,12 @@ struct ElementCallStageLayout: Equatable {
                                                        zIndex: 1))
         }
         
-        let strip = tiles.filter { $0.memberID != spotlightMemberID }
+        // The spotlight is drawn once, so it comes out of the strip. That makes a strip index the
+        // rank index shifted by one whenever there is a spotlight — which is now most of the time,
+        // since a screen share always marks a hero. Nothing here maps a page back to a rank, and
+        // `pageCount` below counts the strip rather than the call, so the geometry is right; the
+        // trap is for whoever translates "page N" into a rank range for the model's detail window.
+        let strip = tiles.filter { $0.id != spotlightID }
         if placements.isEmpty, strip.count == 1, let only = strip.first {
             // Nobody to compare against, so the one tile takes the room the spotlight would have
             // had: the whole stage in landscape, the spotlight slot in portrait, which is where it
@@ -345,7 +355,7 @@ struct ElementCallStageLayout: Equatable {
             return ElementCallStageLayout(placements: placements,
                                           pageCount: 1,
                                           pageAxis: plan.pageAxis,
-                                          pictureInPictureMemberID: only.memberID)
+                                          pictureInPictureTileID: only.id)
         }
         
         let cellWidth = (plan.stripFrame.width - CGFloat(plan.columns - 1) * Metrics.spacing) / CGFloat(plan.columns)
@@ -400,7 +410,7 @@ struct ElementCallStageLayout: Equatable {
                                       // activation state other than foregroundActive". A view in no
                                       // window belongs to no scene. Minimizing alone therefore did
                                       // nothing at all, twice, because the retry fails the same way.
-                                      pictureInPictureMemberID: spotlightTile?.memberID ?? placements.first?.tile.memberID)
+                                      pictureInPictureTileID: spotlightTile?.id ?? placements.first?.tile.id)
     }
     
     /// Portrait has room under the strip for a row of dots. Landscape has none, so they go in the
