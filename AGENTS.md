@@ -76,6 +76,19 @@ Three flags are not optional, and each fails in a way that does not name its own
 
 `swift build` alone will fail: the package is iOS-only. Always go through `xcodebuild`.
 
+**Lint before every commit, the way CI does, and in this order:**
+
+```bash
+swiftformat --lint .          # formatting; `swiftformat .` fixes it
+swiftlint                     # the boundary rules at error severity; warnings are tolerated
+```
+
+CI runs both before it builds anything (`tests.yml`, "Lint"), on the same `brew` versions, and a
+formatting difference fails the whole run before a single test has spoken. Neither is run for you
+by a build or by Xcode, so a change that compiles and passes every test locally still fails CI if
+this step was skipped. `swiftformat --lint` should report `0/N files require formatting`; if it
+names a file, run `swiftformat .` and commit the result with the change, not as a follow-up.
+
 The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`. The
 harness reads them and fails loudly when the simulator does not match. **The workflows do not read
 them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
