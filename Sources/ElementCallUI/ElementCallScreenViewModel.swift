@@ -22,7 +22,10 @@ public final class ElementCallScreenContext {
     /// everything in `viewState`: which tile you are looking at is a way of looking rather than a
     /// fact about the call, and the controller neither knows nor needs to. It could not live in
     /// `viewState` in any case, which `refresh()` rebuilds wholesale from the controller.
-    public var fullscreenMemberID: String?
+    ///
+    /// A tile rather than a member, because a sharer is two tiles and the whole point of the gesture
+    /// is that it takes you to the one you double-tapped.
+    public var fullscreenTileID: MatrixRTCTileID?
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
@@ -220,7 +223,6 @@ public final class ElementCallScreenViewModel {
         state.isTileStatsVisible = controller.isTileStatsVisible
         state.isMaximized = controller.isMaximized
         state.memberCount = controller.session?.memberCount ?? 0
-        state.spotlightMemberID = controller.spotlightMemberID
         // Above the guard below: these two are the only controls that mean anything before there is
         // a call, and without them a mute tapped while joining draws itself back unmuted.
         state.isMicrophoneMuted = controller.isMicrophoneMuted
@@ -247,39 +249,19 @@ public final class ElementCallScreenViewModel {
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
         
-        state.tiles = call.participants.map { participant in
-            let profile = profiles[participant.userID]
-            let hasMicrophone = participant.isLocal || participant.stream(.microphone) != nil
-            return ElementCallTile(memberID: participant.memberID,
-                                   userID: participant.userID,
-                                   displayName: participant.isLocal ? context.style.strings.you : (profile?.displayName ?? participant.userID),
-                                   avatarURL: profile?.avatarURL,
-                                   isLocal: participant.isLocal,
-                                   isMicrophoneMuted: participant.isLocal ? call.isMicrophoneMuted : !participant.isPublishing(.microphone),
-                                   hasMicrophone: hasMicrophone,
-                                   hasVideo: participant.isLocal ? call.isCameraEnabled : participant.isPublishing(.camera),
-                                   isScreenSharing: participant.isPublishing(.screenShare),
-                                   isSpeaking: call.activeSpeakerIDs.contains(participant.memberID),
-                                   hasHandRaised: participant.handRaisedAt != nil,
-                                   isFrontCamera: call.isFrontCamera,
-                                   stats: stats(for: participant, hasMicrophone: hasMicrophone, in: call))
-        }
+        state.tiles = Self.tiles(ranked: call.tiles.ranked,
+                                 own: call.ownTile,
+                                 profiles: profiles,
+                                 youLabel: context.style.strings.you,
+                                 isLocalMicrophoneMuted: call.isMicrophoneMuted,
+                                 localHasVideo: call.isCameraEnabled,
+                                 // The flag is read before any stats, so that with the overlay down
+                                 // none of them enters this method's observation access list.
+                                 // `receiveStats` is rewritten every second whether anyone is looking
+                                 // or not, so tracking it cost a full screen rebuild per second.
+                                 stats: controller.isTileStatsVisible ? { Self.stats(for: $0, in: call) } : { _ in nil })
         
         publish(state)
-    }
-    
-    /// The overlay's text for one tile, or nil when the overlay is down.
-    ///
-    /// The guard comes before the reads so that, with the overlay down, none of these properties
-    /// enters `refresh()`'s observation access list. `receiveStats` is rewritten every second
-    /// whether anyone is looking or not, so tracking it cost a full screen rebuild per second.
-    private func stats(for participant: MatrixRTCParticipant, hasMicrophone: Bool, in call: MatrixRTCCall) -> String? {
-        guard controller.isTileStatsVisible else { return nil }
-        return Self.describe(call.receiveStats[participant.memberID],
-                             hasMicrophone: hasMicrophone,
-                             encryption: call.frameEncryption[participant.memberID],
-                             video: call.videoInfo(memberID: participant.memberID),
-                             requested: participant.isLocal ? nil : call.requestedVideoConstraints(memberID: participant.memberID))
     }
     
     /// Publishes a projection only when it differs from the one on screen.
@@ -292,17 +274,69 @@ public final class ElementCallScreenViewModel {
         context.viewState = state
     }
     
+    /// The one array every downstream site reads: ourselves, then the model's ranking untouched.
+    ///
+    /// **Ourselves at index 0, spliced rather than kept apart.** The model publishes our own tile on
+    /// its own surface, never in the ranked list — which is what makes "the spotlight is never
+    /// ourselves" structural instead of three hand-written guards — but eight sites downstream read
+    /// one array and a second collection buys none of them anything. Index 0 because that is where
+    /// the transport roster always happened to put us, and where the recorded snapshots expect us;
+    /// it was nobody's decision before and it is one now, so `ElementCallStageLayoutTests` asserts it.
+    ///
+    /// **The ranking is not touched.** Hero, then hands raised earliest first, then speaking, then
+    /// video, then join time, damped by the model. Sorting here would fight that damping at a
+    /// different period and make the strip twitch on every word.
+    ///
+    /// Static and pure so it can be tested: `refresh()` needs a live call and cannot be.
+    static func tiles(ranked: [MatrixRTCTile],
+                      own: MatrixRTCTile?,
+                      profiles: [String: ElementCallMemberProfile],
+                      youLabel: String,
+                      isLocalMicrophoneMuted: Bool,
+                      localHasVideo: Bool,
+                      stats: (MatrixRTCTile) -> String? = { _ in nil }) -> [ElementCallTile] {
+        func tile(_ tile: MatrixRTCTile) -> ElementCallTile {
+            let profile = profiles[tile.userID]
+            return ElementCallTile(id: tile.id,
+                                   userID: tile.userID,
+                                   displayName: tile.isLocal ? youLabel : (profile?.displayName ?? tile.userID),
+                                   avatarURL: profile?.avatarURL,
+                                   isLocal: tile.isLocal,
+                                   // Our own mute and camera are overridden from the call rather
+                                   // than read off the tile, and the reason is latency rather than
+                                   // preference: a mute tap has to reach the badge before the
+                                   // transport round-trips. The model publishes per-tile state
+                                   // immediately, but that is a promise about its own coalescing
+                                   // window, not about the round trip.
+                                   isMicrophoneMuted: tile.isLocal ? isLocalMicrophoneMuted : tile.isMicrophoneMuted,
+                                   hasVideo: tile.isLocal ? localHasVideo : tile.hasVideo,
+                                   isSpeaking: tile.isSpeaking,
+                                   hasHandRaised: tile.handRaisedAt != nil,
+                                   // Ours is never a hero even if something upstream said so: it is
+                                   // not in the ranking, so nothing can rank it.
+                                   isHero: tile.isLocal ? false : tile.isHero,
+                                   stats: stats(tile))
+        }
+        return (own.map { [tile($0)] } ?? []) + ranked.map(tile)
+    }
+    
+    /// The stats overlay's text for one tile, from everything the call knows about that stream.
+    private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
+        describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
+                 audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
+                 kind: tile.kind,
+                 encryption: call.frameEncryption[tile.memberID],
+                 video: call.videoInfo(memberID: tile.memberID, kind: tile.kind.videoStreamKind),
+                 requested: tile.isLocal ? nil : call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind))
+    }
+    
     private static func describe(_ stats: MatrixRTCReceiveStats?,
-                                 hasMicrophone: Bool,
+                                 audio: MatrixRTCReceiveStats?,
+                                 kind: MatrixRTCTileKind,
                                  encryption: MatrixRTCFrameEncryptionState?,
                                  video: MatrixRTCVideoInfo?,
                                  requested: MatrixRTCVideoConstraints?) -> String {
         var lines = [String]()
-        // The badge says muted for this too; here "they muted" and "we were never given their
-        // audio" are different answers, and the far end hears them fine in the second case.
-        if !hasMicrophone {
-            lines.append("NO MIC STREAM")
-        }
         if let video {
             lines.append("\(video.width)x\(video.height) @ \(video.framesPerSecond) fps")
         } else {
@@ -318,12 +352,19 @@ public final class ElementCallScreenViewModel {
         if let encryption {
             lines.append("e2ee: \(encryption)")
         }
+        // This tile's own stream: the camera's or the screen's counters.
         if let stats {
             lines.append("pkts \(stats.packetsReceived) lost \(stats.packetsLost)")
             lines.append("frames \(stats.framesDecoded) dropped \(stats.framesDropped)")
-            if let concealed = stats.concealedFraction {
-                lines.append(String(format: "concealed %.0f%%", concealed * 100))
+        }
+        // The member's microphone, on their camera tile only: "concealed" is the one number that tells
+        // audio that is silent from audio that is fabricated.
+        if let audio {
+            var line = "mic pkts \(audio.packetsReceived) lost \(audio.packetsLost)"
+            if let concealed = audio.concealedFraction {
+                line += String(format: " concealed %.0f%%", concealed * 100)
             }
+            lines.append(line)
         }
         return lines.joined(separator: "\n")
     }

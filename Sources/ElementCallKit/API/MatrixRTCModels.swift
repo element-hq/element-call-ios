@@ -29,6 +29,75 @@ public nonisolated enum MatrixRTCStreamKind: Sendable, Hashable {
     case microphone, camera, screenShare, screenShareAudio, data
 }
 
+/// What identifies a tile: a member, and whether this is them or a screen they are sharing.
+///
+/// The member alone was the identity for as long as a member could only be one tile. A member
+/// publishing a camera *and* a screen share is two tiles now, drawn at once and ranked separately,
+/// so the member alone names a person rather than a tile — and a `Set` keyed on one silently keeps
+/// one of the two, which is the failure this type exists to make unrepresentable.
+///
+/// It is deliberately one type for a tile and the video stream it draws. The bindings have always
+/// addressed a stream by exactly this pair — `videoStream(memberId:kind:)`,
+/// `setConstraints(memberId:kind:)` — and this layer has always had a private struct for it; they
+/// simply never shared a name. Giving them one is what lets the stage hand back something the media
+/// layer can act on without having to guess the kind. What it never names is a microphone: a stream
+/// that is not a tile is a ``MatrixRTCStreamRef``, the same pair without the "renderable" in it.
+public nonisolated struct MatrixRTCTileID: Sendable, Hashable {
+    public let memberID: String
+    public let kind: MatrixRTCTileKind
+    
+    public init(memberID: String, kind: MatrixRTCTileKind = .person) {
+        self.memberID = memberID
+        self.kind = kind
+    }
+}
+
+/// What a tile is: a person, or a screen they are sharing.
+///
+/// Not a ``MatrixRTCStreamKind``. A person tile draws the member's camera and carries their
+/// microphone state; a share tile draws the screen. Which stream a tile draws is ``videoStreamKind``,
+/// so nothing guesses it — and a microphone can never be spelled as a tile.
+public nonisolated enum MatrixRTCTileKind: Sendable, Hashable {
+    case person, screenShare
+    
+    /// The stream this kind of tile draws: what the media plane is addressed by.
+    public var videoStreamKind: MatrixRTCStreamKind {
+        switch self {
+        case .person: .camera
+        case .screenShare: .screenShare
+        }
+    }
+}
+
+/// One of a member's streams, of any kind: what per-stream statistics are keyed by.
+///
+/// Not a ``MatrixRTCTileID``, on purpose: a tile is a *renderable* stream, camera or screen share,
+/// and this can name a microphone. Build one from a tile with its member and kind.
+public nonisolated struct MatrixRTCStreamRef: Sendable, Hashable {
+    public let memberID: String
+    public let kind: MatrixRTCStreamKind
+    
+    public init(memberID: String, kind: MatrixRTCStreamKind) {
+        self.memberID = memberID
+        self.kind = kind
+    }
+    
+    /// The stream a tile draws.
+    public init(_ tile: MatrixRTCTileID) {
+        self.init(memberID: tile.memberID, kind: tile.kind.videoStreamKind)
+    }
+    
+    /// The tile this stream is drawn on, if it is one: a camera is a person's tile, a screen share
+    /// its own. A microphone is nobody's tile.
+    public var tileID: MatrixRTCTileID? {
+        switch kind {
+        case .camera: MatrixRTCTileID(memberID: memberID, kind: .person)
+        case .screenShare: MatrixRTCTileID(memberID: memberID, kind: .screenShare)
+        default: nil
+        }
+    }
+}
+
 /// How the membership is published, fixed for the lifetime of a session.
 public nonisolated enum MatrixRTCElementCallCompat: String, Sendable, CaseIterable, Codable {
     /// MSC4143 as it stands.
@@ -125,9 +194,137 @@ public nonisolated struct MatrixRTCParticipant: Sendable, Hashable, Identifiable
     }
 }
 
-public nonisolated struct MatrixRTCSpeakingMember: Sendable, Hashable {
-    public let memberID: String
-    public let level: Float
+/// One renderable stream of one membership, as the model ranked it.
+///
+/// A tile rather than a participant, and the difference is the point: a member publishing a camera
+/// and a screen share is **two** tiles, drawn at the same time and ranked separately. The model
+/// derives these from the roster, orders them, and damps the order; the app renders them in the
+/// order given. Re-sorting here would fight damping the model has already applied, at a different
+/// period, and make the strip twitch on every word.
+public nonisolated struct MatrixRTCTile: Sendable, Hashable, Identifiable {
+    public let id: MatrixRTCTileID
+    public let userID: String
+    public let deviceID: String?
+    /// Ourselves. Not the model's — our own tile arrives on its own surface and is never in the
+    /// ranked list — but the layout needs it, because the thumbnail and "You" are facts about
+    /// *whose* tile this is rather than about the stream.
+    public let isLocal: Bool
+    /// The model marks the tile worth the largest slot: a screen share today, a pin later. It does
+    /// **not** choose a spotlight — what a UI does with its largest slot stays the UI's business.
+    public let isHero: Bool
+    /// This tile's own stream is present and unmuted. Collapses "no camera" and "camera paused",
+    /// because both draw an avatar. On a share tile it is the share.
+    public let hasVideo: Bool
+    /// The *member's* microphone is absent or muted — what a mute icon means. Named for its subject
+    /// because a tile is itself a stream that can be muted, and that state is ``hasVideo``.
+    public let isMicrophoneMuted: Bool
+    public let isSpeaking: Bool
+    public let handRaisedAt: Date?
+    public let isReachable: Bool
+    
+    public var memberID: String {
+        id.memberID
+    }
+    
+    public var kind: MatrixRTCTileKind {
+        id.kind
+    }
+    
+    public var isScreenShare: Bool {
+        id.kind == .screenShare
+    }
+    
+    public init(id: MatrixRTCTileID,
+                userID: String,
+                deviceID: String? = nil,
+                isLocal: Bool = false,
+                isHero: Bool = false,
+                hasVideo: Bool = false,
+                isMicrophoneMuted: Bool = false,
+                isSpeaking: Bool = false,
+                handRaisedAt: Date? = nil,
+                isReachable: Bool = true) {
+        self.id = id
+        self.userID = userID
+        self.deviceID = deviceID
+        self.isLocal = isLocal
+        self.isHero = isHero
+        self.hasVideo = hasVideo
+        self.isMicrophoneMuted = isMicrophoneMuted
+        self.isSpeaking = isSpeaking
+        self.handRaisedAt = handRaisedAt
+        self.isReachable = isReachable
+    }
+}
+
+/// A tile's place in the ranking: what it is, whose it is, and whether it is a hero — and nothing
+/// about what the member is doing.
+///
+/// One of these exists for **every** tile in the call, always — the order is never truncated — so
+/// the set a UI is *not* drawing is computable from it, which is what drives releasing subscriptions.
+/// Detail arrives only for the tiles inside the declared window, which is everything by default; a
+/// tile outside it still has ``userID``, which is what a name and an avatar resolve through, so it
+/// draws as an avatar tile rather than an empty one.
+public nonisolated struct MatrixRTCTileRef: Sendable, Hashable {
+    public let id: MatrixRTCTileID
+    public let userID: String
+    public let isHero: Bool
+    
+    public init(id: MatrixRTCTileID, userID: String, isHero: Bool = false) {
+        self.id = id
+        self.userID = userID
+        self.isHero = isHero
+    }
+}
+
+/// The model's ranking, and the detail we asked for.
+public nonisolated struct MatrixRTCTileRoster: Sendable, Equatable {
+    /// Every tile in the call, in rank order: hero, then hand raised earliest first, then speaking,
+    /// then video, then join time. **Render in this order. Never re-sort it.**
+    public let order: [MatrixRTCTileRef]
+    /// Joined to ``order`` **by identity, never by index**. A dictionary rather than an array for
+    /// exactly that reason: the two are the same length only while the detail window is the default
+    /// one, and joining by position is a silent wrong answer rather than a crash the day it is not.
+    public let detail: [MatrixRTCTileID: MatrixRTCTile]
+    
+    public init(order: [MatrixRTCTileRef], detail: [MatrixRTCTileID: MatrixRTCTile]) {
+        self.order = order
+        self.detail = detail
+    }
+    
+    /// Every tile in the order, with detail for all of them. What the default window produces, and
+    /// the shape a test or a fixture wants.
+    public init(_ tiles: [MatrixRTCTile]) {
+        self.init(order: tiles.map { MatrixRTCTileRef(id: $0.id, userID: $0.userID, isHero: $0.isHero) },
+                  detail: Dictionary(uniqueKeysWithValues: tiles.map { ($0.id, $0) }))
+    }
+    
+    public static let empty = MatrixRTCTileRoster(order: [], detail: [:])
+    
+    public subscript(id: MatrixRTCTileID) -> MatrixRTCTile? {
+        detail[id]
+    }
+    
+    /// The ranked tiles we hold detail for, in order. The accessor a renderer should use: when the
+    /// window narrows this shortens rather than producing half-built tiles.
+    public var ranked: [MatrixRTCTile] {
+        order.compactMap { detail[$0.id] }
+    }
+}
+
+/// What is true of *us*, beside the roster rather than in it, and changing when we act rather than
+/// when the call moves.
+public nonisolated struct MatrixRTCLocalState: Sendable, Equatable {
+    /// Our own tile. Never in the ranked list, and never a hero.
+    public let tile: MatrixRTCTile
+    /// Derived from publication state — the stream up *and* unmuted — never from what we asked for,
+    /// so it goes false however the share ended.
+    public let isScreenSharing: Bool
+    
+    public init(tile: MatrixRTCTile, isScreenSharing: Bool) {
+        self.tile = tile
+        self.isScreenSharing = isScreenSharing
+    }
 }
 
 public nonisolated enum MatrixRTCFrameEncryptionState: Sendable, Hashable {
@@ -146,7 +343,6 @@ public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
     case streamStopped(memberID: String, kind: MatrixRTCStreamKind)
     case streamMuted(memberID: String, kind: MatrixRTCStreamKind)
     case streamUnmuted(memberID: String, kind: MatrixRTCStreamKind)
-    case activeSpeakers([MatrixRTCSpeakingMember])
     case keyImported(memberID: String, keyIndex: UInt8)
     case keyDiscarded(memberID: String, reason: String)
     case frameEncryptionState(memberID: String, state: MatrixRTCFrameEncryptionState)

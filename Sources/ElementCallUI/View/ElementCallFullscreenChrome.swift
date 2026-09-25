@@ -50,7 +50,10 @@ struct ElementCallFullscreenChrome: View {
             // the one thing still worth saying is whose picture this is and whether they can be heard.
             HStack(spacing: 4) {
                 style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
-                Text(tile.isScreenSharing ? "(Screen share)" : tile.displayName)
+                // Named as well as labelled, and for the same reason the tile's own pill is: a
+                // share is a tile of its own now, beside its owner's camera, so "(Screen share)"
+                // alone no longer says whose screen you are looking at.
+                Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
                     .lineLimit(1)
             }
             .font(style.theme.bodySMSemibold)
@@ -126,7 +129,7 @@ struct ElementCallFullscreenChrome_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Muted remote")
         chrome(Fixtures.tile("Alice", isLocal: true, hasVideo: true))
             .previewDisplayName("Our own camera")
-        chrome(Fixtures.tile("Frank", isScreenSharing: true))
+        chrome(Fixtures.share("Frank"))
             .previewDisplayName("Screen share")
     }
 }
