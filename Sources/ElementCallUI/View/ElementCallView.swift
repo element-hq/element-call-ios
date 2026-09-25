@@ -37,13 +37,8 @@ struct ElementCallView: View {
                         if fullscreenTile == nil {
                             topBar
                                 .padding(.horizontal, 16)
-                                // The rail runs up the trailing edge and is centred, so it reaches
-                                // into the top bar's row: without this the overflow button sits on
-                                // top of it.
-                                .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
                             if context.viewState.isScreenSharing {
                                 screenShareBanner
-                                    .padding(.trailing, isLandscape ? Self.controlsClearance : 0)
                                     .transition(.move(edge: .top).combined(with: .opacity))
                             }
                         }
@@ -65,10 +60,11 @@ struct ElementCallView: View {
                                 .transition(.opacity)
                         }
                     } else {
-                        ElementCallFloatingControls(context: context, isLandscape: isLandscape)
+                        ElementCallFloatingControls(context: context)
                     }
                 } else {
                     Color.clear
+                        .onAppear(perform: declareMinimizedDetailWindow)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: context.isFullscreenChromeVisible)
@@ -106,6 +102,16 @@ struct ElementCallView: View {
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+    }
+    
+    /// The stage is gone while minimized, so nothing declares the window. A small head range plus
+    /// whatever the window continues (R52, partial: see the core-rs feedback on a call-wide "any
+    /// remote video" flag); the stage declares its own again the moment it is back.
+    private func declareMinimizedDetailWindow() {
+        guard let call = callProvider() else { return }
+        let spotlightID = context.viewState.spotlightID
+        let also = [spotlightID, call.pictureInPictureCandidate(spotlight: spotlightID)].compactMap { $0 }
+        call.setDetailWindow(.init(ranks: 0..<Self.minimizedDetailWindowLength, also: Set(also)))
     }
     
     /// The tile full screen right now, if it is still in the call.
@@ -234,6 +240,8 @@ struct ElementCallView: View {
     /// How far the floating controls reach in from the edge they are on. The placement itself lives
     /// on ``ElementCallFloatingControls``, which the full-screen chrome shares.
     static let controlsClearance = ElementCallFloatingControls.clearance
+    /// The ranks kept in detail while minimized: enough for the bar and the window's fallbacks.
+    static let minimizedDetailWindowLength = 8
     
     @ViewBuilder
     private var content: some View {
@@ -253,7 +261,7 @@ struct ElementCallView: View {
             ElementCallStage(tiles: state.tiles,
                              spotlightID: state.spotlightID,
                              fullscreenID: fullscreenTile?.id,
-                             layout: state.layout,
+                             scrollRequest: context.scrollRequest,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
@@ -267,7 +275,10 @@ struct ElementCallView: View {
                                  withAnimation(.easeInOut(duration: 0.2)) {
                                      context.isFullscreenChromeVisible.toggle()
                                  }
-                             }) { action in
+                             },
+                             // A way of looking, so it lives on the context beside the fullscreen
+                             // tile; the view model resolves it by identity on the next refresh.
+                             onShowHero: { context.shownHeroID = $0 }) { action in
                 context.send(viewAction: action)
             }
         }
@@ -311,7 +322,11 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
         screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice,
                                                             ElementCallPreviewFixtures.bob],
                                                     isDirect: true))
-            .previewDisplayName("Connected one to one")
+            .previewDisplayName("Two people")
+        screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.listenModeGroup))
+            .previewDisplayName("Listen mode")
+        screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.twoSharesGroup))
+            .previewDisplayName("Two heroes")
         screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
                                                     isMicrophoneMuted: true,
                                                     isScreenSharing: true))

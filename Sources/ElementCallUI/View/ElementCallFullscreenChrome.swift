@@ -28,12 +28,9 @@ struct ElementCallFullscreenChrome: View {
             VStack(spacing: 0) {
                 topRow
                     .padding(.horizontal, 16)
-                    // The rail runs up the trailing edge and is centred, so it reaches into this
-                    // row: without this the flip button sits underneath it.
-                    .padding(.trailing, isLandscape ? ElementCallFloatingControls.clearance : 0)
                 Spacer()
             }
-            ElementCallFloatingControls(context: context, isLandscape: isLandscape)
+            ElementCallFloatingControls(context: context)
         }
     }
     
@@ -79,32 +76,24 @@ struct ElementCallFullscreenChrome: View {
     }
 }
 
-/// The control bar where it floats: along the bottom in portrait, up the trailing edge in landscape.
+/// The control bar where it floats: along the bottom, over the stage, in both orientations. The
+/// design draws it there in landscape too, over the spotlight, rather than as a rail up the
+/// trailing edge, which is what this used to do.
 ///
-/// One type rather than the same `HStack`/`VStack` written out in both the ordinary screen and the
+/// One type rather than the same `VStack` written out in both the ordinary screen and the
 /// full-screen chrome, so the two cannot drift and the stage's clearance stays one number.
 struct ElementCallFloatingControls: View {
     @Bindable var context: ElementCallScreenContext
-    let isLandscape: Bool
     
-    /// How far in from the edge it sits. Its thickness is the same either way round, so the stage
-    /// reserves one clearance and does not care which edge it is on.
+    /// How far up from the safe area it sits; the stage keeps the grid's end clear of it.
     static let edgePadding: CGFloat = 12
     static let clearance: CGFloat = ElementCallControlsView.thickness + edgePadding
     
     var body: some View {
-        if isLandscape {
-            HStack(spacing: 0) {
-                Spacer()
-                ElementCallControlsView(context: context, axis: .vertical)
-                    .padding(.trailing, Self.edgePadding)
-            }
-        } else {
-            VStack(spacing: 0) {
-                Spacer()
-                ElementCallControlsView(context: context, axis: .horizontal)
-                    .padding(.bottom, Self.edgePadding)
-            }
+        VStack(spacing: 0) {
+            Spacer()
+            ElementCallControlsView(context: context, axis: .horizontal)
+                .padding(.bottom, Self.edgePadding)
         }
     }
 }

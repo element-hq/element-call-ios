@@ -74,6 +74,13 @@ public enum ElementCallPreviewFixtures {
     /// in Picture source view.
     public static let sharingGroup = [alice, share("Frank"), tile("Frank", hasVideo: true), carol, bob, tile("Dan")]
     
+    /// More than ten remote members and nobody a hero: "few talk, many listen", the speaker in the
+    /// spotlight and everyone else in a grid that scrolls under it.
+    public static let listenModeGroup = group + ["Ivan", "Judy", "Ken", "Liam"].map { tile($0) }
+    
+    /// Two heroes: the spotlight stacks them and shows one, with a pill and dots to say which.
+    public static let twoSharesGroup = [alice, share("Frank"), share("Grace"), tile("Frank", hasVideo: true), carol, bob, tile("Dan"), tile("Grace")]
+    
     /// No call object exists in a preview, so `hasVideo` here only changes the badges, not the
     /// picture: a tile with nothing to draw falls back to its avatar.
     public static func connected(tiles: [ElementCallTile],
@@ -88,8 +95,12 @@ public enum ElementCallPreviewFixtures {
         // fixed date produces a different image on every run. The duration is not what these
         // snapshots are for.
         state.connectedAt = nil
-        state.memberCount = tiles.count
+        // Members, not tiles: a sharer is two tiles and one person, and the badge on the spotlight
+        // counts people. A real call reads this off the session's memberships.
+        state.memberCount = tiles.filter { !$0.isScreenShare }.count
         state.tiles = tiles
+        // The screen's own rule, so a preview cannot show a spotlight the app would not choose.
+        state.spotlightID = ElementCallSpotlight.choose(tiles: tiles, shownHeroID: nil, lastSpeakerID: nil).tileID
         state.isMicrophoneMuted = isMicrophoneMuted
         state.isScreenSharing = isScreenSharing
         state.isTileStatsVisible = isTileStatsVisible

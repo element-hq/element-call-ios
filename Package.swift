@@ -78,6 +78,9 @@ let package = Package(
                                    "ElementCallMatrix",
                                    .product(name: "SnapshotTesting", package: "swift-snapshot-testing")],
                     exclude: ["__Snapshots__"],
+                    // The layout scenarios, vendored from feature-hq (plans/003.call_layout/scenarios).
+                    // Copied rather than processed so a file keeps its name and a dump can quote it.
+                    resources: [.copy("Scenarios")],
                     swiftSettings: [.defaultIsolation(MainActor.self)])
     ]
 )

@@ -13,12 +13,12 @@ import SwiftUI
 /// parameter rather than booleans because the three are fixed combinations: nothing wants a name
 /// pill without a speaker ring.
 enum ElementCallTileAppearance {
-    /// In the spotlight or the strip: rounded, named, ringed when talking.
+    /// In the grid: rounded, named, ringed when talking.
     case card
-    /// Filling the screen in a one-to-one call: square, unnamed, a mute badge if muted.
-    case fullBleed
-    /// Our own thumbnail over the other person in a one-to-one call: rounded and otherwise bare.
-    case thumbnail
+    /// The portrait spotlight, which runs edge to edge as the design draws it: the card's chrome
+    /// with square corners. The landscape spotlight is inset from the sensor housing and the rail,
+    /// so it stays a card.
+    case spotlight
     /// Alone on the screen after a double tap: square, bare, the picture fitted rather than cropped
     /// and zoomable. Its chrome is ``ElementCallFullscreenChrome``, drawn by the screen, because
     /// keeping the name pill clear of the floating controls needs to know where those are.
@@ -34,7 +34,14 @@ struct ElementCallTileView: View {
     var isSpotlight = false
     var appearance: ElementCallTileAppearance = .card
     var memberCount = 0
-    /// Off screen on another strip page: the avatar stands in so no decoder runs for it.
+    /// Several heroes, one shown: draws the "1 of 3" pill (R19). Only ever set on the spotlight.
+    var heroStack: ElementCallStageLayout.HeroStack?
+    /// The landscape spotlight: the design draws no name on it, the bar floats over its bottom
+    /// edge where the name would be, and landscape is for the shared screen above all. Open
+    /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay.
+    var isNameHidden = false
+    /// The avatar stands in so no decoder runs for it. The stage never sets it for a composed tile
+    /// (a paused tile keeps its last picture); the harness and the previews use it.
     var isVideoSuspended = false
     /// Double tap: in and out of full screen. Defaulted so the previews need not name it, and ahead
     /// of `onAction` rather than after it because that one is the trailing closure at every call
@@ -61,12 +68,22 @@ struct ElementCallTileView: View {
         appearance == .fullscreen
     }
     
+    /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
+    /// the slot width and a portrait picture is cropped top and bottom within a bounded amount
+    /// rather than filled outright. The spec leaves the amount open; this is the value proposed
+    /// back to it, and the alternative — plain fill — is the spec's named wrong implementation.
+    /// A value on the fit continuum rather than a mode, so it animates across a promotion.
+    static let spotlightCameraFit: CGFloat = 0.5
+    
     private var cornerRadius: CGFloat {
-        appearance == .fullBleed || appearance == .fullscreen ? 0 : 16
+        switch appearance {
+        case .fullscreen, .spotlight: 0
+        case .card: 16
+        }
     }
     
     private var isLarge: Bool {
-        isSpotlight || appearance == .fullBleed || appearance == .fullscreen
+        isSpotlight || appearance == .fullscreen
     }
     
     var body: some View {
@@ -78,12 +95,8 @@ struct ElementCallTileView: View {
             picture
             
             switch appearance {
-            case .card:
+            case .card, .spotlight:
                 cardChrome
-            case .fullBleed:
-                fullBleedChrome
-            case .thumbnail:
-                thumbnailChrome
             case .fullscreen:
                 // Drawn by the screen instead, where the controls' clearance is known.
                 EmptyView()
@@ -107,10 +120,12 @@ struct ElementCallTileView: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .overlay {
             RoundedRectangle(cornerRadius: cornerRadius)
-                .strokeBorder(outlineColor, lineWidth: appearance == .thumbnail ? 1 : 3)
+                .strokeBorder(outlineColor, lineWidth: 3)
         }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .accessibilityElement(children: .contain)
+        // The name is still spoken when it is not drawn.
+        .accessibilityLabel(isNameHidden ? Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName) : Text(""))
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
@@ -128,7 +143,7 @@ struct ElementCallTileView: View {
                 // cropping a document to a 1.2-wide cell throws away whatever somebody is pointing
                 // at. A camera still starts filled, because a centre-cropped face still reads as a
                 // face and letterboxing every cell makes a grid look like a contact sheet.
-                AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : 0) { fit in
+                AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : isSpotlight ? Self.spotlightCameraFit : 0) { fit in
                     ElementCallVideoView(memberID: tile.memberID,
                                          kind: tile.kind.videoStreamKind,
                                          isLocal: tile.isLocal,
@@ -232,7 +247,7 @@ struct ElementCallTileView: View {
         style.avatars.avatar(userID: tile.userID,
                              displayName: tile.displayName,
                              avatarURL: tile.avatarURL,
-                             size: appearance == .thumbnail ? .thumbnail : .full)
+                             size: .full)
     }
     
     private var cardChrome: some View {
@@ -253,70 +268,32 @@ struct ElementCallTileView: View {
             }
             Spacer()
             HStack(alignment: .bottom, spacing: 4) {
-                badge {
-                    // A screen has no microphone of its own, and a mic glyph on both of one person's
-                    // tiles reads as two people. The share glyph says what the tile is instead.
-                    if tile.isScreenShare {
-                        style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
-                    } else {
-                        style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
+                if !isNameHidden {
+                    badge {
+                        // A screen has no microphone of its own, and a mic glyph on both of one
+                        // person's tiles reads as two people. The share glyph says what the tile
+                        // is instead.
+                        if tile.isScreenShare {
+                            style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySM)
+                        } else {
+                            style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
+                        }
+                        // Named as well as labelled: a share can sit in a grid cell right beside
+                        // its owner's camera now, so "(Screen share)" on its own no longer says
+                        // whose.
+                        Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+                            .lineLimit(1)
                     }
-                    // Named as well as labelled: a share can sit in a strip cell right beside its
-                    // owner's camera now, so "(Screen share)" on its own no longer says whose. It
-                    // used to be shown only in the spotlight, which was the only place a share was
-                    // ever drawn.
-                    Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
-                        .lineLimit(1)
+                }
+                if let heroStack {
+                    badge { Text("\(heroStack.shown + 1) of \(heroStack.count)") }
+                        // One element, so the identifier lands on something a test can find and
+                        // VoiceOver reads the position as one phrase.
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.heroIndicator)
                 }
                 Spacer()
                 if tile.isLocal, tile.hasVideo {
-                    switchCameraButton
-                }
-            }
-        }
-        .padding(8)
-    }
-    
-    /// The name is in the top bar and the only other person is us, so all that is left to say
-    /// about them is whether they can be heard (and whether their hand is up). Our own tile has the
-    /// screen while the other side is still ringing: our mute state is on the control, so only the
-    /// flip button.
-    private var fullBleedChrome: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                // The raised hand belongs to the person, and a person is their camera tile. On a
-                // share as well it reads as two people with their hands up.
-                if tile.hasHandRaised, !tile.isScreenShare {
-                    badge { style.icons.icon(.raisedHand, size: .xSmall, relativeTo: .bodySM) }
-                }
-                Spacer()
-                if tile.isMicrophoneMuted, !tile.isLocal {
-                    style.icons.icon(.micOff, size: .xSmall, relativeTo: .bodySM)
-                        .foregroundStyle(style.theme.iconCriticalPrimary)
-                        .frame(width: 28, height: 28)
-                        .background(Color.black.opacity(0.5), in: Circle())
-                        .accessibilityLabel("Microphone muted")
-                }
-            }
-            Spacer()
-            if tile.isLocal, tile.hasVideo {
-                HStack(spacing: 0) {
-                    Spacer()
-                    switchCameraButton
-                }
-            }
-        }
-        .padding(12)
-    }
-    
-    /// Our own mute state is on the button we set it with; the flip button acts on the picture it
-    /// sits on and saves the bar a sixth control.
-    private var thumbnailChrome: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            HStack(spacing: 0) {
-                Spacer()
-                if tile.hasVideo {
                     switchCameraButton
                 }
             }
@@ -333,12 +310,9 @@ struct ElementCallTileView: View {
         .accessibilityLabel("Switch camera")
     }
     
-    /// The thumbnail gets a hairline so it has an edge when both cameras are off and it would
-    /// otherwise be an avatar floating over the other person's background. With two people there
-    /// is nobody to tell apart, so no speaker ring in a one-to-one call.
     private var outlineColor: Color {
         switch appearance {
-        case .card:
+        case .card, .spotlight:
             // The ring and the hand belong to the person, and a person is their camera tile. Ringing
             // a sharer's screen as well puts two rings round one speaker, which reads as two people
             // talking at once.
@@ -349,10 +323,8 @@ struct ElementCallTileView: View {
                 return style.theme.iconAccentPrimary
             }
             return tile.isSpeaking ? style.theme.borderSuccessSubtle : .clear
-        case .fullBleed, .fullscreen:
+        case .fullscreen:
             return .clear
-        case .thumbnail:
-            return style.theme.borderInteractiveSecondary
         }
     }
     
@@ -431,10 +403,13 @@ struct ElementCallVideoView<Placeholder: View>: View {
             slot.setOnFirstFrame { [gate] in
                 Task { @MainActor in gate.hasFrame = true }
             }
-            guard let call = callProvider() else {
-                previewVideo?.attach(slot, memberID, kind)
+            // The harness first, when there is one: a scripted call has a call object and no
+            // pictures, so the test pattern has to win over it. Nil in every shipping build.
+            if let previewVideo {
+                previewVideo.attach(slot, memberID, kind)
                 return
             }
+            guard let call = callProvider() else { return }
             if isLocal {
                 call.localVideo.attach(slot)
             } else {
@@ -443,10 +418,11 @@ struct ElementCallVideoView<Placeholder: View>: View {
         }
         .onDisappear {
             slot.setOnFirstFrame(nil)
-            guard let call = callProvider() else {
-                previewVideo?.detach(slot)
+            if let previewVideo {
+                previewVideo.detach(slot)
                 return
             }
+            guard let call = callProvider() else { return }
             if isLocal {
                 call.localVideo.detach(slot)
             } else {
@@ -496,10 +472,6 @@ struct ElementCallTileView_Previews: PreviewProvider, TestablePreview {
         // size for the same reason it is full screen: cropping a document loses what it was showing.
         tileView(Fixtures.share("Frank"))
             .previewDisplayName("Screen share in a cell")
-        tileView(Fixtures.alice, appearance: .thumbnail)
-            .previewDisplayName("Own thumbnail")
-        tileView(Fixtures.bob, appearance: .fullBleed)
-            .previewDisplayName("Full bleed")
         tileView(Fixtures.tile("Grace", stats: "640x360 @ 30 fps\nasked 640x360\ne2ee: ok\npkts 1200 lost 3"))
             .previewDisplayName("With stats")
         // Bare on purpose: its chrome is ``ElementCallFullscreenChrome``, drawn by the screen.

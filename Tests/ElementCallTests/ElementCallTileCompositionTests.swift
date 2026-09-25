@@ -31,7 +31,11 @@ struct ElementCallTileCompositionTests {
     }
     
     private func compose(ranked: [MatrixRTCTile], own: MatrixRTCTile?) -> [ElementCallTile] {
-        ElementCallScreenViewModel.tiles(ranked: ranked,
+        compose(roster: MatrixRTCTileRoster(ranked), own: own)
+    }
+    
+    private func compose(roster: MatrixRTCTileRoster, own: MatrixRTCTile?) -> [ElementCallTile] {
+        ElementCallScreenViewModel.tiles(roster: roster,
                                          own: own,
                                          profiles: [:],
                                          youLabel: "You",
@@ -76,7 +80,7 @@ struct ElementCallTileCompositionTests {
     @Test
     func ourOwnMuteAndCameraComeFromTheCallRatherThanTheModel() {
         let own = MatrixRTCTile(id: me, userID: "@alice:example.com", isLocal: true, hasVideo: false, isMicrophoneMuted: false)
-        let composed = ElementCallScreenViewModel.tiles(ranked: [],
+        let composed = ElementCallScreenViewModel.tiles(roster: .empty,
                                                         own: own,
                                                         profiles: [:],
                                                         youLabel: "You",
@@ -86,51 +90,44 @@ struct ElementCallTileCompositionTests {
         #expect(composed.first?.hasVideo == true)
     }
     
-    // MARK: - The spotlight
+    // MARK: - The detail window
     
+    /// Composition walks the **order**, never `ranked`: under a declared window `ranked` silently
+    /// drops every tile without detail, and the grid would shorten as you scroll. A tile the window
+    /// does not cover still composes, from its reference — a name and an avatar with nothing live —
+    /// and the tiles the window does cover carry their detail, joined by identity rather than index.
     @Test
-    func theHeroTakesTheSpotlightAndWeNeverDo() {
-        var state = ElementCallScreenViewState(roomName: "Room")
-        state.tiles = compose(ranked: [tile("carol", isSpeaking: true), tile("frank", kind: .screenShare, isHero: true)],
-                              own: tile("alice", isLocal: true))
-        #expect(state.spotlightID?.kind == .screenShare)
-        
-        state.tiles = compose(ranked: [tile("carol", isSpeaking: true), tile("bob")],
-                              own: tile("alice", isLocal: true))
-        #expect(state.spotlightID == MatrixRTCTileID(memberID: "@carol:example.com:DEVICE"))
+    func everyTileInTheOrderComposesWhetherOrNotItHasDetail() {
+        let bob = tile("bob", isSpeaking: true)
+        let carol = tile("carol")
+        let windowed = MatrixRTCTileRoster(order: MatrixRTCTileRoster([carol, bob]).order, detail: [bob.id: bob])
+        let composed = compose(roster: windowed, own: tile("alice", isLocal: true))
+        #expect(composed.map(\.id) == [tile("alice", isLocal: true).id, carol.id, bob.id])
+        let reference = composed[1]
+        #expect(reference.displayName == "@carol:example.com")
+        #expect(reference.hasVideo == false)
+        #expect(reference.isSpeaking == false)
+        #expect(reference.isMicrophoneMuted == false)
+        #expect(reference.hasHandRaised == false)
+        #expect(composed[2].isSpeaking == true, "detail is joined by identity, not by position")
     }
     
-    /// Alone, there is nobody to spotlight — and the stage gives our tile the large slot anyway.
+    /// A hero is a property of the reference, so a hero outside the window is still a hero: the
+    /// spotlight and the stack are decided from the order, before any detail arrives.
     @Test
-    func thereIsNoSpotlightWhenWeAreTheOnlyPersonInTheCall() {
-        var state = ElementCallScreenViewState(roomName: "Room")
-        state.tiles = compose(ranked: [], own: tile("alice", isLocal: true))
-        #expect(state.spotlightID == nil)
-        #expect(state.tiles.count == 1)
-    }
-    
-    // MARK: - One to one
-    
-    @Test
-    func aDirectCallIsOneToOneUntilSomethingElseIsOnTheStage() {
-        var state = ElementCallScreenViewState(roomName: "Room")
-        state.isDirect = true
-        
-        state.tiles = compose(ranked: [], own: tile("alice", isLocal: true))
-        #expect(state.layout == .oneToOne, "alone while they are still ringing")
-        
-        state.tiles = compose(ranked: [tile("bob")], own: tile("alice", isLocal: true))
-        #expect(state.layout == .oneToOne)
-        
-        // Their share is a tile of its own, so a direct call in which they share is three tiles and
-        // has nowhere to put our thumbnail.
-        state.tiles = compose(ranked: [tile("bob", kind: .screenShare, isHero: true), tile("bob")],
-                              own: tile("alice", isLocal: true))
-        #expect(state.layout == .group)
-        
-        state.isDirect = false
-        state.tiles = compose(ranked: [tile("bob")], own: tile("alice", isLocal: true))
-        #expect(state.layout == .group)
+    func aReferenceKeepsItsHeroFlagAndItsProfile() {
+        let share = tile("frank", kind: .screenShare, isHero: true)
+        let windowed = MatrixRTCTileRoster(order: MatrixRTCTileRoster([share]).order, detail: [:])
+        let profiles = ["@frank:example.com": ElementCallMemberProfile(userID: "@frank:example.com", displayName: "Frank", avatarURL: URL(string: "https://example.com/frank.png"))]
+        let composed = ElementCallScreenViewModel.tiles(roster: windowed,
+                                                        own: nil,
+                                                        profiles: profiles,
+                                                        youLabel: "You",
+                                                        isLocalMicrophoneMuted: false,
+                                                        localHasVideo: false)
+        #expect(composed.first?.isHero == true)
+        #expect(composed.first?.displayName == "Frank")
+        #expect(composed.first?.avatarURL?.lastPathComponent == "frank.png")
     }
     
     /// A tile outside the detail window has no record, only a reference — and the reference has to
@@ -145,16 +142,5 @@ struct ElementCallTileCompositionTests {
         let outside = windowed.order.last
         #expect(outside?.id == tile("carol").id)
         #expect(outside?.userID == "@carol:example.com")
-    }
-    
-    /// Our own share still makes no tile at all, so it cannot turn a direct call into a group one —
-    /// which is what the one-to-one rule has always claimed and now depends on the model for.
-    @Test
-    func ourOwnShareDoesNotTurnADirectCallIntoAGroupOne() {
-        var state = ElementCallScreenViewState(roomName: "Room")
-        state.isDirect = true
-        state.isScreenSharing = true
-        state.tiles = compose(ranked: [tile("bob")], own: tile("alice", isLocal: true))
-        #expect(state.layout == .oneToOne)
     }
 }

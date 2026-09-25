@@ -76,6 +76,19 @@ Three flags are not optional, and each fails in a way that does not name its own
 
 `swift build` alone will fail: the package is iOS-only. Always go through `xcodebuild`.
 
+**Lint before every commit, the way CI does, and in this order:**
+
+```bash
+swiftformat --lint .          # formatting; `swiftformat .` fixes it
+swiftlint                     # the boundary rules at error severity; warnings are tolerated
+```
+
+CI runs both before it builds anything (`tests.yml`, "Lint"), on the same `brew` versions, and a
+formatting difference fails the whole run before a single test has spoken. Neither is run for you
+by a build or by Xcode, so a change that compiles and passes every test locally still fails CI if
+this step was skipped. `swiftformat --lint` should report `0/N files require formatting`; if it
+names a file, run `swiftformat .` and commit the result with the change, not as a follow-up.
+
 The pinned device and OS live in `Tests/ElementCallTests/Support/SnapshotEnvironment.swift`. The
 harness reads them and fails loudly when the simulator does not match. **The workflows do not read
 them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NAME` and
@@ -117,7 +130,7 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   than tapping its way there — with the argument present the view hierarchy is what it was before
   the catalogue existed, which is what keeps the older UI tests looking at the tree they were
   written against. The argument used to fall back to the group arrangement on anything it did not
-  recognise, so a typo failed a strip test with "this tile is not hittable", true and about nothing;
+  recognise, so a typo failed a grid test with "this tile is not hittable", true and about nothing;
   an unrecognised name now names itself on screen instead, where the failure screenshot catches it.
 - **Minimizing goes to `ElementCallMinimizedBar`, not to a system window, and that is honest rather
   than a shortcut.** `ElementCallPictureInPictureController` builds its `AVPictureInPictureController`
@@ -134,7 +147,7 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
 - **Put a test here only if it needs a real touch.** Arrangement belongs in
   `ElementCallStageLayoutTests`, appearance in the snapshots, and geometry in a unit test: a UI test
   is twenty seconds against their twenty milliseconds. What earns its place is gesture arbitration —
-  the strip's paging drag against a tile's pan, and the `Button` inside a tile — and the minimize
+  the scroller's pan against the spotlight's swipe and a tile's pan, and the `Button` inside a tile — and the minimize
   round trip, which is three real-touch questions at once: whether the identifier reaches a view at
   all, whether the button in the top bar wins the touch, and whether the bar is hittable where a
   host puts it. Which branch the controller takes when asked to minimize is *not* one of them; that
@@ -155,6 +168,44 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
 - **Exact geometry is still pinned by `VideoPresentationTests`**, which asserts on the vertex
   transform. The harness is for looking; a test that compares pictures would only be approximate
   where that one is exact.
+- **The spotlight's swipe is a UIKit pan, on purpose.** A SwiftUI `DragGesture`, high priority or
+  not, does not stop the scroller's pan: the UI test that drags the spotlight and expects the grid
+  to stay put moved it by a screen. `ElementCallSpotlightPanGesture` is a
+  `UIGestureRecognizerRepresentable` whose delegate makes the scroll view's pan wait for it to
+  fail, which is the only thing that keeps a drag starting on the spotlight off the grid.
+
+- **A glass button is interactive glass, always.** Plain `glassEffect` is not wired for touch: a
+  plain-glass button drawn over the stage's content took no taps, on the simulator and on a phone,
+  and the double tap fell through to the tile beneath. Outside the scroller it happened to work,
+  which is why the control bar did not show it. `elementCallGlass(..., isInteractive: true)`.
+
+### The scenario dumps
+
+Every hard rule in the layout spec is a transition — a promotion while scrolled, a hero leaving, a
+tile crossing the band edge — or a claim about what the media plane was asked for during one, and
+neither is visible in a still. `Tests/ElementCallTests/Scenarios/*.txt` is a corpus of timelines
+vendored from feature-hq (`plans/003.call_layout/scenarios/`, whose README has the grammar; hq is
+the source of truth and a copy that differs is a review finding). `StageDumpScenarioTests` runs
+each one through the real call over `MatrixRTCScriptedSession`, a real `ElementCallScreenViewModel`
+and the real arrangement, on `MatrixRTCManualClock`, and snapshots one text block per frame with
+the declared detail window, what is composed and subscribed, and one line per tile. **Read a
+recorded dump against the scenario's comments before accepting it**; a diff in `slot`, `vis`,
+`detail`, `window` or `constraints` is a finding, a point or two in `rect` is rounding.
+
+Re-record one by deleting its `.txt` under `__Snapshots__/StageDumpScenarioTests/` and running the
+suite with a **fresh build**: `test-without-building` reuses the previously bundled corpus, so an
+edited scenario records the old text. The marker file works for these too. **Delete, never
+rewrite by hand**: macOS tags a file with the provenance of the application that created it, and
+the simulator's test runner cannot open a reference written by another application — a dump
+copied into place from an agent's shell fails every run with "you don't have permission to view
+it", while the same bytes recorded by the runner pass. That includes `git` run from such a shell:
+a checkout or rebase there rewrites the references with the shell's provenance, and the whole
+suite fails on identical bytes until the runner has recorded them once. `git diff` on the directory
+after that recording run tells the two apart: empty means provenance, anything else is a finding.
+
+The call's timers — the share intent timeout, the release linger, the audio level flush, the stats
+poll, and the video source's idle linger in `VideoFrameSlot.swift` — all sleep on the injected
+clock. A new `Task.sleep` in the Kit is a timer the scenarios cannot step past.
 
 #### Running it by hand, and watching a move frame by frame
 
@@ -187,7 +238,7 @@ ffmpeg -ss 9.4 -t 1.2 -i /tmp/run.mp4 -vf "fps=25,scale=260:-1,tile=6x5" -frames
 `build-for-testing` first, then `test-without-building`, or the recording is mostly a build. This is
 how the z-order of the growing tile was checked: a tile going full screen has to be **above** the
 ones it replaces, because they are leaving and a leaving view keeps its z position for as long as
-its transition runs. At the strip's own zero the spotlight faded out on top of it all the way up.
+its transition runs. At the grid's own zero the spotlight faded out on top of it all the way up.
 `ElementCallStageLayout.fullscreenZIndex` and the test that pins it are what stop that returning.
 
 ### Re-recording snapshots
@@ -210,6 +261,12 @@ and nothing on an `xcodebuild` command line gets there: not a build setting, not
 prefix, not the calling shell. It works when set in a scheme, which is why it works from inside
 Xcode. On the command line it does nothing, silently, and you conclude your change had no visual
 effect. The marker file is what `record-snapshots.yml` uses, for this reason.
+
+**The references show the flat control bar, not liquid glass.** `PreviewTests` renders every
+preview with `elementCallGlassEnabled` off: an offscreen render of glass in a landscape frame comes
+out entirely blank (every landscape image with the bar in it was white for a day before anyone
+looked), and a reference of the fallback at least pins where the buttons are. Glass is checked on
+a device. Do not "fix" a blank landscape reference by re-recording it.
 
 `SnapshotEnvironment.renderDevices` is what each preview is rendered as, and the orientation is part
 of it. Note the **iPad entry has always been landscape**: the snapshot library's bare `iPad10_2`
@@ -285,8 +342,8 @@ that way.
   struct.
 - **Orientation is the shape of the space, never the size class.** `ElementCallStageLayout.Metrics`
   and `ElementCallView` both decide on `width > height` and must keep agreeing. An iPad in landscape
-  has a *regular* vertical size class, so a size-class branch would leave its controls at the bottom
-  while the stage laid its tiles out for a side rail.
+  has a *regular* vertical size class, so a size-class branch would lay its tiles out in portrait
+  rows while its width says landscape.
 - Follow the [Swift API Design Guidelines]: `ID` not `Id`, `URL` not `Url`.
 - **Every port protocol ends in `Protocol`**, and this is a deliberate exception to those
   guidelines, which would have `ElementCallSystemProvidingProtocol` be `ElementCallSystemProviding`

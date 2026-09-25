@@ -95,22 +95,24 @@ public final class ElementCallController {
         call?.hasVideo ?? false
     }
     
-    /// The tile the layout gives its largest slot: the hero if the model marked one, else the head
-    /// of the model's ranking.
+    /// The tile the stage gives its largest slot, written by the screen through
+    /// ``setSpotlightTile(_:)``. The Picture in Picture window continues this tile's picture.
     ///
-    /// **Computed, because there is nothing left to remember.** This used to be stored state
-    /// maintained by an `updateSpotlight` that re-implemented the ranking: a sharer wins, else the
-    /// loudest remote speaker, else keep the current one while they are still talking, else the
-    /// first remote. Every clause of that is the model's now, and damped — the "keep the current
-    /// one" clause was this app's entire hysteresis and it had no timer at all. A stored copy would
-    /// be a second ranking, free to disagree with the one being drawn.
+    /// **Stored, and written by the screen rather than computed here**, because the screen's rule
+    /// has memory the controller has no business holding: which hero the user swiped to, and who
+    /// spoke last while nobody is speaking. Computing "the hero, else the head of the ranking" here
+    /// — what this used to do — was the spotlight rule the layout spec names as wrong (003 R3): a
+    /// call small enough to see everyone has no spotlight at all.
     ///
-    /// Never ourselves, and that costs nothing now: our own tile is not in the ranked list.
-    public var spotlightTileID: MatrixRTCTileID? {
-        guard let tiles = call?.tiles else { return nil }
-        // The hero rather than simply the head, because a hero is a fact the model states and the
-        // order is an arrangement of it. They agree today; if they ever stop, the hero is right.
-        return (tiles.order.first(where: \.isHero) ?? tiles.order.first)?.id
+    /// Nil between calls, and nil whenever every tile is the same size; the window's candidate
+    /// then falls back to the first tile with video (003 R68).
+    public private(set) var spotlightTileID: MatrixRTCTileID?
+    
+    /// Equality-guarded on purpose: the window re-reads its source inside observation tracking, so
+    /// an unguarded write on every roster would re-attach its stream once a second for nothing.
+    public func setSpotlightTile(_ tileID: MatrixRTCTileID?) {
+        guard tileID != spotlightTileID else { return }
+        spotlightTileID = tileID
     }
     
     public var isInCall: Bool {
@@ -606,6 +608,7 @@ public final class ElementCallController {
         }
         call = nil
         session = nil
+        spotlightTileID = nil
         system.endCall(roomID: roomID)
         // Paired with the activation in publishMedia through the same predicate, so the two
         // cannot disagree about which platforms they apply to and leave the session up.
@@ -642,11 +645,13 @@ public final class ElementCallController {
     func setPreviewState(callData: ElementCallData,
                          room: any ElementCallRoomContextProtocol,
                          connection: ElementCallConnection,
-                         connectedAt: Date? = nil) {
+                         connectedAt: Date? = nil,
+                         call: MatrixRTCCall? = nil) {
         self.callData = callData
         self.room = room
         self.connection = connection
         self.connectedAt = connectedAt
+        self.call = call
         // The same seed `startCall` makes, so a preview of a connecting call draws the controls a
         // real one would: the camera reads as on for a video call from the moment it is joining,
         // which is what it will join with.

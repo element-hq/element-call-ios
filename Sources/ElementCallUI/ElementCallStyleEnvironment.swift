@@ -37,4 +37,9 @@ public nonisolated struct ElementCallPreviewVideo: Sendable {
 
 public extension EnvironmentValues {
     @Entry var elementCallPreviewVideo: ElementCallPreviewVideo?
+    /// Whether the floating controls use liquid glass where the system has it. On by default and
+    /// in every shipping build; the snapshot harness turns it off, because an offscreen render of
+    /// glass in a landscape frame comes out blank and a reference of the flat fallback at least
+    /// says where the buttons are. Glass itself is checked on a device.
+    @Entry var elementCallGlassEnabled = true
 }
