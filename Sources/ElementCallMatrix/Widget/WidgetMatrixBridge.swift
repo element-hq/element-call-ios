@@ -445,9 +445,10 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     /// The driver hands over `{type, content, sender, encrypted}` only: it has already dropped
     /// cleartext in an encrypted room and attested the sender of an encrypted message, but reports
     /// neither the sender's device nor whether it is cross-signed. The device is read from the key
-    /// message itself, or failing that from the sender's one live membership, and an encrypted
-    /// message is taken as cross-signed, the trust Element Call web gets through this same driver
-    /// (see this folder's header for what retires the stopgap).
+    /// message itself and from nowhere else: a key that names none is passed on with none, and the
+    /// core drops it, rather than being attributed to whatever device the sender's membership
+    /// happens to name. An encrypted message is taken as cross-signed, the trust Element Call web
+    /// gets through this same driver (see this folder's header for what retires the stopgap).
     private func deliverToDevice(_ data: [String: Any]) {
         guard let eventType = data["type"] as? String,
               let sender = data["sender"] as? String,
@@ -457,11 +458,10 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
             return
         }
         let wasEncrypted = data["encrypted"] as? Bool ?? false
-        let claimedDeviceID = Self.claimedDeviceID(in: content)
-        let deviceID = claimedDeviceID ?? membershipDeviceID(of: sender)
-        if claimedDeviceID == nil {
+        let deviceID = Self.claimedDeviceID(in: content)
+        if deviceID == nil {
             // Field names only, never values: which shape of key message the peer speaks.
-            log(.info, "\(eventType) from \(sender) names no device (fields: \(content.keys.sorted())), inferred \(deviceID ?? "none")")
+            log(.info, "\(eventType) from \(sender) names no device (fields: \(content.keys.sorted()))")
         }
         let message = MatrixRTCToDeviceMessage(eventType: eventType,
                                                attestedSenderID: sender,
@@ -483,42 +483,6 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         }
         let member = content["member"] as? [String: Any]
         return (member?["claimed_device_id"] ?? member?["device_id"]) as? String
-    }
-    
-    /// The device behind the user's live call membership, when there is exactly one. Element Call's
-    /// key messages do not always name their device, while the core refuses a key whose device it
-    /// cannot match to the membership.
-    private func membershipDeviceID(of userID: String) -> String? {
-        let memberships = (state[MatrixRTCEventTypes.legacyStateMember] ?? [:]).values.filter { $0.sender == userID && $0.contentJSON != "{}" }
-        var deviceIDs = Set<String>()
-        for membership in memberships {
-            if let content = Self.parseObject(membership.contentJSON) {
-                for case let entry as [String: Any] in content["memberships"] as? [Any] ?? [] {
-                    if let deviceID = entry["device_id"] as? String {
-                        deviceIDs.insert(deviceID)
-                    }
-                }
-            }
-            if deviceIDs.isEmpty, let deviceID = Self.deviceID(inStateKey: membership.stateKey, userID: userID) {
-                deviceIDs.insert(deviceID)
-            }
-        }
-        return deviceIDs.count == 1 ? deviceIDs.first : nil
-    }
-    
-    /// Element Call keys its membership `_{user}_{device}_m.call` (or `{user}_{device}`, or just the
-    /// user); the device is whatever follows the user ID.
-    private nonisolated static func deviceID(inStateKey stateKey: String, userID: String) -> String? {
-        var key = stateKey
-        if key.hasPrefix("_") {
-            key.removeFirst()
-        }
-        guard key.hasPrefix(userID + "_") else { return nil }
-        key.removeFirst(userID.count + 1)
-        if key.hasSuffix("_m.call") {
-            key.removeLast("_m.call".count)
-        }
-        return key.isEmpty ? nil : key
     }
     
     private func driverStopped() {
