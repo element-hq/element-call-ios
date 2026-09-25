@@ -100,6 +100,10 @@ public final class MatrixRTCCall {
     /// The bindings' own protocol rather than the concrete `MediaSession`, so a test can see what
     /// actually reaches the transport -- which is the only place the publish options are observable.
     private let mediaSession: any MediaSessionProtocol
+    /// Constraints and windows go to the session off the main actor, since the core may block, and
+    /// in order: a queue rather than a detached task, because two requests for one stream a frame
+    /// apart must not arrive swapped, or the stale one sticks.
+    private let mediaRequests = DispatchQueue(label: "io.element.call.media-requests", qos: .utility)
     private let audioEngine = CallAudioEngine()
     @ObservationIgnored private lazy var microphone = MicrophoneCapturer(engine: audioEngine) { [weak self] level in
         Task { @MainActor in self?.setAudioLevel(level, for: self?.localMemberID) }
@@ -561,10 +565,17 @@ public final class MatrixRTCCall {
             .auto
         }
         let mediaSession = mediaSession
-        Task.detached(priority: .utility) {
+        mediaRequests.async {
             mediaSession.setConstraints(memberId: memberID,
                                         kind: kind.ffi,
                                         constraints: FfiMediaConstraints(enabled: constraints.isEnabled, visible: constraints.isVisible, detail: detail, lowBandwidth: false))
+        }
+    }
+    
+    /// Returns once every constraint and window declared so far has reached the session.
+    func drainMediaRequests() async {
+        await withCheckedContinuation { continuation in
+            mediaRequests.async { continuation.resume() }
         }
     }
     
@@ -628,12 +639,7 @@ public final class MatrixRTCCall {
                 setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
                                     memberID: tile.memberID,
                                     kind: tile.kind.videoStreamKind)
-                let clock = clock
-                pendingReleases[tile] = Task { [weak self] in
-                    try? await clock.sleep(for: Self.releaseLinger)
-                    guard !Task.isCancelled else { return }
-                    self?.release(tile)
-                }
+                pendingReleases[tile] = clock.schedule(after: Self.releaseLinger) { [weak self] in self?.release(tile) }
             } else if paused.contains(tile) {
                 setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
                                     memberID: tile.memberID,
@@ -658,7 +664,7 @@ public final class MatrixRTCCall {
         MatrixRTCLog.info("Detail window ranks \(window.ranks.lowerBound)..<\(window.ranks.upperBound) also \(window.also.map { "\($0.memberID)/\($0.kind)" })")
         let mediaSession = mediaSession
         let also = window.also.map { FfiTileId(memberId: $0.memberID, kind: $0.kind.ffi) }
-        Task.detached(priority: .utility) {
+        mediaRequests.async {
             mediaSession.setDetailWindow(offset: UInt32(clamping: window.ranks.lowerBound),
                                          len: UInt32(clamping: window.ranks.count),
                                          also: also)
@@ -916,6 +922,21 @@ public final nonisolated class LocalVideoFanOut: Sendable {
     func offer(_ frame: MatrixRTCVideoFrame) {
         for slot in slots.withLock({ Array($0.values) }) {
             slot.offer(frame)
+        }
+    }
+}
+
+private extension Clock where Duration == Swift.Duration {
+    /// Runs `body` on the main actor once `duration` has passed on this clock, unless cancelled first.
+    ///
+    /// The deadline is taken now, not in the task: a `sleep(for:)` there reads the clock whenever the
+    /// task first runs, which on a manual clock can be after it was advanced past the deadline.
+    func schedule(after duration: Duration, _ body: @escaping @MainActor () -> Void) -> Task<Void, Never> {
+        let deadline = now.advanced(by: duration)
+        return Task { @MainActor in
+            try? await sleep(until: deadline, tolerance: nil)
+            guard !Task.isCancelled else { return }
+            body()
         }
     }
 }

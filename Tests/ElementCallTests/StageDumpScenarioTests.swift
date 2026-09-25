@@ -245,13 +245,12 @@ final class ScenarioStage {
         }
     }
     
+    /// Sleeps between looks so the view model's own main-actor work can run meanwhile.
     private func waitUntil(_ what: String, _ condition: @MainActor () -> Bool) async throws {
-        for _ in 0..<4000 {
-            if condition() {
-                return
-            }
-            await Task.yield()
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !condition() {
+            guard ContinuousClock.now < deadline else { throw Timeout(what: what) }
+            try? await Task.sleep(for: .milliseconds(5))
         }
-        guard condition() else { throw Timeout(what: what) }
     }
 }

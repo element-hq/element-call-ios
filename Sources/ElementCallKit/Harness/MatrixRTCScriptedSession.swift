@@ -311,6 +311,8 @@ public final class MatrixRTCScenarioPlayer {
         guard position < scenario.frames.count else { return nil }
         let frame = scenario.frames[position]
         position += 1
+        // A request is stamped when it reaches the session, so the last frame's must land first.
+        await settle()
         clock.advance(to: frame.time)
         await settle()
         switch frame.event {
@@ -334,19 +336,23 @@ public final class MatrixRTCScenarioPlayer {
         return frame
     }
     
-    /// Lets whatever the last step set in motion land: a resumed sleeper, a pushed roster, the
-    /// detached task a constraint goes out on. Bounded, so a harness never hangs on a frame.
+    /// Lets the main actor run what the last step resumed, then waits for whatever that sent to
+    /// reach the session.
     public func settle() async {
         for _ in 0..<20 {
             await Task.yield()
         }
+        await call.drainMediaRequests()
     }
     
     private var detailOnly: Set<MatrixRTCTileID>?
     
+    /// Sleeps rather than yields between looks: a yield loop keeps the main actor busy, and the pump
+    /// that satisfies the condition needs it.
     private func waitUntil(_ condition: @MainActor () -> Bool) async {
-        for _ in 0..<2000 where !condition() {
-            await Task.yield()
+        let deadline = ContinuousClock.now + .seconds(10)
+        while !condition(), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(5))
         }
     }
 }

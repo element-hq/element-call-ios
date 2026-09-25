@@ -198,7 +198,10 @@ edited scenario records the old text. The marker file works for these too. **Del
 rewrite by hand**: macOS tags a file with the provenance of the application that created it, and
 the simulator's test runner cannot open a reference written by another application — a dump
 copied into place from an agent's shell fails every run with "you don't have permission to view
-it", while the same bytes recorded by the runner pass. Files that came from `git` are fine.
+it", while the same bytes recorded by the runner pass. That includes `git` run from such a shell:
+a checkout or rebase there rewrites the references with the shell's provenance, and the whole
+suite fails on identical bytes until the runner has recorded them once. `git diff` on the directory
+after that recording run tells the two apart: empty means provenance, anything else is a finding.
 
 The call's timers — the share intent timeout, the release linger, the audio level flush, the stats
 poll, and the video source's idle linger in `VideoFrameSlot.swift` — all sleep on the injected
