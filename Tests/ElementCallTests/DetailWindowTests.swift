@@ -23,7 +23,7 @@ struct DetailWindowTests {
     }
     
     private func player(_ text: String) async throws -> MatrixRTCScenarioPlayer {
-        let player = MatrixRTCScenarioPlayer(scenario: try MatrixRTCScenario.parse(text, name: "t"))
+        let player = try MatrixRTCScenarioPlayer(scenario: MatrixRTCScenario.parse(text, name: "t"))
         await player.start()
         _ = await player.step()
         return player

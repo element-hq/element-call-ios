@@ -19,7 +19,7 @@ import Synchronization
 ///
 /// The bindings' types stay inside this module, which is the one allowed to import the core; the
 /// records are in the app's own terms.
-public nonisolated final class MatrixRTCScriptedSession: MediaSessionProtocol, Sendable {
+public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, Sendable {
     public struct DetailWindowRecord: Sendable, Equatable {
         public let time: Duration
         public let offset: Int
@@ -156,7 +156,9 @@ public nonisolated final class MatrixRTCScriptedSession: MediaSessionProtocol, S
     public func nextEvent() async -> FfiCallEvent? {
         await withCheckedContinuation { continuation in
             let ended = state.withLock { state -> Bool in
-                if state.hasEnded { return true }
+                if state.hasEnded {
+                    return true
+                }
                 state.pendingEvent = continuation
                 return false
             }

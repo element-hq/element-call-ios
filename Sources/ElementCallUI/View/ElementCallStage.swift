@@ -214,19 +214,19 @@ struct ElementCallStage: View {
         // and sprang back to the top. A grid shorter than three viewports never showed it.
         let pin = placement.isSpotlight || placement.appearance == .fullscreen ? stage.viewport.minY : 0
         return ElementCallTileView(tile: placement.tile,
-                            callProvider: callProvider,
-                            isSpotlight: placement.isSpotlight,
-                            appearance: placement.appearance,
-                            memberCount: memberCount,
-                            heroStack: placement.isSpotlight ? stage.heroStack : nil,
-                            isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height,
-                            // Never for a composed tile: a paused one keeps its video view, and
-                            // with it the last frame, so scrolling it in shows a picture rather
-                            // than an avatar (R49). The call is what stops its stream meanwhile.
-                            isVideoSuspended: false,
-                            onToggleFullscreen: { onToggleFullscreen(placement.id) },
-                            onToggleChrome: onToggleChrome,
-                            onAction: onAction)
+                                   callProvider: callProvider,
+                                   isSpotlight: placement.isSpotlight,
+                                   appearance: placement.appearance,
+                                   memberCount: memberCount,
+                                   heroStack: placement.isSpotlight ? stage.heroStack : nil,
+                                   isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height,
+                                   // Never for a composed tile: a paused one keeps its video view, and
+                                   // with it the last frame, so scrolling it in shows a picture rather
+                                   // than an avatar (R49). The call is what stops its stream meanwhile.
+                                   isVideoSuspended: false,
+                                   onToggleFullscreen: { onToggleFullscreen(placement.id) },
+                                   onToggleChrome: onToggleChrome,
+                                   onAction: onAction)
             .background {
                 if placement.id == stage.pictureInPictureTileID {
                     PictureInPictureSourceView(sourceView: pictureInPictureSourceView)

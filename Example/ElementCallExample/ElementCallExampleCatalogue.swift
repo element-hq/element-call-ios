@@ -14,6 +14,8 @@ import SwiftUI
 /// borrowing the package's namespace would quietly join that set.
 struct ElementCallExampleCatalogue: View {
     let target: ElementCallExampleLaunchTarget
+    /// Something the host wants read, such as a scenario that did not parse.
+    var notice: String?
     let onPick: (ElementCallExampleFixture) -> Void
     let onPickScenario: (ElementCallExampleScenario) -> Void
     
@@ -21,6 +23,12 @@ struct ElementCallExampleCatalogue: View {
         List {
             if case .unknown(let name) = target {
                 unknownArrangement(name)
+            }
+            if let notice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("example.notice")
             }
             ForEach(ElementCallExampleFixture.Category.allCases, id: \.self) { category in
                 Section(category.rawValue) {

@@ -15,7 +15,9 @@ struct ElementCallExampleScenario: Identifiable, Hashable {
     let name: String
     let url: URL
     
-    var id: String { name }
+    var id: String {
+        name
+    }
     
     static let all: [ElementCallExampleScenario] = (Bundle.main.urls(forResourcesWithExtension: "txt", subdirectory: "Scenarios") ?? [])
         .map { ElementCallExampleScenario(name: $0.deletingPathExtension().lastPathComponent, url: $0) }
@@ -97,9 +99,17 @@ final class ElementCallExampleScenarioPlayback {
         }
     }
     
-    var position: Int { player.position }
-    var count: Int { scenario.frames.count }
-    var isFinished: Bool { player.isFinished }
+    var position: Int {
+        player.position
+    }
+    
+    var count: Int {
+        scenario.frames.count
+    }
+    
+    var isFinished: Bool {
+        player.isFinished
+    }
     
     func start() async {
         await player.start()
@@ -151,7 +161,11 @@ struct ElementCallExampleScenarioScrubber: View {
     var body: some View {
         HStack(spacing: 12) {
             Button {
-                if playback.isPlaying { playback.pause() } else { playback.play() }
+                if playback.isPlaying {
+                    playback.pause()
+                } else {
+                    playback.play()
+                }
             } label: {
                 Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
             }

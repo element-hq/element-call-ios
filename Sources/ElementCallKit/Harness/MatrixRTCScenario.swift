@@ -124,7 +124,7 @@ public nonisolated struct MatrixRTCScenario: Sendable, Equatable {
     
     // MARK: - Parsing
     
-    private static let actions: Set<String> = ["viewport", "scroll", "rotate", "fullscreen", "swipe-hero", "minimize", "restore", "me", "detail-only", "tick"]
+    private static let actions: Set = ["viewport", "scroll", "rotate", "fullscreen", "swipe-hero", "minimize", "restore", "me", "detail-only", "tick"]
     
     public static func parse(_ text: String, name: String) throws -> MatrixRTCScenario {
         var frames = [Frame]()
@@ -148,7 +148,7 @@ public nonisolated struct MatrixRTCScenario: Sendable, Equatable {
             if let first = words.first, actions.contains(first) {
                 event = try parseAction(first, arguments: Array(words.dropFirst()), fail: fail)
             } else {
-                event = .roster(try words.map { try parseToken($0, fail: fail) })
+                event = try .roster(words.map { try parseToken($0, fail: fail) })
             }
             frames.append(Frame(time: time, event: event, line: number, text: line))
         }
@@ -229,7 +229,7 @@ public nonisolated struct MatrixRTCScenario: Sendable, Equatable {
             guard let target = arguments.first else {
                 throw fail("fullscreen needs a token or `none`")
             }
-            return .fullscreen(target == "none" ? nil : try parseToken(target, fail: fail).tileID)
+            return try .fullscreen(target == "none" ? nil : parseToken(target, fail: fail).tileID)
         case "swipe-hero":
             switch arguments.first {
             case "next": return .swipeHero(.next)
@@ -247,7 +247,7 @@ public nonisolated struct MatrixRTCScenario: Sendable, Equatable {
             }
             return .me(hasVideo: flags.contains("v"), isMicrophoneMuted: flags.contains("m"))
         case "detail-only":
-            return .detailOnly(try arguments.map { try parseToken($0, fail: fail).tileID })
+            return try .detailOnly(arguments.map { try parseToken($0, fail: fail).tileID })
         case "tick":
             return .tick
         default:

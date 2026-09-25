@@ -109,7 +109,9 @@ struct ScriptedSessionTests {
         }
         await Task.yield()
         clock.advance(by: .seconds(1))
-        for _ in 0..<20 { await Task.yield() }
+        for _ in 0..<20 {
+            await Task.yield()
+        }
         #expect(await woke.value == false)
         clock.advance(by: .seconds(1))
         _ = try await sleeper.value
@@ -123,6 +125,8 @@ struct ScriptedSessionTests {
     
     private actor Woke {
         var value = false
-        func set() { value = true }
+        func set() {
+            value = true
+        }
     }
 }

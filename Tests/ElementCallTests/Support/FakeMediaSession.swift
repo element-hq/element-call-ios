@@ -108,6 +108,7 @@ final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
     func setConstraints(memberId: String, kind: FfiStreamKind, constraints: FfiMediaConstraints) {
         state.withLock { $0.constraints.append((FfiStreamRef(memberId: memberId, kind: kind), constraints)) }
     }
+    
     func unpublish(kind: FfiStreamKind) async throws { }
     func videoStream(memberId: String, kind: FfiStreamKind) -> VideoFrameStream? {
         nil

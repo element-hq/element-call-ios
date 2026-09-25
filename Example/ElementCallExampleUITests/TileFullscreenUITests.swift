@@ -68,7 +68,9 @@ final class TileFullscreenUITests: XCTestCase {
             Thread.sleep(forTimeInterval: 0.3)
             guard let middle = tileNearestTheMiddle() else { continue }
             let now = (middle.identifier, middle.frame)
-            if let last, last.0 == now.0, last.1 == now.1 { return }
+            if let last, last.0 == now.0, last.1 == now.1 {
+                return
+            }
             last = now
         }
     }

@@ -39,10 +39,18 @@ struct ElementCallStageLayoutTests {
     let carol = tile("carol")
     
     /// A portrait grid cell: half the card width less the gap, 4:3.
-    var cellWidth: CGFloat { (width - 2 * margin - spacing) / 2 }
-    var cellHeight: CGFloat { cellWidth * 3 / 4 }
+    var cellWidth: CGFloat {
+        (width - 2 * margin - spacing) / 2
+    }
+    
+    var cellHeight: CGFloat {
+        cellWidth * 3 / 4
+    }
+    
     /// The portrait spotlight: the stage width, 16:9.
-    var spotlightHeight: CGFloat { width * 9 / 16 }
+    var spotlightHeight: CGFloat {
+        width * 9 / 16
+    }
     
     static func tile(_ name: String, kind: MatrixRTCTileKind = .person, isLocal: Bool = false, isHero: Bool = false) -> ElementCallTile {
         ElementCallTile(id: MatrixRTCTileID(memberID: "@\(name):example.com:DEVICE", kind: kind),
@@ -172,7 +180,7 @@ struct ElementCallStageLayoutTests {
     // MARK: - The portrait grid (R10, R12, R26, R29, R30)
     
     @Test
-    func fromFourTilesOnACellIsHalfTheWidthAndTheRowsStartAtTheTop() throws {
+    func fromFourTilesOnACellIsHalfTheWidthAndTheRowsStartAtTheTop() {
         let layout = compute([local] + Self.members(4))
         let cells = grid(layout)
         #expect(cells.count == 5)
@@ -257,7 +265,7 @@ struct ElementCallStageLayoutTests {
     /// The column is sized to fit its tiles, not to a share of the width and then whatever happens:
     /// 22% of 812 pt is a 179 pt column whose cells miss a second row by 8 pt.
     @Test
-    func aShortLandscapeStageNarrowsTheColumnToKeepTwoWholeTiles() throws {
+    func aShortLandscapeStageNarrowsTheColumnToKeepTwoWholeTiles() {
         let tight = ElementCallStageLayout.Metrics(area: CGSize(width: 812, height: 300), bottomInset: 1, controlsClearance: 84)
         let column = grid(compute([local] + Self.members(6), spotlight: bob.id, metrics: tight))
         #expect(column[0].frame.width >= 140)
@@ -265,7 +273,7 @@ struct ElementCallStageLayoutTests {
     }
     
     @Test
-    func landscapeWithoutASpotlightIsFourAcrossAndScrollsUnderTheBar() throws {
+    func landscapeWithoutASpotlightIsFourAcrossAndScrollsUnderTheBar() {
         let layout = compute([local] + Self.members(9), metrics: landscape)
         let cells = grid(layout)
         let cellWidth = (landscapeCards.width - 3 * spacing) / 4
@@ -338,7 +346,9 @@ struct ElementCallStageLayoutTests {
     func visibilityIsByDistanceFromTheViewportWithHysteresisOnTheLiveEdge() {
         let viewport = CGRect(x: 0, y: 1000, width: 393, height: 734)
         let cell = CGSize(width: 174.5, height: 130.875)
-        func frame(y: CGFloat) -> CGRect { CGRect(origin: CGPoint(x: 16, y: y), size: cell) }
+        func frame(y: CGFloat) -> CGRect {
+            CGRect(origin: CGPoint(x: 16, y: y), size: cell)
+        }
         // On screen, or overlapping its edge: live.
         #expect(ElementCallTileVisibility.forFrame(frame(y: 1200), viewport: viewport, wasLive: false) == .live)
         #expect(ElementCallTileVisibility.forFrame(frame(y: 900), viewport: viewport, wasLive: false) == .live)
@@ -525,7 +535,7 @@ struct ElementCallStageLayoutTests {
     }
     
     @Test
-    func fullScreenOnATileThatHasGoneFallsBackToTheOrdinaryLayout() throws {
+    func fullScreenOnATileThatHasGoneFallsBackToTheOrdinaryLayout() {
         let layout = compute([local, bob, carol], spotlight: nil, fullscreen: MatrixRTCTileID(memberID: "@ghost:example.com:DEVICE"))
         #expect(layout.placements.count == 3)
         #expect(layout.hiddenTileIDs.isEmpty)

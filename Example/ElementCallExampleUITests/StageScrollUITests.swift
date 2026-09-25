@@ -73,18 +73,18 @@ final class StageScrollUITests: XCTestCase {
         let spotlight = tile("carol")
         XCTAssertTrue(spotlight.waitForExistence(timeout: 5))
         let before = spotlight.frame
-
+        
         tile("alice").swipeUp()
         var seen = [CGFloat]()
         for _ in 0..<6 {
             seen.append(spotlight.frame.minY)
             Thread.sleep(forTimeInterval: 0.15)
         }
-
+        
         XCTAssertTrue(seen.allSatisfy { abs($0 - before.minY) <= 1 }, "the spotlight moved during the scroll: \(seen)")
         XCTAssertEqual(spotlight.frame.minY, before.minY, accuracy: 1)
     }
-
+    
     /// A vertical drag that starts on the spotlight does not scroll the grid (R64).
     func testADragOnTheSpotlightDoesNotScrollTheGrid() {
         launch("sharerOnAPagedStrip")
@@ -148,7 +148,7 @@ final class StageScrollUITests: XCTestCase {
     }
     
     /// A double tap with no movement enters fullscreen even immediately after a scroll (R65).
-    func testADoubleTapRightAfterAScrollGoesFullScreen() {
+    func testADoubleTapRightAfterAScrollGoesFullScreen() throws {
         launch("pagedStrip")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
@@ -157,7 +157,7 @@ final class StageScrollUITests: XCTestCase {
             .allElementsBoundByAccessibilityElement.filter(\.isHittable)
         XCTAssertGreaterThan(visible.count, 1)
         let chosen = visible[visible.count / 2]
-        let other = visible.first { $0.identifier != chosen.identifier }!
+        let other = try XCTUnwrap(visible.first { $0.identifier != chosen.identifier })
         chosen.doubleTap()
         let gone = expectation(for: NSPredicate(format: "isHittable == false"), evaluatedWith: other)
         XCTAssertEqual(XCTWaiter().wait(for: [gone], timeout: 3), .completed, "everything but the chosen tile left the stage")

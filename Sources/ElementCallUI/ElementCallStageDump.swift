@@ -25,9 +25,9 @@ enum ElementCallStageDump {
     ///   - tiles: the composed tiles, ourselves first, as the layout was given them.
     ///   - call: the call, for the roster's detail and the constraints last sent.
     static func render(frame: MatrixRTCScenario.Frame,
-                              layout: ElementCallStageLayout,
-                              tiles: [ElementCallTile],
-                              call: MatrixRTCCall) -> String {
+                       layout: ElementCallStageLayout,
+                       tiles: [ElementCallTile],
+                       call: MatrixRTCCall) -> String {
         var lines = ["== \(describe(frame.time)) \(frame.text)"]
         let window = layout.detailWindow
         let subscribed = call.tiles.order.map(\.id).filter { id in
@@ -69,7 +69,7 @@ enum ElementCallStageDump {
                 "released"
             }
             let detail = tile.isLocal ? "-" : (call.tiles.detail[tile.id] != nil ? "detail" : "ref")
-            let constraints: String = if tile.isLocal {
+            let constraints = if tile.isLocal {
                 "-"
             } else if let sent = call.requestedVideoConstraints(memberID: tile.memberID, kind: tile.kind.videoStreamKind) {
                 "\(sent.isEnabled ? "enabled" : "disabled") \(sent.isVisible ? "visible" : "hidden") \(sent.pixelSize.map { "\(Int($0.width))x\(Int($0.height))" } ?? "auto")"
@@ -94,11 +94,21 @@ enum ElementCallStageDump {
         if tile.isScreenShare {
             token += "#"
         }
-        if tile.isHero { token += "*" }
-        if tile.isSpeaking { token += "!" }
-        if tile.hasHandRaised { token += "^" }
-        if tile.hasVideo { token += "v" }
-        if tile.isMicrophoneMuted { token += "m" }
+        if tile.isHero {
+            token += "*"
+        }
+        if tile.isSpeaking {
+            token += "!"
+        }
+        if tile.hasHandRaised {
+            token += "^"
+        }
+        if tile.hasVideo {
+            token += "v"
+        }
+        if tile.isMicrophoneMuted {
+            token += "m"
+        }
         return token
     }
     

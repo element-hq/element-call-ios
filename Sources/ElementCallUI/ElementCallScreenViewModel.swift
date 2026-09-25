@@ -41,6 +41,7 @@ public final class ElementCallScreenContext {
             viewState.spotlightID = ElementCallSpotlight.choose(tiles: viewState.tiles, shownHeroID: shownHeroID, lastSpeakerID: nil).tileID
         }
     }
+    
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
@@ -53,7 +54,7 @@ public final class ElementCallScreenContext {
     
     fileprivate var handler: ((ElementCallScreenViewAction) -> Void)?
     /// Built by ``harness(state:style:onHostAction:)``: transitions are faked here, not projected.
-    fileprivate var isHarness = false
+    private var isHarness = false
     
     fileprivate init(viewState: ElementCallScreenViewState, style: ElementCallStyle) {
         self.viewState = viewState
@@ -305,7 +306,11 @@ public final class ElementCallScreenViewModel {
                                                     shownHeroID: context.shownHeroID,
                                                     lastSpeakerID: lastSpeakerID)
         state.spotlightID = spotlight.tileID
-        lastSpeakerID = if case .speaker(let id) = spotlight { id } else { nil }
+        lastSpeakerID = if case .speaker(let id) = spotlight {
+            id
+        } else {
+            nil
+        }
         // The user's pick is followed by identity for as long as it is a hero; the moment the
         // choice lands elsewhere it is stale, and keeping it would bring that hero straight back
         // to the front if it ever returned.

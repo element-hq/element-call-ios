@@ -38,7 +38,7 @@ struct ElementCallExampleRootView: View {
             // losing its scroll position costs nothing, and in exchange the accessibility tree a UI
             // test walks during a call is the one it walked before any of this existed.
             if host.session == nil || host.isMinimized {
-                ElementCallExampleCatalogue(target: target, onPick: { host.open($0) }, onPickScenario: { host.open($0) })
+                ElementCallExampleCatalogue(target: target, notice: host.notice, onPick: { host.open($0) }, onPickScenario: { host.open($0) })
                     // An inset rather than an overlay: it pushes the list down instead of covering
                     // its first row, which is what a host does and what makes the point of the
                     // thing — you can see the catalogue behind the call — actually legible.

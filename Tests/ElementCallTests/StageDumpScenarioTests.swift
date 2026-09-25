@@ -67,7 +67,9 @@ final class ScenarioStage {
         metrics = Self.metrics(for: MatrixRTCScenario.defaultViewport)
     }
     
-    private var context: ElementCallScreenContext { viewModel.context }
+    private var context: ElementCallScreenContext {
+        viewModel.context
+    }
     
     func run() async throws -> [String] {
         await player.start()
@@ -238,12 +240,16 @@ final class ScenarioStage {
     
     private struct Timeout: Error, CustomStringConvertible {
         let what: String
-        var description: String { "the screen never showed \(what)" }
+        var description: String {
+            "the screen never showed \(what)"
+        }
     }
     
     private func waitUntil(_ what: String, _ condition: @MainActor () -> Bool) async throws {
         for _ in 0..<4000 {
-            if condition() { return }
+            if condition() {
+                return
+            }
             await Task.yield()
         }
         guard condition() else { throw Timeout(what: what) }

@@ -41,6 +41,10 @@ final class ElementCallExampleHost {
     }
     
     private(set) var session: Session?
+    /// A scenario that did not parse, named with its line, shown on the catalogue rather than
+    /// printed: the package's lint forbids `print`, and a notice on screen is what a person and a
+    /// failure screenshot can both read.
+    private(set) var notice: String?
     private var cancellables = Set<AnyCancellable>()
     /// Only for a harness session. A live one is asked, below.
     private var isHarnessMinimized = false
@@ -62,8 +66,9 @@ final class ElementCallExampleHost {
     func open(_ scenario: ElementCallExampleScenario) {
         cancellables.removeAll()
         isHarnessMinimized = false
+        notice = nil
         do {
-            let playback = ElementCallExampleScenarioPlayback(scenario: try scenario.load())
+            let playback = try ElementCallExampleScenarioPlayback(scenario: scenario.load())
             let controller = ElementCallController.fake(connection: .connected,
                                                         room: ElementCallFakeRoom(displayName: scenario.name),
                                                         connectedAt: .now,
@@ -81,8 +86,7 @@ final class ElementCallExampleHost {
                 playback.play()
             }
         } catch {
-            // A scenario that does not parse names its line; the catalogue is where to read it.
-            print("Scenario \(scenario.name) failed to load: \(error)")
+            notice = "Scenario \(scenario.name) failed to load: \(error)"
         }
     }
     
