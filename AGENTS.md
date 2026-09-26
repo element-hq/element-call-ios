@@ -155,6 +155,28 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
 - **Exact geometry is still pinned by `VideoPresentationTests`**, which asserts on the vertex
   transform. The harness is for looking; a test that compares pictures would only be approximate
   where that one is exact.
+- **`DeviceScreenshotTests` is how you see a device.** Some questions have no answer in the
+  simulator at all — Picture in Picture is the standing one, since
+  `AVPictureInPictureController.isPictureInPictureSupported()` is false on every simulator — and
+  there is no tool that photographs a device: `simctl` does not reach one and `devicectl` has no
+  screenshot command. A UI test runs *on* the device, so it takes the picture itself and attaches it
+  to the result bundle, which `xcresulttool` then hands back. It captures the whole screen, so
+  system windows are in it; a Picture in Picture window belongs to another process and still
+  appears.
+
+  ```bash
+  TEST_RUNNER_ARRANGEMENT=video xcodebuild test \
+    -project Example/ElementCallExample.xcodeproj -scheme ElementCallExample \
+    -destination "id=$DEVICE_UDID" -only-testing:ElementCallExampleUITests/DeviceScreenshotTests \
+    -resultBundlePath /tmp/res.xcresult
+  xcrun xcresulttool export attachments --path /tmp/res.xcresult --output-path /tmp/shots
+  ```
+
+  Two things it is easy to lose an afternoon to. `XCTAttachment.lifetime` must be `.keepAlways`, or
+  a *passing* test throws its attachments away, which is exactly the run you wanted the picture
+  from. And the variable must be `TEST_RUNNER_`-prefixed: a bare `ARRANGEMENT=…` on the `xcodebuild`
+  line never reaches the runner, silently — the same trap `RECORD_FAILURES` sets below, for the same
+  reason.
 
 #### Running it by hand, and watching a move frame by frame
 
