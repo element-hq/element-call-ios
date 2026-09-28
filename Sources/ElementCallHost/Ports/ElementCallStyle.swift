@@ -89,9 +89,9 @@ public extension ElementCallIconRenderingProtocol {
 // MARK: - Avatars
 
 public nonisolated enum ElementCallAvatarSize: Sendable {
-    /// The small tile in a one-to-one layout, and the strip in a group call.
+    /// A tile in the grid.
     case thumbnail
-    /// A full-bleed tile, and the Picture in Picture placeholder.
+    /// The spotlight, a tile full screen, and the Picture in Picture placeholder.
     case full
 }
 

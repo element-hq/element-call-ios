@@ -261,7 +261,7 @@ struct ElementCallTileView: View, Equatable {
         style.avatars.avatar(userID: tile.userID,
                              displayName: tile.displayName,
                              avatarURL: tile.avatarURL,
-                             size: .full)
+                             size: isSpotlight || isFullscreen ? .full : .thumbnail)
     }
     
     private var cardChrome: some View {
