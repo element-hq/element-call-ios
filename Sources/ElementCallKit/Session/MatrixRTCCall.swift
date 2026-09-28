@@ -606,7 +606,8 @@ public final class MatrixRTCCall {
     /// released only if still named a few seconds later, because releasing frees the subscription
     /// but costs a visible re-negotiation to undo. Going full screen and straight back out, or a
     /// tile bouncing at the edge of the band, then costs nothing, while settling somewhere still
-    /// gives a two-hundred-person call its bandwidth back.
+    /// gives a two-hundred-person call its bandwidth back. A stream no tile has ever asked for has
+    /// nothing to come back to, and is released at once.
     ///
     /// A stream leaving both sets while its tile is still mounted is asked for again at the size
     /// that tile last reported: a paused tile does not re-attach when it scrolls back in, so its
@@ -636,7 +637,15 @@ public final class MatrixRTCCall {
                 // surface's size would stay here for the rest of the call and go on inflating the
                 // maximum for whoever draws the stream next.
                 drawnSizes[key] = nil
-                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied?.pixelSize),
+                // Never drawn, so nothing to come back to: the linger would only hold the core's
+                // default subscription open. At a join of two hundred that is most of the call.
+                guard let applied else {
+                    setVideoConstraints(.init(isEnabled: false, isVisible: false, pixelSize: nil),
+                                        memberID: tile.memberID,
+                                        kind: tile.kind.videoStreamKind)
+                    continue
+                }
+                setVideoConstraints(.init(isEnabled: true, isVisible: false, pixelSize: applied.pixelSize),
                                     memberID: tile.memberID,
                                     kind: tile.kind.videoStreamKind)
                 pendingReleases[tile] = clock.schedule(after: Self.releaseLinger) { [weak self] in self?.release(tile) }

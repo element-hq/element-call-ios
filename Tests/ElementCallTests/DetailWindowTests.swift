@@ -53,10 +53,11 @@ struct DetailWindowTests {
     }
     
     /// A paused stream is subscribed but not sent, and stays that way however long it is paused; a
-    /// released one is paused at once and disabled after the linger.
+    /// released one that was drawn is paused at once and disabled after the linger.
     @Test
     func pausedStaysSubscribedAndReleasedGoesAfterTheLinger() async throws {
         let player = try await player("0s B C\n5s tick")
+        player.call.attachVideo(VideoFrameSlot(), memberID: a("C").memberID)
         player.call.setVideoVisibility(paused: [a("B")], released: [a("C")])
         await player.settle()
         #expect(player.session.lastConstraints(for: stream("B")) == .init(isEnabled: true, isVisible: false, pixelSize: nil))
@@ -72,6 +73,7 @@ struct DetailWindowTests {
     @Test
     func releasedAndBackWithinTheLingerIsNeverDisabled() async throws {
         let player = try await player("0s B\n1s tick\n5s tick")
+        player.call.attachVideo(VideoFrameSlot(), memberID: a("B").memberID)
         player.call.setVideoVisibility(paused: [], released: [a("B")])
         await player.settle()
         _ = await player.step()
@@ -79,6 +81,21 @@ struct DetailWindowTests {
         await player.settle()
         _ = await player.step()
         #expect(player.session.constraints.map(\.constraints.isEnabled).allSatisfy { $0 }, "the pending release was cancelled")
+        await player.call.disconnect()
+    }
+    
+    /// A stream no tile ever drew has no picture to keep and nothing to come back to: a hero
+    /// arriving behind the one shown, or at a join everyone past the band. It is released at once,
+    /// not held open by the linger (Android's appendix 2).
+    @Test
+    func aStreamNeverDrawnIsReleasedAtOnce() async throws {
+        let player = try await player("0s B C\n5s tick")
+        player.call.setVideoVisibility(paused: [], released: [a("B")])
+        await player.settle()
+        #expect(player.session.lastConstraints(for: stream("B")) == .init(isEnabled: false, isVisible: false, pixelSize: nil))
+        
+        _ = await player.step()
+        #expect(player.session.constraints.count { $0.stream == stream("B") } == 1, "the linger has nothing left to do")
         await player.call.disconnect()
     }
     

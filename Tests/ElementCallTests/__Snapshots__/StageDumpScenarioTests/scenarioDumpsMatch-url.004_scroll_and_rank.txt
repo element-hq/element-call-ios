@@ -24,14 +24,14 @@ rank slot      rect                 vis      detail constraints
 15   grid 7,1  203,1233,175,131     paused   detail enabled hidden auto
 16   grid 8,0  16,1376,175,131      paused   detail enabled hidden auto
 17   grid 8,1  203,1376,175,131     paused   detail enabled hidden auto
-18   hidden    -                    released detail enabled hidden auto
-19   hidden    -                    released detail enabled hidden auto
-20   hidden    -                    released detail enabled hidden auto
-21   hidden    -                    released detail enabled hidden auto
-22   hidden    -                    released detail enabled hidden auto
-23   hidden    -                    released detail enabled hidden auto
-24   hidden    -                    released detail enabled hidden auto
-25   hidden    -                    released detail enabled hidden auto
+18   hidden    -                    released detail disabled hidden auto
+19   hidden    -                    released detail disabled hidden auto
+20   hidden    -                    released detail disabled hidden auto
+21   hidden    -                    released detail disabled hidden auto
+22   hidden    -                    released detail disabled hidden auto
+23   hidden    -                    released detail disabled hidden auto
+24   hidden    -                    released detail disabled hidden auto
+25   hidden    -                    released detail disabled hidden auto
 -    grid 0,0  16,233,175,131       live     -      -
 
 == 1s 1s     scroll 300
@@ -59,10 +59,10 @@ rank slot      rect                 vis      detail constraints
 19   grid 9,1  203,1519,175,131     paused   detail enabled hidden auto
 20   grid 10,0 16,1662,175,131      paused   detail enabled hidden auto
 21   grid 10,1 203,1662,175,131     paused   detail enabled hidden auto
-22   hidden    -                    released detail enabled hidden auto
-23   hidden    -                    released detail enabled hidden auto
-24   hidden    -                    released detail enabled hidden auto
-25   hidden    -                    released detail enabled hidden auto
+22   hidden    -                    released detail disabled hidden auto
+23   hidden    -                    released detail disabled hidden auto
+24   hidden    -                    released detail disabled hidden auto
+25   hidden    -                    released detail disabled hidden auto
 -    grid 0,0  16,233,175,131       live     -      -
 
 == 2s 2s     tick
@@ -90,10 +90,10 @@ rank slot      rect                 vis      detail constraints
 19   grid 9,1  203,1519,175,131     paused   detail enabled hidden auto
 20   grid 10,0 16,1662,175,131      paused   detail enabled hidden auto
 21   grid 10,1 203,1662,175,131     paused   detail enabled hidden auto
-22   hidden    -                    released detail enabled hidden auto
-23   hidden    -                    released detail enabled hidden auto
-24   hidden    -                    released detail enabled hidden auto
-25   hidden    -                    released detail enabled hidden auto
+22   hidden    -                    released detail disabled hidden auto
+23   hidden    -                    released detail disabled hidden auto
+24   hidden    -                    released detail disabled hidden auto
+25   hidden    -                    released detail disabled hidden auto
 -    grid 0,0  16,233,175,131       live     -      -
 
 == 3s 3s     A#* Y! B C D E F G H I J K L M N O P Q R S T U V W X Z

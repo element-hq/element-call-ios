@@ -67,6 +67,7 @@ struct ScriptedSessionTests {
         await player.start()
         _ = await player.step()
         
+        player.call.attachVideo(VideoFrameSlot(), memberID: a("C").memberID)
         player.call.setReleasedVideoStreams([a("C")])
         await player.settle()
         let stream = MatrixRTCStreamRef(memberID: a("C").memberID, kind: .camera)
