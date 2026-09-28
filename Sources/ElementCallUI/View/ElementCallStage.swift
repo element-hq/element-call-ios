@@ -61,6 +61,17 @@ struct ElementCallStage: View {
     /// that was first visible is still visible (R66): the offset is re-set to put it at the top of
     /// the grid area under the new arrangement.
     @State private var anchor: (tileID: MatrixRTCTileID, area: CGSize)?
+    /// The call's tiles as of the last pass. A tile inserted that is not among them has just
+    /// joined, and is the only kind that grows in: see ``arrival``.
+    @State private var knownTileIDs: Set<MatrixRTCTileID> = []
+    /// The tile full screen, and then on its way back, until that move lands. On the way back the
+    /// layout gives it a grid tile's z position straight away, and it shrank under the spotlight
+    /// and the neighbours it was returning to.
+    @State private var raisedTileID: MatrixRTCTileID?
+    
+    /// How a tile that has just joined appears, and how any tile goes. Never how a row scrolling
+    /// into the band appears: a fling reaches it while it would still be transparent (R38, R49).
+    private static let arrival: AnyTransition = .scale(scale: 0.85).combined(with: .opacity)
     
     private static let animation: Animation = .spring(duration: 0.45, bounce: 0.15)
     
@@ -124,10 +135,13 @@ struct ElementCallStage: View {
                                                         excluded: stage.heroStack != nil && metrics.isLandscape
                                                             ? stage.placements.first(where: \.isSpotlight).map { [Self.arrowFrame(step: -1, spotlight: $0.frame), Self.arrowFrame(step: 1, spotlight: $0.frame)] } ?? []
                                                             : []) { step in showHero(step, in: stage) })
-                // On the arrangement with the scroll taken out, not on the layout itself: the
-                // offset changes on every frame of a drag and must snap, or the sticky spotlight
-                // trails the finger on the spring.
-                .animation(animation, value: stage.motion)
+                .transaction(value: fullscreenID) { transaction in
+                    // Inside the stack's spring, so this is the move the completion waits for. With
+                    // no animation at all it runs straight after the pass, as it must.
+                    guard fullscreenID == nil, raisedTileID != nil else { return }
+                    transaction.addAnimationCompletion { raisedTileID = nil }
+                }
+                .animation(animation, value: Arrangement(tiles: tiles, spotlightID: spotlightID, fullscreenID: fullscreenID, metrics: metrics))
             }
             // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen.
             .scrollIndicators(.hidden)
@@ -152,6 +166,10 @@ struct ElementCallStage: View {
             .onChange(of: Set(stage.placements.filter { $0.visibility == .live }.map(\.id)), initial: true) { _, live in
                 liveTileIDs = live
             }
+            // After the pass, so a tile is still unknown on the pass that inserts it.
+            .onChange(of: tiles, initial: true) { _, tiles in
+                knownTileIDs = Set(tiles.lazy.map(\.id))
+            }
             .onChange(of: stage.maxScrollOffset) { _, maxOffset in
                 // A departure that shortens the grid past the offset: the scroller would clamp
                 // without animating and the grid would jump. Settling to the new end inside the
@@ -171,6 +189,7 @@ struct ElementCallStage: View {
             .onChange(of: fullscreenID != nil) { _, isFullscreen in
                 guard isFullscreen else { return }
                 offsetBeforeFullscreen = scrollOffset
+                raisedTileID = fullscreenID
             }
             .onChange(of: stage, initial: true) { _, stage in
                 // Leaving fullscreen: the stage grows back under the top bar over several passes,
@@ -192,6 +211,16 @@ struct ElementCallStage: View {
         }
     }
     
+    /// What the stack animates on: the inputs that change the arrangement, never the offset. Keyed
+    /// on the layout, every row a scroll moved into or out of the band was animated as well, which
+    /// at two hundred kept a dozen tiles in flight through a fling, a viewport off screen.
+    private struct Arrangement: Equatable {
+        let tiles: [ElementCallTile]
+        let spotlightID: MatrixRTCTileID?
+        let fullscreenID: MatrixRTCTileID?
+        let metrics: ElementCallStageLayout.Metrics
+    }
+    
     /// What the stage is not showing, in the two ways the call tells apart: composed but off screen
     /// (paused, the view stays mounted so its last picture is there when it scrolls in, R49) and
     /// not composed at all (released).
@@ -209,9 +238,8 @@ struct ElementCallStage: View {
         // A pinned tile (the spotlight, a fullscreen tile) is placed relative to the offset. That
         // part of its position follows the finger and must never animate, while the rest of it —
         // where the arrangement puts it — springs like every other tile's. They are two modifiers
-        // for that reason: rows entering and leaving the composed band open an animation on the
-        // stack, and with one `position` the sticky part rode that animation, lagged the finger
-        // and sprang back to the top. A grid shorter than three viewports never showed it.
+        // for that reason: with one `position`, an arrangement change during a scroll carried the
+        // sticky part on the spring, and it lagged the finger and sprang back to the top.
         let pin = placement.isSpotlight || placement.appearance == .fullscreen ? stage.viewport.minY : 0
         return ElementCallTileView(tile: placement.tile,
                                    callProvider: callProvider,
@@ -227,6 +255,7 @@ struct ElementCallStage: View {
                                    onToggleFullscreen: { onToggleFullscreen(placement.id) },
                                    onToggleChrome: onToggleChrome,
                                    onAction: onAction)
+            .equatable()
             .background {
                 if placement.id == stage.pictureInPictureTileID {
                     PictureInPictureSourceView(sourceView: pictureInPictureSourceView)
@@ -242,11 +271,12 @@ struct ElementCallStage: View {
             }
             .position(x: placement.frame.midX, y: placement.frame.midY - pin)
             .offset(y: pin)
-            // Nil on the offset-driven part only: for a grid tile the value never changes, so
-            // this is transparent and the stack's spring reaches it as before.
-            .animation(nil, value: pin)
-            .zIndex(placement.zIndex)
-            .transition(.scale(scale: 0.85).combined(with: .opacity))
+            // Nil when the offset moves, never when the arrangement does. Keyed on the pin itself,
+            // a tile going full screen from a scrolled grid changed it from 0 to the offset in the
+            // same transaction as its frame, and snapped to full size instead of growing.
+            .animation(nil, value: stage.viewport.minY)
+            .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
+            .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
     }
     
     /// The next or previous hero in the stack, clamped: the stack does not wrap (R23).

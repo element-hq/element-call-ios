@@ -118,9 +118,12 @@ public nonisolated struct ElementCallTokenIcons: ElementCallIconRenderingProtoco
                                    textStyle: Self.uiTextStyle(for: textStyle)))
     }
     
+    /// One for the process: it holds every icon Compound has, and making one per lookup was most
+    /// of what a tile's body cost on each frame of a scroll.
+    private static let icons = CompoundIcons()
+    
     private static func image(for icon: ElementCallIcon) -> Image {
-        let icons = CompoundIcons()
-        return switch icon {
+        switch icon {
         case .endCall: icons.endCall
         case .micOn: icons.micOnSolid
         case .micOff: icons.micOffSolid

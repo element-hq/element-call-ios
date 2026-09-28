@@ -27,7 +27,11 @@ enum ElementCallTileAppearance {
 
 /// One participant: video (or the avatar when the camera is off), name and mic badge, the flip
 /// button on the self tile, and outlines for the active speaker and a raised hand.
-struct ElementCallTileView: View {
+///
+/// **Equatable on what it draws**, and the stage compares it (`.equatable()`): every scroll frame
+/// re-runs the stage, and none of that is news to the thirty tiles it composes. The closures are
+/// left out; for a given tile they route to the same place whichever pass made them.
+struct ElementCallTileView: View, Equatable {
     @Environment(\.elementCallStyle) private var style
     let tile: ElementCallTile
     let callProvider: () -> MatrixRTCCall?
@@ -66,6 +70,16 @@ struct ElementCallTileView: View {
     
     private var isFullscreen: Bool {
         appearance == .fullscreen
+    }
+    
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.tile == rhs.tile
+            && lhs.isSpotlight == rhs.isSpotlight
+            && lhs.appearance == rhs.appearance
+            && lhs.memberCount == rhs.memberCount
+            && lhs.heroStack == rhs.heroStack
+            && lhs.isNameHidden == rhs.isNameHidden
+            && lhs.isVideoSuspended == rhs.isVideoSuspended
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills

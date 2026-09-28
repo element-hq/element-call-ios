@@ -209,27 +209,6 @@ struct ElementCallStageLayout: Equatable {
         max(0, contentHeight - viewport.height)
     }
     
-    /// What a change of arrangement looks like with the scroll taken out: the same layout at a
-    /// different offset compares equal. The stage animates on *this* rather than on the layout,
-    /// because the spotlight and a fullscreen tile are placed relative to the offset, and animating
-    /// that change made the spotlight chase the finger on a spring instead of sticking to the top.
-    struct Motion: Equatable {
-        var frames: [MatrixRTCTileID: CGRect]
-        var appearances: [MatrixRTCTileID: ElementCallTileAppearance]
-        var hidden: Set<MatrixRTCTileID>
-    }
-    
-    var motion: Motion {
-        var frames = [MatrixRTCTileID: CGRect](minimumCapacity: placements.count)
-        var appearances = [MatrixRTCTileID: ElementCallTileAppearance](minimumCapacity: placements.count)
-        for placement in placements {
-            let isPinned = placement.isSpotlight || placement.appearance == .fullscreen
-            frames[placement.id] = isPinned ? placement.frame.offsetBy(dx: 0, dy: -viewport.minY) : placement.frame
-            appearances[placement.id] = placement.appearance
-        }
-        return Motion(frames: frames, appearances: appearances, hidden: hiddenTileIDs)
-    }
-    
     static func compute(_ input: Input) -> ElementCallStageLayout {
         let metrics = input.metrics
         let viewport = CGRect(x: 0, y: input.scrollOffset, width: metrics.area.width, height: metrics.area.height)
@@ -288,12 +267,16 @@ struct ElementCallStageLayout: Equatable {
     private static func arrange(_ input: Input, viewport: CGRect) -> ElementCallStageLayout {
         let metrics = input.metrics
         let heroes = ElementCallSpotlight.heroes(in: input.tiles)
-        let spotlight = input.tiles.first { $0.id == input.spotlightID && !$0.isLocal }
+        let spotlit = input.tiles.firstIndex { $0.id == input.spotlightID && !$0.isLocal }.map { (rank: $0 - 1, tile: input.tiles[$0]) }
+        let spotlight = spotlit?.tile
         
         // A hero is only ever drawn in the spotlight (R17); one not shown is neither drawn nor sent
         // video (R24). The spotlight itself comes out of the grid, own tile first as given (R1).
         let unshownHeroes = Set(heroes).subtracting([spotlight?.id].compactMap { $0 })
-        let grid = input.tiles.filter { $0.id != spotlight?.id && !unshownHeroes.contains($0.id) }
+        // Each with its rank, so nothing searches the order for it per tile on every scroll frame.
+        let grid = input.tiles.indices
+            .filter { input.tiles[$0].id != spotlight?.id && !unshownHeroes.contains(input.tiles[$0].id) }
+            .map { (rank: $0 - 1, tile: input.tiles[$0]) }
         
         var heroStack: HeroStack?
         if let spotlight, heroes.count > 1, let shown = heroes.firstIndex(of: spotlight.id) {
@@ -301,9 +284,9 @@ struct ElementCallStageLayout: Equatable {
         }
         var layout: ElementCallStageLayout
         if spotlight == nil, grid.count <= 3 {
-            layout = small(grid, viewport: viewport, metrics: metrics)
+            layout = small(grid.map(\.tile), viewport: viewport, metrics: metrics)
         } else {
-            layout = ranked(grid, spotlight: spotlight, heroStack: heroStack, input: input, viewport: viewport)
+            layout = ranked(grid, spotlight: spotlit, heroStack: heroStack, input: input, viewport: viewport)
         }
         layout.hiddenTileIDs.formUnion(unshownHeroes)
         layout.heroStack = heroStack
@@ -329,7 +312,8 @@ struct ElementCallStageLayout: Equatable {
         case (3, false):
             let height = cards.width / Metrics.tileAspect
             guard 3 * height + 2 * Metrics.spacing <= cards.height else {
-                return ranked(tiles, spotlight: nil, heroStack: nil, input: .init(tiles: tiles, metrics: metrics), viewport: viewport)
+                return ranked(tiles.enumerated().map { (rank: $0.offset - 1, tile: $0.element) },
+                              spotlight: nil, heroStack: nil, input: .init(tiles: tiles, metrics: metrics), viewport: viewport)
             }
             frames = rows(count: 3, width: cards.width, height: height, in: cards)
         case (let count, true):
@@ -376,7 +360,7 @@ struct ElementCallStageLayout: Equatable {
     /// Only the rows within a viewport of the screen are composed; the rest are hidden and so
     /// released (R47, R48). Each composed remote tile carries its rank, and the detail window is the
     /// range over them plus the spotlight (R52, R53).
-    private static func ranked(_ grid: [ElementCallTile], spotlight: ElementCallTile?, heroStack: HeroStack?, input: Input, viewport: CGRect) -> ElementCallStageLayout {
+    private static func ranked(_ grid: [(rank: Int, tile: ElementCallTile)], spotlight: (rank: Int, tile: ElementCallTile)?, heroStack: HeroStack?, input: Input, viewport: CGRect) -> ElementCallStageLayout {
         let metrics = input.metrics
         var placements = [ElementCallTilePlacement]()
         var hidden = Set<MatrixRTCTileID>()
@@ -437,14 +421,14 @@ struct ElementCallStageLayout: Equatable {
         }
         
         if let spotlight, let spotlightFrame {
-            placements.append(ElementCallTilePlacement(tile: spotlight,
+            placements.append(ElementCallTilePlacement(tile: spotlight.tile,
                                                        frame: spotlightFrame,
                                                        appearance: metrics.isLandscape ? .card : .spotlight,
                                                        isSpotlight: true,
                                                        visibility: .live,
-                                                       orderIndex: input.tiles.firstIndex { $0.id == spotlight.id }.map { $0 - 1 },
+                                                       orderIndex: spotlight.rank,
                                                        zIndex: spotlightZIndex))
-            also.insert(spotlight.id)
+            also.insert(spotlight.tile.id)
         }
         
         // The band a tile has to be within to be composed at all: one viewport either side. A tile
@@ -453,7 +437,7 @@ struct ElementCallStageLayout: Equatable {
         let rowCount = (grid.count + columns - 1) / columns
         var lowestRank = Int.max
         var highestRank = -1
-        for (index, tile) in grid.enumerated() {
+        for (index, (rank, tile)) in grid.enumerated() {
             let row = index / columns
             let column = index % columns
             let frame = CGRect(x: gridFrame.minX + CGFloat(column) * (cellWidth + Metrics.spacing),
@@ -465,8 +449,7 @@ struct ElementCallStageLayout: Equatable {
                 hidden.insert(tile.id)
                 continue
             }
-            let rank = input.tiles.firstIndex { $0.id == tile.id }.map { $0 - 1 }
-            if let rank, !tile.isLocal {
+            if !tile.isLocal {
                 lowestRank = min(lowestRank, rank)
                 highestRank = max(highestRank, rank)
             }
@@ -496,7 +479,7 @@ struct ElementCallStageLayout: Equatable {
                                       // activation state other than foregroundActive". A view in no
                                       // window belongs to no scene. Minimizing then did nothing at
                                       // all, twice, because the retry fails the same way.
-                                      pictureInPictureTileID: spotlight?.id ?? placements.first?.tile.id,
+                                      pictureInPictureTileID: spotlight?.tile.id ?? placements.first?.tile.id,
                                       hiddenTileIDs: hidden)
     }
 }
