@@ -27,6 +27,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case sharerOnAPagedStrip
     case twoShares
     case video
+    case twoHundred
     case joining
     case connectingMedia
     case failed
@@ -46,7 +47,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     
     var category: Category {
         switch self {
-        case .group, .pagedStrip, .oneToOne, .screenShare, .sharerOnAPagedStrip, .twoShares, .video: .connected
+        case .group, .pagedStrip, .oneToOne, .screenShare, .sharerOnAPagedStrip, .twoShares, .video, .twoHundred: .connected
         case .joining, .connectingMedia, .failed, .ended: .connecting
         }
     }
@@ -64,6 +65,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .sharerOnAPagedStrip: "Sharer on a long grid"
         case .twoShares: "Two screen shares"
         case .video: "Moving video"
+        case .twoHundred: "Two hundred"
         case .joining: "Joining"
         case .connectingMedia: "Connecting media"
         case .failed: "Failed"
@@ -81,7 +83,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .screenShare: "A remote share holding the spotlight, the sharer's camera in the grid."
         case .sharerOnAPagedStrip: "A sharer's camera scrolls away from their screen."
         case .twoShares: "Two heroes stacked in the spotlight; swipe it sideways to switch."
-        case .video: "The only row fed real frames, some portrait and some landscape."
+        case .video: "Real frames, some portrait and some landscape."
+        case .twoHundred: "Two hundred people, most with a camera: what a scroll costs at scale."
         case .joining: "Before there is a call to render."
         case .connectingMedia: "Joined, waiting on media."
         case .failed: "The error the screen shows once and clears."
@@ -89,10 +92,10 @@ enum ElementCallExampleFixture: String, CaseIterable {
         }
     }
     
-    /// Whether the tiles should be fed generated frames. Only the video row asks for it, so every
-    /// other one stays a pure layout harness with no timer running behind it.
+    /// Whether the tiles should be fed generated frames. Only the rows about pictures ask for it,
+    /// so every other one stays a pure layout harness with no timer running behind it.
     var wantsVideo: Bool {
-        self == .video
+        self == .video || self == .twoHundred
     }
     
     /// A connected row is a view state written by hand; a connecting row is a connection for a fake
@@ -149,6 +152,17 @@ enum ElementCallExampleFixture: String, CaseIterable {
                 Fixtures.tile(name, isLocal: index == 0, hasVideo: name != "Dan")
             }
             return .connected(Fixtures.connected(tiles: tiles))
+        case .twoHundred:
+            // What Android measured its scroll against, and what a phone fast enough to hide the
+            // cost never shows by hand: a band of about thirty composed tiles, most of them drawing
+            // pictures, crossing row edges on nearly every frame of a fling. One in five has the
+            // camera off, as in a real call of this size. Carol speaking puts listen mode's
+            // spotlight over the grid. Measure it in a Release build: see `ScrollPerformanceUITests`.
+            let extras = (1...192).map { Fixtures.tile("Member\($0)", hasVideo: $0 % 5 != 0) }
+            let group = [Fixtures.tile("Alice", isLocal: true, hasVideo: true),
+                         Fixtures.tile("Carol", hasVideo: true, isSpeaking: true)]
+                + ["Bob", "Dan", "Erin", "Frank", "Grace", "Heidi"].map { Fixtures.tile($0, hasVideo: true) }
+            return .connected(Fixtures.connected(tiles: group + extras))
         case .joining:
             return .connecting(.joining)
         case .connectingMedia:

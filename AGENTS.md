@@ -160,11 +160,14 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   `ElementCallPreviewVideo`, an environment value consulted only where there is no call — nil in
   every shipping build.
   
-  Keep it honest, or it is worse than nothing. Two things had to be fixed before it was: the
-  pattern is generated a row at a time rather than a pixel at a time, and one frame per size is
-  shared by every tile that wants it; and its timer runs on `.common`, because on the default mode
-  it stops while the run loop tracks a touch, which starved the tiles of frames for exactly the
-  length of a gesture and made the harness stutter far worse than the app it stands in for.
+  Keep it honest, or it is worse than nothing. The pattern is generated a row at a time, one frame
+  per size is shared by every tile that wants it, and frames are made on a dispatch timer off the
+  main thread, as a decoder's are. A run loop timer on main either stopped during a touch or
+  charged every scroll with work the app never does.
+- **`twoHundred` is the scale fixture, and `ScrollPerformanceUITests` flings it.** The test runs only
+  on a device, in a Release build (`-configuration Release`); on the simulator it skips. It reports
+  the system's scroll hitch metrics and asserts nothing. For attribution, record an `xctrace` Time
+  Profiler or Animation Hitches trace with `--all-processes` while it runs.
 - **Exact geometry is still pinned by `VideoPresentationTests`**, which asserts on the vertex
   transform. The harness is for looking; a test that compares pictures would only be approximate
   where that one is exact.
