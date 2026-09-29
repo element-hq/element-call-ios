@@ -187,7 +187,10 @@ public extension ElementCallController {
                      // value to exercise a gate.
                      options: ElementCallOptions = ElementCallOptions(isDeveloperModeEnabled: true,
                                                                       isScreenSharingEnabled: true),
-                     style: ElementCallStyle = .stock) -> ElementCallController {
+                     style: ElementCallStyle = .stock,
+                     // A scripted call (`MatrixRTCScenarioPlayer`), so a real view model can run
+                     // over a controller that never joined. Nil for the stills the previews want.
+                     call: MatrixRTCCall? = nil) -> ElementCallController {
         let transport = ElementCallFakeTransport()
         let controller = ElementCallController(rtcService: MatrixRTCService(transport: transport),
                                                transport: transport,
@@ -198,7 +201,8 @@ public extension ElementCallController {
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
                                    room: room,
                                    connection: connection,
-                                   connectedAt: connectedAt)
+                                   connectedAt: connectedAt,
+                                   call: call)
         return controller
     }
 }

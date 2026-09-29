@@ -82,7 +82,13 @@ final class MinimizedCallUITests: XCTestCase {
         XCTAssertFalse(app.buttons["elementCall.minimizedBar"].exists,
                        "A call that ended is not a call that was minimized.")
         
-        app.buttons["example.fixture.joining"].tap()
+        // Below the fold on a small phone now that the catalogue has a scenarios section too, and
+        // a tap does not scroll to its target.
+        let joining = app.buttons["example.fixture.joining"]
+        for _ in 0..<4 where !joining.isHittable {
+            app.swipeUp()
+        }
+        joining.tap()
         XCTAssertTrue(app.buttons["elementCall.hangUp"].waitForExistence(timeout: 10),
                       "A connecting fixture should open its screen too.")
         

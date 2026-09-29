@@ -14,18 +14,43 @@ import SwiftUI
 /// borrowing the package's namespace would quietly join that set.
 struct ElementCallExampleCatalogue: View {
     let target: ElementCallExampleLaunchTarget
+    /// Something the host wants read, such as a scenario that did not parse.
+    var notice: String?
     let onPick: (ElementCallExampleFixture) -> Void
+    let onPickScenario: (ElementCallExampleScenario) -> Void
     
     var body: some View {
         List {
             if case .unknown(let name) = target {
                 unknownArrangement(name)
             }
+            if let notice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("example.notice")
+            }
             ForEach(ElementCallExampleFixture.Category.allCases, id: \.self) { category in
                 Section(category.rawValue) {
                     ForEach(ElementCallExampleFixture.fixtures(in: category), id: \.self) { fixture in
                         row(fixture)
                     }
+                }
+            }
+            Section("Scenarios") {
+                ForEach(ElementCallExampleScenario.all) { scenario in
+                    Button {
+                        onPickScenario(scenario)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(scenario.name).font(.body)
+                            Text(scenario.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("example.scenario.\(scenario.name)")
                 }
             }
         }

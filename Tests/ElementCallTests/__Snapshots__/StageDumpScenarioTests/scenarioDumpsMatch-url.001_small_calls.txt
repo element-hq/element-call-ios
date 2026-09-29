@@ -1,0 +1,60 @@
+== 0s 0s     viewport 393x734 bottom 34
+window ranks 0..<0 also -  composed 1  subscribed 0  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+-    grid 0,0  16,0,361,604         live     -      -
+
+== 0s 0s
+window ranks 0..<0 also -  composed 1  subscribed 0  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+-    grid 0,0  16,0,361,604         live     -      -
+
+== 1s 1s     B
+window ranks 0..<1 also -  composed 2  subscribed 1  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 1,0  16,283,361,271       live     detail enabled visible 720x544
+-    grid 0,0  16,0,361,271         live     -      -
+
+== 3s 3s     B C
+window ranks 0..<2 also -  composed 3  subscribed 2  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 0,1  203,0,175,131        live     detail enabled visible 352x256
+1    grid 1,0  16,143,175,131       live     detail enabled visible 352x256
+-    grid 0,0  16,0,175,131         live     -      -
+
+== 5s 5s     B C D
+window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 0,1  203,0,175,131        live     detail enabled visible 352x256
+1    grid 1,0  16,143,175,131       live     detail enabled visible 352x256
+2    grid 1,1  203,143,175,131      live     detail enabled visible 352x256
+-    grid 0,0  16,0,175,131         live     -      -
+
+== 7s 7s     B C D E F
+window ranks 0..<5 also -  composed 6  subscribed 5  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 0,1  203,0,175,131        live     detail enabled visible 352x256
+1    grid 1,0  16,143,175,131       live     detail enabled visible 352x256
+2    grid 1,1  203,143,175,131      live     detail enabled visible 352x256
+3    grid 2,0  16,286,175,131       live     detail enabled visible 352x256
+4    grid 2,1  203,286,175,131      live     detail enabled visible 352x256
+-    grid 0,0  16,0,175,131         live     -      -
+
+== 8s 8s     rotate landscape
+window ranks 0..<5 also -  composed 6  subscribed 5  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 0,1  195,0,167,125        live     detail enabled visible 336x256
+1    grid 0,2  373,0,167,125        live     detail enabled visible 336x256
+2    grid 0,3  552,0,167,125        live     detail enabled visible 336x256
+3    grid 1,0  16,137,167,125       live     detail enabled visible 336x256
+4    grid 1,1  195,137,167,125      live     detail enabled visible 336x256
+-    grid 0,0  16,0,167,125         live     -      -
+
+== 9s 9s     rotate portrait
+window ranks 0..<5 also -  composed 6  subscribed 5  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    grid 0,1  203,0,175,131        live     detail enabled visible 352x256
+1    grid 1,0  16,143,175,131       live     detail enabled visible 352x256
+2    grid 1,1  203,143,175,131      live     detail enabled visible 352x256
+3    grid 2,0  16,286,175,131       live     detail enabled visible 352x256
+4    grid 2,1  203,286,175,131      live     detail enabled visible 352x256
+-    grid 0,0  16,0,175,131         live     -      -

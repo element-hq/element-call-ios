@@ -312,6 +312,26 @@ public nonisolated struct MatrixRTCTileRoster: Sendable, Equatable {
     }
 }
 
+/// What a consumer asks the model for full records of: a rank range over the remote order, plus
+/// the tiles it draws out of rank order (002 contract C12). Everything else arrives as a
+/// reference, which is enough to draw a name and an avatar. The default, detail for everything,
+/// costs the whole call on every update at two hundred participants.
+public nonisolated struct MatrixRTCDetailWindow: Sendable, Equatable {
+    /// Half-open, over ``MatrixRTCTileRoster/order``. Clamped by the core; asking past the end is
+    /// not an error.
+    public var ranks: Range<Int>
+    /// Included wherever they rank: the spotlight, a fullscreen tile, the Picture in Picture tile.
+    /// Identities not in the call are ignored, not errors.
+    public var also: Set<MatrixRTCTileID>
+    
+    public init(ranks: Range<Int>, also: Set<MatrixRTCTileID> = []) {
+        self.ranks = ranks
+        self.also = also
+    }
+    
+    public static let none = MatrixRTCDetailWindow(ranks: 0..<0)
+}
+
 /// What is true of *us*, beside the roster rather than in it, and changing when we act rather than
 /// when the call moves.
 public nonisolated struct MatrixRTCLocalState: Sendable, Equatable {

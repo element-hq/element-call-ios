@@ -29,7 +29,7 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public let isSpeaking: Bool
     public let hasHandRaised: Bool
     /// The model marks the tile worth the largest slot — a screen share today, a pin later. It does
-    /// not choose a spotlight; ``ElementCallScreenViewState/spotlightID`` is where that is decided.
+    /// not choose a spotlight; `ElementCallSpotlight` is where that is decided.
     public let isHero: Bool
     public let stats: String?
     
@@ -44,14 +44,6 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public var isScreenShare: Bool {
         id.kind == .screenShare
     }
-}
-
-/// How the tiles are arranged.
-public nonisolated enum ElementCallLayout: Sendable {
-    /// The other person fills the screen, we are a thumbnail over them.
-    case oneToOne
-    /// Whoever is talking large, everyone else in the strip.
-    case group
 }
 
 /// A message the screen shows once and then forgets. Replaces the host's alert type so the package
@@ -92,37 +84,13 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// False while minimized, in the bar or the system window: the tiles unmount so only the window decodes.
     public var isMaximized = true
     
-    /// Which tile gets the largest slot.
+    /// Which tile gets the largest slot, or nil when every tile is the same size.
     ///
-    /// The model **ranks**; it does not choose a spotlight. It marks a hero — a screen share today,
-    /// a pin later — and orders everything after it, and what a UI does with its largest slot stays
-    /// the UI's business. So: the hero if there is one, else the head of the ranking, which is who
-    /// the model's damping has settled on.
-    ///
-    /// Never ourselves while anybody else is there, and that now costs nothing: we are not in the
-    /// model's list at all, we are spliced in at the front, so reading past ourselves is the whole
-    /// of the rule. It used to be three separate guards.
-    ///
-    /// Reading `isHero` rather than taking `tiles[1]` is not belt and braces. It is the difference
-    /// between honouring a fact the model states and assuming a sort order agrees with it; if they
-    /// ever disagree, the hero is the answer.
-    public var spotlightID: MatrixRTCTileID? {
-        (tiles.first(where: \.isHero) ?? tiles.first { !$0.isLocal })?.id
-    }
-    
-    /// One-to-one is a direct chat with at most one other tile on the stage, and that tile a camera:
-    /// alone while the other side is still ringing, our own camera fills the screen and shrinks to
-    /// the thumbnail once they arrive. Anyone else joining is a group call, because a third member
-    /// has nowhere to go in a two-tile layout.
-    ///
-    /// The `isLocal` count is gone: the own tile is no longer one of the model's, the view model
-    /// splices it in unconditionally, so counting it proves nothing. The share test survives for the
-    /// sharer whose camera is *off* — two tiles by the count, and a layout that would otherwise put
-    /// our thumbnail over somebody's spreadsheet. Our own share still never makes a tile at all, so
-    /// it still cannot turn a direct call into a group one.
-    public var layout: ElementCallLayout {
-        isDirect && tiles.count <= 2 && !tiles.contains(where: \.isScreenShare) ? .oneToOne : .group
-    }
+    /// Stored rather than computed, because the answer has memory: which hero the user swiped to,
+    /// and who spoke last while nobody is speaking. `ElementCallSpotlight` decides it in `refresh()`
+    /// and this is the one copy the stage, the Picture in Picture window and the tests all read.
+    /// Never ourselves, and never the head of the ranking just for being the head of it.
+    public var spotlightID: MatrixRTCTileID?
     
     public var isVideoCall: Bool {
         isCameraEnabled || tiles.contains { $0.hasVideo || $0.isScreenShare }

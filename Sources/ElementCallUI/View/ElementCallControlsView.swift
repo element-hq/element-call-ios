@@ -64,7 +64,11 @@ struct ElementCallControlsView: View {
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.hangUp)
         }
         .padding(8)
-        .background(style.theme.bgCanvasDefaultLevel.opacity(0.9), in: Capsule())
+        // The bar is the glass (R46) and the buttons sit on it with their own fills: design's
+        // decision after seeing the three shapes on a phone. Glass on glass flattens the inner
+        // shapes and a union loses their states, so the buttons are not glass here; the top bar's
+        // buttons and the spotlight's arrows, which have no bar, are.
+        .elementCallGlass(in: Capsule(), fallback: style.theme.bgCanvasDefaultLevel.opacity(0.9))
     }
     
     /// Speaker toggles the loudspeaker; a long press opens the system route picker for
@@ -114,7 +118,10 @@ struct ElementCallRoundButtonStyle: ButtonStyle {
             configuration.label
                 .foregroundStyle(style.theme.iconPrimary)
                 .frame(width: 44, height: 44)
-                .background(style.theme.bgSubtleSecondary.opacity(configuration.isPressed ? 0.6 : 1), in: Circle())
+                .opacity(configuration.isPressed ? 0.6 : 1)
+                // The same material as the bar, so the top bar and the fullscreen exit button do
+                // not mix surfaces with it.
+                .elementCallGlass(in: Circle(), fallback: style.theme.bgSubtleSecondary, isInteractive: true)
         }
     }
 }
