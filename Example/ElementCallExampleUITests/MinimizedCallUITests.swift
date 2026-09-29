@@ -82,8 +82,8 @@ final class MinimizedCallUITests: XCTestCase {
         XCTAssertFalse(app.buttons["elementCall.minimizedBar"].exists,
                        "A call that ended is not a call that was minimized.")
         
-        // Below the fold on a small phone now that the catalogue has a scenarios section too, and
-        // a tap does not scroll to its target.
+        // Below the fold: the connecting rows come after every connected one, and a tap does not
+        // scroll to its target.
         let joining = app.buttons["example.fixture.joining"]
         for _ in 0..<4 where !joining.isHittable {
             app.swipeUp()

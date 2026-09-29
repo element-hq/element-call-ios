@@ -50,8 +50,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
     /// Named `Category` rather than `Section` so it does not collide with SwiftUI's `Section` at
     /// the catalogue's use site, where both would be in scope.
     enum Category: String, CaseIterable {
-        case connecting = "Connecting"
         case connected = "Connected"
+        case connecting = "Connecting"
     }
     
     var category: Category {
