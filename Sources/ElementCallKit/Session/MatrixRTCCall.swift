@@ -173,11 +173,20 @@ public final class MatrixRTCCall {
     /// level flush and the stats poll. Injected so a scenario can walk through a linger in one
     /// step; the continuous clock everywhere a session makes the call.
     private let clock: any Clock<Duration>
+    /// Whether turning the camera on opens the device. Off for a scripted call: it has no track to
+    /// send frames into, and the example app that plays scenarios has no camera usage string, so
+    /// opening the device there is a privacy abort. The camera state still changes, so our tile
+    /// follows it and the harness draws its test pattern there.
+    private let capturesCamera: Bool
     
-    init(localMemberID: String, mediaSession: any MediaSessionProtocol, clock: any Clock<Duration> = ContinuousClock()) {
+    init(localMemberID: String,
+         mediaSession: any MediaSessionProtocol,
+         clock: any Clock<Duration> = ContinuousClock(),
+         capturesCamera: Bool = true) {
         self.localMemberID = localMemberID
         self.mediaSession = mediaSession
         self.clock = clock
+        self.capturesCamera = capturesCamera
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
     }
     
@@ -303,19 +312,27 @@ public final class MatrixRTCCall {
                 }
                 cameraTrack = track
             }
-            camera.setInterfaceOrientation(currentInterfaceOrientation)
-            try camera.start(track: track)
-            isFrontCamera = camera.isFrontFacing
+            if capturesCamera {
+                camera.setInterfaceOrientation(currentInterfaceOrientation)
+                try camera.start(track: track)
+                isFrontCamera = camera.isFrontFacing
+            }
             await setTransportMuted(.camera, muted: false)
         } else {
             await setTransportMuted(.camera, muted: true)
-            camera.stop()
+            if capturesCamera {
+                camera.stop()
+            }
         }
         isCameraEnabled = enabled
         MatrixRTCLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
     }
     
     public func switchCamera() throws {
+        guard capturesCamera else {
+            isFrontCamera.toggle()
+            return
+        }
         isFrontCamera = try camera.switchCamera()
     }
     
@@ -381,6 +398,7 @@ public final class MatrixRTCCall {
     }
     
     public func updateInterfaceOrientation(_ orientation: UIInterfaceOrientation) {
+        guard capturesCamera else { return }
         camera.setInterfaceOrientation(orientation)
     }
     
@@ -706,7 +724,9 @@ public final class MatrixRTCCall {
         audioLevelFlush?.cancel()
         audioLevelFlush = nil
         microphone.stop()
-        camera.stop()
+        if capturesCamera {
+            camera.stop()
+        }
         await screenShare.stop()
         playbackSinks.values.forEach { $0.stop() }
         playbackSinks.removeAll()

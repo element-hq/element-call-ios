@@ -58,6 +58,24 @@ struct ScriptedSessionTests {
         await player.call.disconnect()
     }
     
+    /// The camera button during a scenario: a scripted call has no device to open (on a phone the
+    /// example app has no camera usage string, and opening it aborted the process), so turning the
+    /// camera on or flipping it changes the call's state only.
+    @Test
+    func theCameraTurnsOnAndFlipsWithoutADevice() async throws {
+        let scenario = try MatrixRTCScenario.parse("0s B", name: "t")
+        let player = MatrixRTCScenarioPlayer(scenario: scenario)
+        await player.start()
+        _ = await player.step()
+        try await player.call.setCameraEnabled(true)
+        #expect(player.call.isCameraEnabled)
+        try player.call.switchCamera()
+        #expect(player.call.isFrontCamera == false)
+        try await player.call.setCameraEnabled(false)
+        #expect(player.call.isCameraEnabled == false)
+        await player.call.disconnect()
+    }
+
     /// The linger is the call's own timer, and it is what the scenario clock exists for: a released
     /// stream is paused at once and disabled only three seconds later, on the scenario's clock.
     @Test
