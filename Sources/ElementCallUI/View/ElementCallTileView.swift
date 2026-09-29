@@ -89,6 +89,9 @@ struct ElementCallTileView: View, Equatable {
     /// A value on the fit continuum rather than a mode, so it animates across a promotion.
     static let spotlightCameraFit: CGFloat = 0.5
     
+    /// The design's avatar on a grid tile.
+    static let gridAvatarDiameter: CGFloat = 52
+    
     private var cornerRadius: CGFloat {
         switch appearance {
         case .fullscreen, .spotlight: 0
@@ -257,11 +260,21 @@ struct ElementCallTileView: View, Equatable {
                 })
     }
     
+    /// One `.full` avatar at every size, scaled down in the grid, rather than `.thumbnail` there. A
+    /// tile changes size inside an animation, and a different view per size would be re-laid out
+    /// mid-move, where a frame interpolates and a font size does not. A scale is a render transform,
+    /// so the avatar moves as one picture whatever the host draws in it.
     private var avatar: some View {
-        style.avatars.avatar(userID: tile.userID,
-                             displayName: tile.displayName,
-                             avatarURL: tile.avatarURL,
-                             size: isSpotlight || isFullscreen ? .full : .thumbnail)
+        // Read from the view's own geometry as it draws, not measured into state: a measurement
+        // lands a pass late, and a one-pass render (a snapshot) never sees it.
+        let diameter: CGFloat? = isLarge ? nil : Self.gridAvatarDiameter
+        return style.avatars.avatar(userID: tile.userID,
+                                    displayName: tile.displayName,
+                                    avatarURL: tile.avatarURL,
+                                    size: .full)
+            .visualEffect { content, geometry in
+                content.scaleEffect(diameter.map { $0 / max(1, geometry.size.width) } ?? 1)
+            }
     }
     
     private var cardChrome: some View {

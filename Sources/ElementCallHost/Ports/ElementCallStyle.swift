@@ -89,9 +89,10 @@ public extension ElementCallIconRenderingProtocol {
 // MARK: - Avatars
 
 public nonisolated enum ElementCallAvatarSize: Sendable {
-    /// A tile in the grid.
+    /// Not requested by the built-in stage.
     case thumbnail
-    /// The spotlight, a tile full screen, and the Picture in Picture placeholder.
+    /// Every tile, and the Picture in Picture placeholder. A grid tile draws it scaled down to
+    /// 52 pt, so it grows into the spotlight or full screen as one picture.
     case full
 }
 

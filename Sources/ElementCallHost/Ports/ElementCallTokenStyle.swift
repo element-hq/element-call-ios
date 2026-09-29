@@ -199,7 +199,6 @@ public nonisolated struct ElementCallTokenAvatars: ElementCallAvatarRenderingPro
     }
     
     public func avatar(userID: String, displayName: String?, avatarURL: URL?, size: ElementCallAvatarSize) -> AnyView {
-        // 52 is the design's grid tile.
         let diameter: CGFloat = size == .thumbnail ? 52 : 96
         let name = displayName ?? userID
         let initial = name.trimmingCharacters(in: .whitespaces)
