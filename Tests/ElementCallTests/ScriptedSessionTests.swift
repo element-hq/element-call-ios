@@ -75,7 +75,7 @@ struct ScriptedSessionTests {
         #expect(player.call.isCameraEnabled == false)
         await player.call.disconnect()
     }
-
+    
     /// The linger is the call's own timer, and it is what the scenario clock exists for: a released
     /// stream is paused at once and disabled only three seconds later, on the scenario's clock.
     @Test
