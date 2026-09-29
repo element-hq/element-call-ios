@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.9 - 2026-09-29
+
 **`ElementCallLayout` and `ElementCallScreenViewState.layout` are removed, and
 `ElementCallScreenViewState.spotlightID` is stored rather than computed.** The one-to-one arrangement
 (the other person full-bleed, ourselves as a thumbnail) is retired by the call layout spec: two people
@@ -102,6 +106,22 @@ For a host reading the view state:
 **`MatrixRTCCall.isScreenSharing` is now derived from publication state**, not from what the app
 asked for, so it goes false however a share ended. A capture stopped from outside the app — Control
 Centre, another app taking the recorder — now unpublishes rather than leaving a dead share published.
+
+
+
+### What's Changed
+
+✨ Features
+* Feat: New grid-layout with hero spotlight when needed by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/46
+
+🐛 Bugfixes
+* Fix: Legacy Format, stop inferring a sender device for key messages that name none by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/45
+
+🧱 Build
+* chore: Use the new core tiles model by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/41
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.8...0.1.0-rc.9
 
 ## 0.1.0-rc.8 - 2026-09-22
 
