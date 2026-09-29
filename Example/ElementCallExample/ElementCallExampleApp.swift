@@ -14,9 +14,11 @@ import SwiftUI
 /// works and for the same reason: the handover between full screen and minimized is the host's job,
 /// and a harness that cannot leave the call screen cannot show it going wrong.
 ///
-/// `-arrangement <name>` skips the catalogue and opens that fixture directly, so a test starts where
-/// it means to rather than tapping its way there through a menu it does not care about. With the
-/// argument present the hierarchy is exactly what it was before the catalogue existed.
+/// `-fixture <key>` skips the catalogue and opens that fixture directly, and `-scenario <name>` plays
+/// that scenario file, so a test starts where it means to rather than tapping its way there through
+/// a menu it does not care about. With the argument present the hierarchy is exactly what it was
+/// before the catalogue existed. The keys are shared with Android's sample: see
+/// `element-call-feature-hq/harness/fixtures.md`.
 @main
 struct ElementCallExampleApp: App {
     var body: some Scene {
@@ -72,7 +74,10 @@ struct ElementCallExampleRootView: View {
         switch session.presentation {
         case .harness(let context):
             ElementCallHarnessScreen(context: context)
-                .environment(\.elementCallPreviewVideo, session.fixture?.wantsVideo == true ? video.source : nil)
+                // Always attached: a tile draws the pattern exactly when it has video, so our own
+                // tile lights up when the camera is turned on, as on Android. The timer only runs
+                // while some slot is attached, so a fixture with no video costs nothing.
+                .environment(\.elementCallPreviewVideo, video.source)
         case .live(let viewModel):
             // The shipping view, not the harness one: a connecting state is the one thing a real
             // view model can render without a joined call, so there is no reason to fake it.

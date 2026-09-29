@@ -21,7 +21,7 @@ final class OverflowMenuUITests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
-        app.launchArguments = ["-arrangement", "group"]
+        app.launchArguments = ["-fixture", "group"]
         app.launch()
     }
     

@@ -22,7 +22,7 @@ final class ScrollPerformanceUITests: XCTestCase {
         #else
         let app = XCUIApplication()
         XCUIDevice.shared.orientation = .portrait
-        app.launchArguments = ["-arrangement", "twoHundred"]
+        app.launchArguments = ["-fixture", "two_hundred"]
         app.launch()
         // Starting on a grid tile, not the scroller's centre: a drag that starts on the spotlight is
         // the spotlight's, and never scrolls the grid (R64).

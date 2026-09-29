@@ -125,13 +125,16 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   bar is drawn from one, which needs only a room name, a style and a duration. Two things a fake
   cannot know: the mic glyph reads through `call`, which is nil, so the bar always shows unmuted;
   and `connectedAt` has to be passed in, which is why `fake(...)` takes it.
-- **The app opens on a catalogue of fixtures, and minimizes back to it.** `-arrangement <name>`
-  skips the catalogue and opens that fixture directly, so a test starts where it means to rather
-  than tapping its way there — with the argument present the view hierarchy is what it was before
-  the catalogue existed, which is what keeps the older UI tests looking at the tree they were
+- **The app opens on a catalogue of fixtures, and minimizes back to it.** `-fixture <key>`
+  skips the catalogue and opens that fixture directly, and `-scenario <name>` plays a scenario
+  file, so a test starts where it means to rather than tapping its way there — with the argument
+  present the view hierarchy is what it was before the catalogue existed, which is what keeps the older UI tests looking at the tree they were
   written against. The argument used to fall back to the group arrangement on anything it did not
   recognise, so a typo failed a grid test with "this tile is not hittable", true and about nothing;
   an unrecognised name now names itself on screen instead, where the failure screenshot catches it.
+  **The fixture list is shared with Android's sample**: keys, rosters and flags come from
+  `element-call-feature-hq/harness/fixtures.md`, so one key opens the same call on both phones.
+  Change a fixture there first, then here and on Android.
 - **Minimizing goes to `ElementCallMinimizedBar`, not to a system window, and that is honest rather
   than a shortcut.** `ElementCallPictureInPictureController` builds its `AVPictureInPictureController`
   only in `bind(call:spotlightProvider:)`, and that needs a live call which cannot exist here, so
@@ -152,7 +155,8 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   all, whether the button in the top bar wins the touch, and whether the bar is hittable where a
   host puts it. Which branch the controller takes when asked to minimize is *not* one of them; that
   is `MinimizeRoutingTests`, in process, in milliseconds.
-- **The `video` arrangement draws real frames**, from `MatrixRTCTestPattern`: colour bars with a
+- **Every tile with video draws real frames**, from `MatrixRTCTestPattern` (the `video` fixture is
+  the one built for looking at them): colour bars with a
   heavy border, because the questions are geometric. A border running off the edges is a crop, a
   border with black beside it is a letterbox, and a border that changes thickness partway through a
   move is the picture being stretched rather than redrawn. Some members are portrait sources and
@@ -217,10 +221,11 @@ Open `Example/ElementCallExample.xcodeproj` and run it, or from the command line
 ```bash
 xcrun simctl install "$SIMULATOR_UDID" \
   "$(find ~/Library/Developer/Xcode/DerivedData -name ElementCallExample.app -path '*Debug-iphonesimulator*' | head -1)"
-xcrun simctl launch "$SIMULATOR_UDID" io.element.call.example.ElementCallExample -arrangement pagedStrip
+xcrun simctl launch "$SIMULATOR_UDID" io.element.call.example.ElementCallExample -fixture listen_mode
+xcrun simctl launch "$SIMULATOR_UDID" io.element.call.example.ElementCallExample -scenario 002_listen_mode
 ```
 
-Leave `-arrangement` off to get the catalogue and pick by hand; it is the bypass, not the only way in.
+Leave the flag off to get the catalogue and pick by hand; it is the bypass, not the only way in.
 
 **This is the answer to "do I have to join a real call to see it?"** — you do not, for anything the
 layout does. Which is most of what goes wrong: the arrangements, the chrome, and every animation

@@ -26,8 +26,8 @@ final class TileFullscreenUITests: XCTestCase {
         app = XCUIApplication()
     }
     
-    private func launch(_ arrangement: String) {
-        app.launchArguments = ["-arrangement", arrangement]
+    private func launch(_ fixture: String) {
+        app.launchArguments = ["-fixture", fixture]
         app.launch()
     }
     
@@ -126,7 +126,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// bar) and a scroller whose viewport grows clamps its offset without asking. Coming back has
     /// to land where you were, not at the top (spec 003 R63).
     func testTheGridKeepsItsOffsetAcrossFullScreen() throws {
-        launch("pagedStrip")
+        launch("listen_mode")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
         scrollGrid(on: ours)
@@ -200,7 +200,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// They share a view tree, and the arrangement relies on full screen reporting a single page to
     /// keep the paging gesture out of the way.
     func testPinchingInFullScreenNeitherExitsNorPages() {
-        launch("pagedStrip")
+        launch("listen_mode")
         let bob = tile("bob")
         XCTAssertTrue(bob.waitForExistence(timeout: 10))
         
@@ -219,7 +219,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// The other half of the same arrangement: outside full screen the tile's own gestures must not
     /// have eaten the drag the grid scrolls with.
     func testTheGridStillScrollsWhenNotFullScreen() {
-        launch("pagedStrip")
+        launch("listen_mode")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
         let before = ours.frame
@@ -230,7 +230,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// A `Button` inside the tile has to keep its taps: child gestures beat the parent's, which is
     /// why the tile uses `.gesture` and not `.highPriorityGesture`.
     func testTappingTheFlipButtonDoesNotGoFullScreen() {
-        launch("oneToOne")
+        launch("one_to_one")
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 10))
         let flip = app.buttons["Switch camera"].firstMatch
@@ -244,6 +244,23 @@ final class TileFullscreenUITests: XCTestCase {
         // going away is what tells you the tile took the taps.
         XCTAssertTrue(flip.exists, "the button is still there to be tapped")
         XCTAssertTrue(tile("bob").exists, "still the one-to-one arrangement, not full screen")
+    }
+    
+    /// Our own tile follows the camera button. The harness applies the tap to the view state
+    /// itself, and it used to light the button alone, leaving our tile's picture (and so its flip
+    /// button) where it was. The flip button is drawn only on our own tile with video, so it going
+    /// and coming back is our tile following the camera.
+    func testTheCameraButtonTurnsOurOwnPictureOffAndOn() {
+        launch("one_to_one")
+        XCTAssertTrue(tile("alice").waitForExistence(timeout: 10))
+        let flip = app.buttons["Switch camera"].firstMatch
+        XCTAssertTrue(flip.waitForExistence(timeout: 2))
+        
+        app.buttons["Turn camera off"].tap()
+        XCTAssertTrue(flip.waitForNonExistence(timeout: 2), "our tile lost its picture with the camera")
+        
+        app.buttons["Turn camera on"].tap()
+        XCTAssertTrue(flip.waitForExistence(timeout: 2), "our tile has its picture back")
     }
     
     // MARK: - With a picture in the tile
@@ -277,7 +294,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// way to ask for the camera at all. The tile carries its own stream now, so there is nothing
     /// left to infer.
     func testASharerIsTwoTilesAndFullScreenTakesTheOneYouTapped() {
-        launch("screenShare")
+        launch("screen_share")
         XCTAssertTrue(share("frank").waitForExistence(timeout: 10))
         XCTAssertTrue(tile("frank").exists, "his camera is on the stage beside his screen")
         
@@ -298,7 +315,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// `tilesOnScreen` would silently do while the identifier named only the member, since it
     /// collects them into a `Set`.
     func testASharersTwoTilesAreCountedAsTwo() {
-        launch("screenShare")
+        launch("screen_share")
         XCTAssertTrue(share("frank").waitForExistence(timeout: 5))
         let onScreen = tilesOnScreen()
         XCTAssertTrue(onScreen.contains(share("frank").identifier))
@@ -312,7 +329,7 @@ final class TileFullscreenUITests: XCTestCase {
     /// with a visible re-negotiation to undo. Nothing in-process can see that — the placements are
     /// all correct — so it takes a running app.
     func testScrollingAwayASharersCameraLeavesTheirScreenDrawing() {
-        launch("sharerOnAPagedStrip")
+        launch("share_on_long_grid")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
         scrollGrid(on: ours)

@@ -108,8 +108,10 @@ public final class ElementCallScreenContext {
                 }
             case .toggleMicrophone:
                 context.viewState.isMicrophoneMuted.toggle()
+                context.applyLocalMedia()
             case .toggleCamera:
                 context.viewState.isCameraEnabled.toggle()
+                context.applyLocalMedia()
             case .switchCamera:
                 context.viewState.isFrontCamera.toggle()
             case .toggleScreenShare:
@@ -121,6 +123,14 @@ public final class ElementCallScreenContext {
             }
         }
         return context
+    }
+    
+    /// Our own tile follows the controls, as the live composition makes it: without this a harness
+    /// camera tap lit the button and left our tile on its avatar.
+    private func applyLocalMedia() {
+        viewState.tiles = viewState.tiles.map {
+            $0.withLocalMedia(isMicrophoneMuted: viewState.isMicrophoneMuted, hasVideo: viewState.isCameraEnabled)
+        }
     }
     
     public func send(viewAction: ElementCallScreenViewAction) {
@@ -387,20 +397,16 @@ public final class ElementCallScreenViewModel {
                                    displayName: tile.isLocal ? youLabel : (profile?.displayName ?? tile.userID),
                                    avatarURL: profile?.avatarURL,
                                    isLocal: tile.isLocal,
-                                   // Our own mute and camera are overridden from the call rather
-                                   // than read off the tile, and the reason is latency rather than
-                                   // preference: a mute tap has to reach the badge before the
-                                   // transport round-trips. The model publishes per-tile state
-                                   // immediately, but that is a promise about its own coalescing
-                                   // window, not about the round trip.
-                                   isMicrophoneMuted: tile.isLocal ? isLocalMicrophoneMuted : tile.isMicrophoneMuted,
-                                   hasVideo: tile.isLocal ? localHasVideo : tile.hasVideo,
+                                   isMicrophoneMuted: tile.isMicrophoneMuted,
+                                   hasVideo: tile.hasVideo,
                                    isSpeaking: tile.isSpeaking,
                                    hasHandRaised: tile.handRaisedAt != nil,
                                    // Ours is never a hero even if something upstream said so: it is
                                    // not in the ranking, so nothing can rank it.
                                    isHero: tile.isLocal ? false : tile.isHero,
                                    stats: stats(tile))
+                // Our own mute and camera come from the call, not the tile: see `withLocalMedia`.
+                .withLocalMedia(isMicrophoneMuted: isLocalMicrophoneMuted, hasVideo: localHasVideo)
         }
         return (own.map { [tile($0)] } ?? []) + roster.order.map(tile)
     }
