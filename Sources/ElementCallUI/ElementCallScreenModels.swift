@@ -114,6 +114,27 @@ extension ElementCallTile {
                         isHero: isHero,
                         stats: stats)
     }
+    
+    /// Our own mute and camera, taken from the controls rather than from the tile; anyone else's
+    /// tile comes back unchanged. The reason is latency rather than preference: a mute tap has to
+    /// reach the badge before the transport round-trips. The model publishes per-tile state
+    /// immediately, but that is a promise about its own coalescing window, not about the round trip.
+    /// The live composition and the harness both go through here, so a harness tap changes our
+    /// tile exactly as a real one does.
+    func withLocalMedia(isMicrophoneMuted: Bool, hasVideo: Bool) -> ElementCallTile {
+        guard isLocal else { return self }
+        return ElementCallTile(id: id,
+                               userID: userID,
+                               displayName: displayName,
+                               avatarURL: avatarURL,
+                               isLocal: isLocal,
+                               isMicrophoneMuted: isMicrophoneMuted,
+                               hasVideo: hasVideo,
+                               isSpeaking: isSpeaking,
+                               hasHandRaised: hasHandRaised,
+                               isHero: isHero,
+                               stats: stats)
+    }
 }
 
 public nonisolated enum ElementCallScreenViewAction: Sendable {

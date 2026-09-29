@@ -105,6 +105,7 @@ final class ElementCallExampleHost {
                 self?.handle(action)
             }
             session = Session(fixture: fixture, presentation: .harness(context), controller: controller)
+            isHarnessMinimized = fixture.opensMinimized
             
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())

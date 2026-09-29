@@ -21,8 +21,8 @@ struct ElementCallExampleCatalogue: View {
     
     var body: some View {
         List {
-            if case .unknown(let name) = target {
-                unknownArrangement(name)
+            if case .unknown(let flag, let name) = target {
+                unknownTarget(flag: flag, name: name)
             }
             if let notice {
                 Text(notice)
@@ -76,19 +76,21 @@ struct ElementCallExampleCatalogue: View {
         .accessibilityIdentifier("example.fixture.\(fixture.rawValue)")
     }
     
-    /// Shown rather than silently substituted. `-arrangement` used to fall back to `.group` on
+    /// Shown rather than silently substituted. The launch flag used to fall back to `.group` on
     /// anything it did not recognise, so a typo ran the strip tests against an eight-person stage
     /// and failed with "this tile is not hittable" — a true statement about nothing. On screen, it
     /// is in the failure screenshot; logged, it is in the run's console too.
-    private func unknownArrangement(_ name: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(name.isEmpty ? "No arrangement given after \(ElementCallExampleFixture.launchArgument)"
-                : "Unknown arrangement \u{201C}\(name)\u{201D}")
+    private func unknownTarget(flag: String, name: String) -> some View {
+        let isScenario = flag == ElementCallExampleFixture.scenarioLaunchArgument
+        let known = isScenario ? ElementCallExampleScenario.all.map(\.name) : ElementCallExampleFixture.allCases.map(\.rawValue)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(name.isEmpty ? "Nothing given after \(flag)"
+                : "Unknown \(isScenario ? "scenario" : "fixture") \u{201C}\(name)\u{201D}")
                 .font(.headline)
-            Text("Showing the catalogue. Known: \(ElementCallExampleFixture.allCases.map(\.rawValue).joined(separator: ", "))")
+            Text("Showing the catalogue. Known: \(known.joined(separator: ", "))")
                 .font(.caption)
         }
         .foregroundStyle(.red)
-        .accessibilityIdentifier("example.unknownArrangement")
+        .accessibilityIdentifier("example.unknownTarget")
     }
 }

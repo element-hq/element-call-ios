@@ -25,9 +25,9 @@ final class StageScrollUITests: XCTestCase {
     /// Portrait, and settled, before the app comes up: the simulator keeps whatever orientation
     /// the previous test left, and an app launched mid-rotation lays out twice, with the tiles a
     /// test had just found gone in between.
-    private func launch(_ arrangement: String) {
+    private func launch(_ fixture: String) {
         XCUIDevice.shared.orientation = .portrait
-        app.launchArguments = ["-arrangement", arrangement]
+        app.launchArguments = ["-fixture", fixture]
         app.launch()
         let window = app.windows.firstMatch
         let deadline = Date().addingTimeInterval(5)
@@ -47,7 +47,7 @@ final class StageScrollUITests: XCTestCase {
     /// The grid scrolls vertically under a spotlight that keeps its place (R26, R27): after a drag
     /// up on the grid, a tile that was on screen has moved up and the spotlight has not moved.
     func testTheGridScrollsAndTheSpotlightStaysPut() {
-        launch("sharerOnAPagedStrip")
+        launch("share_on_long_grid")
         let spotlight = share("frank")
         XCTAssertTrue(spotlight.waitForExistence(timeout: 5))
         let spotlightBefore = spotlight.frame
@@ -69,7 +69,7 @@ final class StageScrollUITests: XCTestCase {
     /// which a check after everything has settled cannot see. Listen mode here: twenty-three remote
     /// members and Carol speaking, so the spotlight is her camera tile.
     func testTheSpotlightStaysPutWhileALongGridScrolls() {
-        launch("pagedStrip")
+        launch("listen_mode")
         let spotlight = tile("carol")
         XCTAssertTrue(spotlight.waitForExistence(timeout: 5))
         let before = spotlight.frame
@@ -87,7 +87,7 @@ final class StageScrollUITests: XCTestCase {
     
     /// A vertical drag that starts on the spotlight does not scroll the grid (R64).
     func testADragOnTheSpotlightDoesNotScrollTheGrid() {
-        launch("sharerOnAPagedStrip")
+        launch("share_on_long_grid")
         let spotlight = share("frank")
         XCTAssertTrue(spotlight.waitForExistence(timeout: 5))
         let ours = tile("alice")
@@ -100,7 +100,7 @@ final class StageScrollUITests: XCTestCase {
     
     /// A horizontal swipe on the spotlight switches the shown hero, clamped at both ends (R22, R23).
     func testAHorizontalSwipeOnTheSpotlightSwitchesTheShownHero() {
-        launch("twoShares")
+        launch("two_shares")
         let frank = share("frank")
         let grace = share("grace")
         XCTAssertTrue(frank.waitForExistence(timeout: 5))
@@ -126,7 +126,7 @@ final class StageScrollUITests: XCTestCase {
     /// the end they point past (R23). Real touches, because the arrows are siblings above the
     /// spotlight in a scroll view, which is two chances for a tap to be claimed by something else.
     func testTheArrowsSwitchTheShownHeroInLandscape() {
-        launch("twoShares")
+        launch("two_shares")
         XCUIDevice.shared.orientation = .landscapeLeft
         // Back before the next test launches, and settled: a launch mid-rotation lays out for
         // the wrong shape and the test after this one found no tiles at all.
@@ -149,7 +149,7 @@ final class StageScrollUITests: XCTestCase {
     
     /// A double tap with no movement enters fullscreen even immediately after a scroll (R65).
     func testADoubleTapRightAfterAScrollGoesFullScreen() throws {
-        launch("pagedStrip")
+        launch("listen_mode")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
         ours.swipeUp()
@@ -165,7 +165,7 @@ final class StageScrollUITests: XCTestCase {
     
     /// A drag that starts on the control bar does not scroll the grid (R45).
     func testADragOnTheControlBarDoesNotScrollTheGrid() {
-        launch("pagedStrip")
+        launch("listen_mode")
         let ours = tile("alice")
         XCTAssertTrue(ours.waitForExistence(timeout: 5))
         let oursBefore = ours.frame

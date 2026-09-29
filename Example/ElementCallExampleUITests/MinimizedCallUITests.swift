@@ -26,7 +26,7 @@ final class MinimizedCallUITests: XCTestCase {
         super.setUp()
         continueAfterFailure = false
         app = XCUIApplication()
-        // No `-arrangement`, so the app opens on the catalogue and the fixture is chosen by tapping,
+        // No `-fixture`, so the app opens on the catalogue and the fixture is chosen by tapping,
         // which is the path a person takes.
         app.launch()
     }
@@ -57,7 +57,7 @@ final class MinimizedCallUITests: XCTestCase {
         let bar = app.buttons["elementCall.minimizedBar"]
         XCTAssertTrue(bar.waitForExistence(timeout: 5), "Minimizing should leave the call in the bar.")
         XCTAssertFalse(hasVisibleTiles(), "The stage should be gone while the call is minimized.")
-        XCTAssertTrue(app.buttons["example.fixture.oneToOne"].isHittable,
+        XCTAssertTrue(app.buttons["example.fixture.one_to_one"].isHittable,
                       "The catalogue should be reachable behind a minimized call, not merely visible.")
         
         bar.tap()
@@ -82,8 +82,8 @@ final class MinimizedCallUITests: XCTestCase {
         XCTAssertFalse(app.buttons["elementCall.minimizedBar"].exists,
                        "A call that ended is not a call that was minimized.")
         
-        // Below the fold on a small phone now that the catalogue has a scenarios section too, and
-        // a tap does not scroll to its target.
+        // Below the fold: the connecting rows come after every connected one, and a tap does not
+        // scroll to its target.
         let joining = app.buttons["example.fixture.joining"]
         for _ in 0..<4 where !joining.isHittable {
             app.swipeUp()

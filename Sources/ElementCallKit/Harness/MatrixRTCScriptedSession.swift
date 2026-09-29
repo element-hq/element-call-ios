@@ -297,7 +297,7 @@ public final class MatrixRTCScenarioPlayer {
         self.scenario = scenario
         clock = MatrixRTCManualClock()
         session = MatrixRTCScriptedSession(localMemberID: localMemberID, clock: clock)
-        call = MatrixRTCCall(localMemberID: localMemberID, mediaSession: session, clock: clock)
+        call = MatrixRTCCall(localMemberID: localMemberID, mediaSession: session, clock: clock, capturesCamera: false)
     }
     
     /// Starts the call's pumps. Nothing has been applied yet; the first `step()` applies frame 0.
