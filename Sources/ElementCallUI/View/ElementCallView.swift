@@ -15,7 +15,20 @@ import SwiftUI
 /// Android's answer to big calls (tiles keep their size, pages grow).
 struct ElementCallView: View {
     @Environment(\.elementCallStyle) private var style
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Bindable var context: ElementCallScreenContext
+    /// Measured while drawn and kept while not, so the clearance it reserves can change in the same
+    /// transaction as the chrome rather than a layout pass later. Started at what they measure at
+    /// the default text size, so the first pass — all a snapshot ever renders — is already right:
+    /// started at zero, the banner's row of tiles began underneath it.
+    @State private var topBarHeight: CGFloat = 44
+    @State private var bannerHeight: CGFloat = 28
+    /// Set when a scroll-hide starts counting down to its return; any change cancels the count.
+    @State private var scrollIdleToken: Int?
+    /// A single tap waiting out ``chromeTapDelay`` before it toggles anything. A second tap within
+    /// that is the other half of a double tap, and cancels it.
+    @State private var isChromeTapPending = false
     let pictureInPictureSourceView: UIView
     /// Read at render time: the call exists only once media is connected.
     let callProvider: () -> MatrixRTCCall?
@@ -33,22 +46,24 @@ struct ElementCallView: View {
                 if context.viewState.isMaximized {
                     style.theme.bgCanvasDefault.ignoresSafeArea()
                     
-                    VStack(spacing: 12) {
-                        if fullscreenTile == nil {
-                            topBar
-                                .padding(.horizontal, 16)
-                            if context.viewState.isScreenSharing {
-                                screenShareBanner
-                                    .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-                        }
-                        content
-                            // A fitted picture is centred on what it is given, so full screen gives
-                            // it the screen: centred on the notch-shaped remainder instead, the
-                            // letterbox above and below would not match.
-                            .ignoresSafeArea(.container, edges: fullscreenTile == nil ? [] : .all)
+                    // The whole container, whatever the chrome is doing: the chrome is drawn over
+                    // the stage (017 R2) and the stage keeps clear of it by a content margin, not by
+                    // giving up its frame. A frame that changes height makes the scroller clamp its
+                    // offset unasked, and a margin is the one change UIKit applies without moving
+                    // the content under a finger (R6).
+                    content(isLandscape: isLandscape)
+                        // A fitted picture is centred on what it is given, so full screen gives
+                        // it the screen: centred on the notch-shaped remainder instead, the
+                        // letterbox above and below would not match.
+                        .ignoresSafeArea(.container, edges: fullscreenTile == nil ? [] : .all)
+                    
+                    // Every overlay gets an explicit z position. A view leaving a `ZStack` without
+                    // one is drawn behind its siblings for the length of its removal, so the
+                    // chrome went in with a slide and out with none.
+                    if fullscreenTile == nil {
+                        topChrome(isLandscape: isLandscape, safeArea: geometry.safeAreaInsets)
+                            .zIndex(1)
                     }
-                    .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
                     
                     if let fullscreenTile {
                         if context.isFullscreenChromeVisible {
@@ -58,9 +73,14 @@ struct ElementCallView: View {
                                                         onExit: { setFullscreen(nil) },
                                                         onAction: { context.send(viewAction: $0) })
                                 .transition(.opacity)
+                                .zIndex(2)
                         }
                     } else {
                         ElementCallFloatingControls(context: context)
+                            .chromeSlide(isVisible: isStageChromeVisible,
+                                         by: Self.controlsClearance + geometry.safeAreaInsets.bottom,
+                                         reduceMotion: reduceMotion)
+                            .zIndex(2)
                     }
                 } else {
                     Color.clear
@@ -68,7 +88,14 @@ struct ElementCallView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: context.isFullscreenChromeVisible)
+            .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
+            .animation(.easeInOut(duration: 0.3), value: isStageShown)
             .frame(width: geometry.size.width, height: geometry.size.height)
+            // In landscape the status bar goes with the chrome; in portrait it stays (R8, R9).
+            .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isLandscape && !isStageChromeVisible)
+            .onChange(of: isLandscape) { _, isLandscape in
+                applyStageChrome(.rotated(isLandscape: isLandscape))
+            }
         }
         .environment(\.colorScheme, .dark)
         .alert(context.alertInfo?.title ?? "",
@@ -83,13 +110,34 @@ struct ElementCallView: View {
         } message: { alert in
             Text(alert.message)
         }
-        .statusBarHidden(fullscreenTile != nil && !context.isFullscreenChromeVisible)
         .onChange(of: context.viewState.isMaximized) { _, isMaximized in
             // Minimizing ends full screen rather than suspending it. The window continues whatever
             // the ordinary arrangement gives it, and coming back is the stage: one state fewer to
             // reason about, and no way to return to a screen whose chrome you had left hidden.
-            guard !isMaximized else { return }
+            guard !isMaximized else {
+                applyStageChrome(.restored)
+                return
+            }
             setFullscreen(nil)
+        }
+        .onChange(of: voiceOverEnabled, initial: true) { _, isRunning in
+            applyStageChrome(.screenReader(isRunning: isRunning))
+        }
+        .task(id: isChromeTapPending) {
+            guard isChromeTapPending else { return }
+            try? await Task.sleep(for: Self.chromeTapDelay)
+            guard !Task.isCancelled else { return }
+            isChromeTapPending = false
+            toggleChrome()
+        }
+        .task(id: scrollIdleToken) {
+            // The return of chrome a scroll hid (R20). Cancelled by the token changing, which any
+            // further scroll or tap does; the rule itself is the value's, so a late arrival after
+            // a tap-hide changes nothing (R21).
+            guard scrollIdleToken != nil else { return }
+            try? await Task.sleep(for: ElementCallChromeVisibility.returnDelay)
+            guard !Task.isCancelled else { return }
+            applyStageChrome(.scrollIdleElapsed)
         }
         .onChange(of: context.viewState.tiles) { _, tiles in
             // The tile you were watching can go. The arrangement falls back on its own, but the
@@ -98,7 +146,7 @@ struct ElementCallView: View {
             // member leaves, or they stop sharing and the share tile goes with them.
             guard let tileID = context.fullscreenTileID,
                   !tiles.contains(where: { $0.id == tileID }) else { return }
-            setFullscreen(nil)
+            setFullscreen(nil, byDeparture: true)
         }
         .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
         .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
@@ -122,11 +170,141 @@ struct ElementCallView: View {
     
     /// Entering always starts with the chrome down, so the first thing a full-screen tile shows is
     /// the picture; leaving puts it back down for next time.
-    private func setFullscreen(_ tileID: MatrixRTCTileID?) {
+    ///
+    /// The stage's chrome is told on the way out, and told how: a departure shows it whatever the
+    /// orientation (R28), where leaving by hand returns it to the orientation's start (R27).
+    private func setFullscreen(_ tileID: MatrixRTCTileID?, byDeparture: Bool = false) {
+        let wasFullscreen = context.fullscreenTileID != nil
         withAnimation(.easeInOut(duration: 0.25)) {
             context.fullscreenTileID = tileID
             context.isFullscreenChromeVisible = false
         }
+        if wasFullscreen, tileID == nil {
+            applyStageChrome(.fullscreenEnded(byDeparture: byDeparture))
+        }
+    }
+    
+    // MARK: - Stage chrome
+    
+    /// The top bar and the control bar, shown and hidden as one (017 R1). Until the stage is up
+    /// there is nothing to look at, and hang up has to stay in reach (R13).
+    private var isStageChromeVisible: Bool {
+        !isStageShown || context.stageChrome.isVisible
+    }
+    
+    /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
+    private var isStageShown: Bool {
+        let state = context.viewState
+        return state.connection == .connected || !state.tiles.isEmpty
+    }
+    
+    /// Assigned only on a change: the context is observed, and the scroll reports a direction many
+    /// times a second while the answer stays the same.
+    private func applyStageChrome(_ event: ElementCallChromeVisibility.Event) {
+        var chrome = context.stageChrome
+        chrome.apply(event)
+        switch event {
+        case .userScrolled, .tap:
+            scrollIdleToken = nil
+        default:
+            break
+        }
+        guard chrome != context.stageChrome else { return }
+        withAnimation(chromeAnimation) {
+            context.stageChrome = chrome
+        }
+    }
+    
+    /// A single tap toggles after a short wait of our own rather than the system's double-tap
+    /// timeout: the system's made the chrome feel as if the tap had not worked, and toggling at once
+    /// flashed the bar on every double tap (017 R16). A second tap inside the wait is the other half
+    /// of a double tap, so it cancels the toggle and the double tap is all that happens.
+    private func chromeTapped() {
+        isChromeTapPending.toggle()
+    }
+    
+    private func toggleChrome() {
+        if fullscreenTile != nil {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                context.isFullscreenChromeVisible.toggle()
+            }
+        } else {
+            applyStageChrome(.tap)
+        }
+    }
+    
+    /// Shorter than the system's double-tap interval. A double tap slower than this still goes full
+    /// screen, but the first tap's toggle will have started.
+    static let chromeTapDelay: Duration = .milliseconds(200)
+    
+    /// The user stopped scrolling. Counts down to the return only when it was a scroll that hid it.
+    private func stageScrollDidStop() {
+        guard context.stageChrome.isAwaitingReturn else { return }
+        scrollIdleToken = (scrollIdleToken ?? 0) + 1
+    }
+    
+    /// Slides, or fades with reduce motion on (R25).
+    private var chromeAnimation: Animation {
+        reduceMotion ? .easeInOut(duration: 0.2) : ElementCallChromeVisibility.slide
+    }
+    
+    /// Room above the stage's content for whatever is drawn over its top. Landscape draws over the
+    /// picture and keeps nothing clear (R4). Portrait keeps the top bar and the banner clear, and
+    /// the top bar never leaves in portrait (R30), so this changes only with the banner. Full
+    /// screen runs under everything.
+    static func topClearance(isLandscape: Bool, isFullscreen: Bool, topBarHeight: CGFloat, bannerHeight: CGFloat?) -> CGFloat {
+        guard !isLandscape, !isFullscreen else { return 0 }
+        var clearance = topBarHeight + topChromeSpacing
+        if let bannerHeight {
+            clearance += bannerHeight + topChromeSpacing
+        }
+        return clearance
+    }
+    
+    /// The top bar and the banner, over the stage. The banner is not chrome and stays (R3).
+    ///
+    /// Portrait puts the canvas behind them, up through the status bar: the grid scrolls under the
+    /// top bar, and without it a passing row would show through the room name. The top bar never
+    /// leaves in portrait (R30); in landscape it goes with the control bar, over the picture, so a
+    /// scrim there instead of a band.
+    private func topChrome(isLandscape: Bool, safeArea: EdgeInsets) -> some View {
+        let isVisible = !isLandscape || isStageChromeVisible
+        let isSharing = context.viewState.isScreenSharing
+        return ZStack(alignment: .top) {
+            if isLandscape {
+                LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: topBarHeight + 2 * Self.topChromeSpacing)
+                    .ignoresSafeArea(edges: .top)
+                    .opacity(isVisible ? 1 : 0)
+                    .allowsHitTesting(false)
+            } else {
+                // Sized explicitly from the screen's top edge rather than stretched there by
+                // `ignoresSafeArea`: the scroller runs under the status bar too, and a band of zero
+                // height is not stretched at all, so with the chrome away the spotlight showed
+                // through under the island.
+                style.theme.bgCanvasDefault
+                    .frame(height: safeArea.top + Self.topClearance(isLandscape: false,
+                                                                    isFullscreen: false,
+                                                                    topBarHeight: topBarHeight,
+                                                                    bannerHeight: isSharing ? bannerHeight : nil))
+                    .frame(maxHeight: .infinity, alignment: .top)
+                    .ignoresSafeArea(edges: .top)
+            }
+            VStack(spacing: Self.topChromeSpacing) {
+                topBar
+                    .padding(.horizontal, 16)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
+                    .chromeSlide(isVisible: isVisible, by: -(topBarHeight + safeArea.top + Self.topChromeSpacing), reduceMotion: reduceMotion)
+                if isSharing {
+                    screenShareBanner
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bannerHeight = $0 }
+                        // Up into the top bar's place while it is away.
+                        .offset(y: isVisible ? 0 : -(topBarHeight + Self.topChromeSpacing))
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
     
     // MARK: - Top bar
@@ -242,9 +420,11 @@ struct ElementCallView: View {
     static let controlsClearance = ElementCallFloatingControls.clearance
     /// The ranks kept in detail while minimized: enough for the bar and the window's fallbacks.
     static let minimizedDetailWindowLength = 8
+    /// Between the top bar and the banner, and between them and the stage's content.
+    static let topChromeSpacing: CGFloat = 12
     
     @ViewBuilder
-    private var content: some View {
+    private func content(isLandscape: Bool) -> some View {
         let state = context.viewState
         // The spinner means "no call yet". That used to be the same thing as "no tiles" and is not
         // any more: the model's ranked list is *empty* when you are the only person in the call, and
@@ -253,10 +433,10 @@ struct ElementCallView: View {
         // in unconditionally so the list is not actually empty here, but the invariant should not be
         // the only thing standing between a user alone in a call and a permanent loading screen.
         if state.connection != .connected, state.tiles.isEmpty {
-            Spacer()
             ProgressView()
                 .tint(style.theme.iconPrimary)
-            Spacer()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .transition(.opacity)
         } else {
             ElementCallStage(tiles: state.tiles,
                              spotlightID: state.spotlightID,
@@ -265,22 +445,33 @@ struct ElementCallView: View {
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
+                             topClearance: Self.topClearance(isLandscape: isLandscape,
+                                                             isFullscreen: fullscreenTile != nil,
+                                                             topBarHeight: topBarHeight,
+                                                             bannerHeight: state.isScreenSharing ? bannerHeight : nil),
+                             // Whether the bar is up or not: the grid's end always clears where it
+                             // sits, so the bar going changes nothing under it (R31).
                              controlsClearance: Self.controlsClearance,
                              onToggleFullscreen: { tileID in
                                  // The same tile again is the way back out, which is what makes one
                                  // gesture do both halves of it.
+                                 isChromeTapPending = false
                                  setFullscreen(context.fullscreenTileID == tileID ? nil : tileID)
                              },
-                             onToggleChrome: {
-                                 withAnimation(.easeInOut(duration: 0.2)) {
-                                     context.isFullscreenChromeVisible.toggle()
-                                 }
-                             },
+                             // One tap, two chromes: full screen's keeps 000's rules, and the
+                             // stage's follows 017's. The stage does not need to know which.
+                             onToggleChrome: chromeTapped,
+                             onUserScroll: { applyStageChrome(.userScrolled(towardEnd: $0)) },
+                             onScrollIdle: stageScrollDidStop,
                              // A way of looking, so it lives on the context beside the fullscreen
                              // tile; the view model resolves it by identity on the next refresh.
                              onShowHero: { context.shownHeroID = $0 }) { action in
                 context.send(viewAction: action)
             }
+            .onAppear { applyStageChrome(.stageAppeared(isLandscape: isLandscape)) }
+            // The call arriving: the tiles fade in over the spinner rather than replacing it in one
+            // frame. How the screen itself arrives is the host's presentation, not this view's.
+            .transition(.opacity)
         }
     }
 }
@@ -303,6 +494,16 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
         let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
         context.fullscreenTileID = ElementCallPreviewFixtures.carol.id
         context.isFullscreenChromeVisible = isChromeVisible
+        return ElementCallView(context: context,
+                               pictureInPictureSourceView: UIView(),
+                               callProvider: ElementCallPreviewFixtures.noCall)
+    }
+    
+    /// Pinned, so the portrait and landscape renders of one preview show one state rather than
+    /// each orientation's start.
+    static func chrome(isVisible: Bool) -> some View {
+        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
+        context.stageChrome = .pinned(isVisible: isVisible)
         return ElementCallView(context: context,
                                pictureInPictureSourceView: UIView(),
                                callProvider: ElementCallPreviewFixtures.noCall)
@@ -335,5 +536,23 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Full screen")
         fullscreen(isChromeVisible: true)
             .previewDisplayName("Full screen with chrome")
+        chrome(isVisible: true)
+            .previewDisplayName("Chrome shown")
+        chrome(isVisible: false)
+            .previewDisplayName("Chrome hidden")
+    }
+}
+
+private extension View {
+    /// How the stage's chrome goes away: it stays mounted and slides off the edge it is on, or
+    /// fades with reduce motion on (017 R25), and while away it takes no touches and is not there for
+    /// a screen reader. Mounted rather than inserted and removed, because a removal transition did
+    /// not carry the bar's contents: the glass buttons and the title stayed put and vanished on the
+    /// last frame while only the background moved.
+    func chromeSlide(isVisible: Bool, by distance: CGFloat, reduceMotion: Bool) -> some View {
+        offset(y: isVisible || reduceMotion ? 0 : distance)
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
     }
 }

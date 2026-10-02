@@ -523,6 +523,14 @@ struct ElementCallStageLayoutTests {
     /// z position while it does. So the one growing has to be above every z position any other
     /// arrangement hands out, or something fades away on top of it: which is exactly what the
     /// spotlight's 1 did to a grid tile's 0.
+    /// The scrim behind a growing tile covers the stage, the spotlight's arrows and dots
+    /// included, and stays under the tile.
+    @Test
+    func theFullScreenScrimIsBetweenTheStageAndTheTile() {
+        #expect(ElementCallStageLayout.fullscreenScrimZIndex > ElementCallStageLayout.spotlightZIndex + 0.5)
+        #expect(ElementCallStageLayout.fullscreenScrimZIndex < ElementCallStageLayout.fullscreenZIndex)
+    }
+    
     @Test
     func theFullScreenTileIsAboveEveryTileItReplaces() throws {
         let tiles = [local, bob, carol] + Self.members(6)
@@ -567,5 +575,24 @@ struct ElementCallStageLayoutTests {
         }
         #expect(compute([local]).pictureInPictureTileID == local.id)
         #expect(compute([local, bob, carol] + Self.members(3), spotlight: bob.id).pictureInPictureTileID == bob.id, "the spotlight wins")
+    }
+    
+    // MARK: - Chrome (017)
+    
+    /// What the screen keeps clear for its chrome. Neither clearance depends on whether the chrome
+    /// is up: the top bar never leaves in portrait (R30), landscape draws over the picture (R4), and
+    /// the grid's end always clears where the control bar sits (R31). So hiding the chrome changes
+    /// nothing the layout is given, and no tile moves or resizes. Only the banner, which is not
+    /// chrome, adds to the top (R3).
+    @Test
+    func theClearancesDoNotDependOnTheChrome() {
+        func top(landscape: Bool = false, fullscreen: Bool = false, banner: CGFloat? = nil) -> CGFloat {
+            ElementCallView.topClearance(isLandscape: landscape, isFullscreen: fullscreen, topBarHeight: 44, bannerHeight: banner)
+        }
+        #expect(top() == 44 + spacing)
+        #expect(top(banner: 28) == 44 + 28 + 2 * spacing)
+        #expect(top(landscape: true) == 0)
+        #expect(top(landscape: true, banner: 28) == 0)
+        #expect(top(fullscreen: true) == 0)
     }
 }
