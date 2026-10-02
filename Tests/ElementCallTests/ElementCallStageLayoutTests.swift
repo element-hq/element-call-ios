@@ -523,6 +523,14 @@ struct ElementCallStageLayoutTests {
     /// z position while it does. So the one growing has to be above every z position any other
     /// arrangement hands out, or something fades away on top of it: which is exactly what the
     /// spotlight's 1 did to a grid tile's 0.
+    /// The scrim behind a growing tile covers the stage, the spotlight's arrows and dots
+    /// included, and stays under the tile.
+    @Test
+    func theFullScreenScrimIsBetweenTheStageAndTheTile() {
+        #expect(ElementCallStageLayout.fullscreenScrimZIndex > ElementCallStageLayout.spotlightZIndex + 0.5)
+        #expect(ElementCallStageLayout.fullscreenScrimZIndex < ElementCallStageLayout.fullscreenZIndex)
+    }
+    
     @Test
     func theFullScreenTileIsAboveEveryTileItReplaces() throws {
         let tiles = [local, bob, carol] + Self.members(6)

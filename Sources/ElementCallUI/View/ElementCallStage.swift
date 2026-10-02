@@ -133,6 +133,7 @@ struct ElementCallStage: View {
                                                              metrics: metrics))
             ScrollView(.vertical) {
                 ZStack(alignment: .topLeading) {
+                    fullscreenScrim(in: stage)
                     ForEach(stage.placements) { placement in
                         tileView(for: placement, in: stage)
                     }
@@ -296,6 +297,27 @@ struct ElementCallStage: View {
                 reanchor(in: stage, gridTop: gridTop(in: stage))
             }
         }
+    }
+    
+    /// Black between the stage and a tile growing to full screen. Without it, the last part of the
+    /// move left a stripe of the stage along the edges the tile had not reached yet, which read as
+    /// a half-finished screen rather than a tile growing. Always mounted and transparent, so there
+    /// is nothing to insert: it turns opaque well ahead of the tile on the way in, and fades over
+    /// the shrink on the way out, so the grid comes back as the tile returns to it.
+    ///
+    /// Taller than the viewport by a screen each way: the scroller draws under the status bar and
+    /// the home indicator, and full screen does not scroll.
+    private func fullscreenScrim(in stage: ElementCallStageLayout) -> some View {
+        let isFullscreen = fullscreenID != nil
+        return Color.black
+            .frame(width: stage.viewport.width, height: stage.viewport.height * 3)
+            .position(x: stage.viewport.midX, y: stage.viewport.midY)
+            .animation(nil, value: stage.viewport)
+            .opacity(isFullscreen ? 1 : 0)
+            .animation(reduceMotion ? nil : isFullscreen ? .easeOut(duration: 0.15) : .easeIn(duration: 0.35), value: isFullscreen)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .zIndex(ElementCallStageLayout.fullscreenScrimZIndex)
     }
     
     /// UIKit applies an inset change in one step: near the top it moves the content to keep it

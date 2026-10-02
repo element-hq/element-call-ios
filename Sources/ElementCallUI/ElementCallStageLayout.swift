@@ -183,6 +183,9 @@ struct ElementCallStageLayout: Equatable {
     /// grid because the grid scrolls underneath it. Named so the relationship is something a test
     /// can assert rather than something the next person has to notice.
     static let fullscreenZIndex: Double = 3
+    /// The scrim behind a tile going full screen: over everything it replaces, the spotlight's
+    /// controls included, and under the tile itself.
+    static let fullscreenScrimZIndex = 2.5
     static let spotlightZIndex: Double = 1
     
     var placements: [ElementCallTilePlacement]
