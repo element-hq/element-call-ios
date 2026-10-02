@@ -36,13 +36,20 @@ struct ElementCallStage: View {
     let memberCount: Int
     let pictureInPictureSourceView: UIView
     let callProvider: () -> MatrixRTCCall?
-    /// How far above the safe area the floating controls reach.
+    /// How far down from the top the chrome drawn over the stage reaches; zero when nothing is kept
+    /// clear there. A content margin rather than a smaller frame: see ``body``.
+    var topClearance: CGFloat = 0
+    /// How far above the safe area the floating controls reach; zero while they are hidden.
     let controlsClearance: CGFloat
     /// Double tap. Ahead of `onAction` for the same reason as on the tile: that one is the trailing
     /// closure at every call site, and a new closure after it would quietly take its place.
     var onToggleFullscreen: (MatrixRTCTileID) -> Void = { _ in }
-    /// Single tap, which only means anything while full screen.
+    /// Single tap, anywhere on the stage; the screen knows which chrome it toggles.
     var onToggleChrome: () -> Void = { }
+    /// The user's own scrolling, never the app's, and never the bounce past either end (017 R23).
+    var onUserScroll: (_ towardEnd: Bool) -> Void = { _ in }
+    /// The user's scrolling has fully stopped, fling included (R20).
+    var onScrollIdle: () -> Void = { }
     /// A swipe or a VoiceOver adjustment on the spotlight asks for another hero (R22, R25).
     var onShowHero: (MatrixRTCTileID) -> Void = { _ in }
     let onAction: (ElementCallScreenViewAction) -> Void
@@ -50,6 +57,19 @@ struct ElementCallStage: View {
     /// The visible top, in content coordinates. Fed back into the layout, which is what makes the
     /// spotlight sticky and the composed band follow the screen.
     @State private var scrollOffset: CGFloat = 0
+    /// The scroller's top inset, which the chrome's margin is part of. The pinned tiles carry it as
+    /// a separate, animated offset; see ``pinned(_:at:)``.
+    @State private var scrollInsetTop: CGFloat = 0
+    /// How far the grid is held back from where an inset change just put it; animated back to
+    /// zero so the grid slides with the chrome. See ``slideGridForInsetChange(from:to:)``.
+    @State private var gridSlide: CGFloat = 0
+    /// Set when the clearance changes, and spent on the inset change it causes.
+    @State private var isClearanceChangePending = false
+    /// What the scroller adds to the top inset beyond our margin — the safe area it extends under.
+    /// Taken whenever it reports, so a pinned view can slide on the margin as soon as it changes,
+    /// a frame before the report does, and still land where the report puts it.
+    /// Nil until the scroller first reports, which a snapshot never waits for.
+    @State private var scrollInsetBase: CGFloat?
     @State private var scrollPosition = ScrollPosition(edge: .top)
     /// The tiles that were live on the last pass, for the layout's edge hysteresis.
     @State private var liveTileIDs: Set<MatrixRTCTileID> = []
@@ -68,6 +88,16 @@ struct ElementCallStage: View {
     /// layout gives it a grid tile's z position straight away, and it shrank under the spotlight
     /// and the neighbours it was returning to.
     @State private var raisedTileID: MatrixRTCTileID?
+    @State private var scrollPhase: ScrollPhase = .idle
+    /// Where the last reported scroll direction was measured from, in the scroller's raw offset.
+    @State private var scrollDirectionOrigin: CGFloat?
+    @State private var lastReportedTowardEnd: Bool?
+    /// Which way the finger sent the fling it let go of; nil while the finger is down.
+    @State private var flingTowardEnd: Bool?
+    /// Between the user starting to scroll and the scroller next coming to rest.
+    @State private var isUserScrolling = false
+    /// The content height the origin was measured against.
+    @State private var scrollDirectionContentHeight: CGFloat?
     
     /// How a tile that has just joined appears, and how any tile goes. Never how a row scrolling
     /// into the band appears: a fling reaches it while it would still be transparent (R38, R49).
@@ -90,7 +120,9 @@ struct ElementCallStage: View {
         // the stage in landscape.
         GeometryReader { geometry in
             let insets = geometry.safeAreaInsets
-            let metrics = ElementCallStageLayout.Metrics(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom),
+            // The area under the top margin: content coordinates start there, so the layout's
+            // viewport is what is not covered by the chrome kept clear above it.
+            let metrics = ElementCallStageLayout.Metrics(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom - topClearance),
                                                          bottomInset: insets.bottom,
                                                          controlsClearance: controlsClearance)
             let stage = ElementCallStageLayout.compute(.init(tiles: tiles,
@@ -120,8 +152,11 @@ struct ElementCallStage: View {
                                     .zIndex(ElementCallStageLayout.spotlightZIndex + 0.5)
                             }
                         } else {
+                            // Pinned with the spotlight they hang from, or they would jump while it
+                            // slid with the chrome.
                             heroDots(heroStack)
-                                .position(x: spotlight.frame.midX, y: spotlight.frame.maxY + ElementCallStageLayout.Metrics.heroDotsClearance / 2)
+                                .position(x: spotlight.frame.midX, y: spotlight.frame.maxY + ElementCallStageLayout.Metrics.heroDotsClearance / 2 - stage.viewport.minY)
+                                .modifier(Pinned(pin: stage.viewport.minY, scroll: scrollParts, insetBase: scrollInsetBase, topClearance: topClearance, animation: chromeAnimation))
                                 .zIndex(ElementCallStageLayout.spotlightZIndex + 0.5)
                         }
                     }
@@ -135,6 +170,9 @@ struct ElementCallStage: View {
                                                         excluded: stage.heroStack != nil && metrics.isLandscape
                                                             ? stage.placements.first(where: \.isSpotlight).map { [Self.arrowFrame(step: -1, spotlight: $0.frame), Self.arrowFrame(step: 1, spotlight: $0.frame)] } ?? []
                                                             : []) { step in showHero(step, in: stage) })
+                // The gaps between tiles and below the last row (017 R14). A tile's own tap wins
+                // over this one, so a tap on a tile toggles once.
+                .onTapGesture { onToggleChrome() }
                 .transaction(value: fullscreenID) { transaction in
                     // Inside the stack's spring, so this is the move the completion waits for. With
                     // no animation at all it runs straight after the pass, as it must.
@@ -147,11 +185,51 @@ struct ElementCallStage: View {
             .scrollIndicators(.hidden)
             .scrollDisabled(fullscreenID != nil)
             .scrollPosition($scrollPosition)
+            // The top bar's room as a margin and not a shorter frame. UIKit leaves the offset alone
+            // when an inset changes, so the chrome going mid-drag moves nothing under the finger
+            // (R6), mid-scroll it simply uncovers rows, and at the top the content slides up into
+            // the space (R5). Compensating a layout clearance with `scrollTo` was tried first and
+            // does not work: an active pan overrides the write.
+            .contentMargins(.top, topClearance, for: .scrollContent)
             // The bottom clearance is the layout's, so the scroller must not add its own inset
             // for the home indicator on top of it.
             .ignoresSafeArea(.container, edges: .bottom)
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, offset in
-                scrollOffset = offset
+            .onScrollGeometryChange(for: CGPoint.self) { CGPoint(x: $0.contentInsets.top, y: $0.contentOffset.y) } action: { old, sample in
+                scrollOffset = sample.y + sample.x
+                scrollInsetTop = sample.x
+                scrollInsetBase = sample.x - topClearance
+                // Only an inset change we caused. The scroller's first report is a zero geometry
+                // and the next one the real inset, safe area and all; slid across, the grid came
+                // down into place from under the top bar the first time the stage appeared.
+                if isClearanceChangePending, sample.x != old.x {
+                    isClearanceChangePending = false
+                    slideGridForInsetChange(from: old, to: sample)
+                }
+            }
+            .onChange(of: topClearance) {
+                isClearanceChangePending = true
+            }
+            .onScrollPhaseChange { old, new in
+                scrollPhase = new
+                if new == .interacting, old != .interacting {
+                    scrollDirectionOrigin = nil
+                    flingTowardEnd = nil
+                    isUserScrolling = true
+                }
+                if new == .decelerating, old == .interacting {
+                    flingTowardEnd = lastReportedTowardEnd
+                }
+                // On the first idle after the user's scrolling, whatever came between: a fling that
+                // hides the chrome at the end shortens the grid, the stage settles it to the new end
+                // with a scroll of its own, and the phase goes through `.animating` on the way.
+                // Waiting for idle straight after a user phase, the return never started.
+                if new == .idle, isUserScrolling {
+                    isUserScrolling = false
+                    onScrollIdle()
+                }
+            }
+            .onScrollGeometryChange(for: UserScrollSample.self) { UserScrollSample($0) } action: { _, sample in
+                reportUserScroll(sample, in: stage)
             }
             .onChange(of: Visibility(stage), initial: true) { _, visibility in
                 // A side effect, so it belongs here rather than in the body: releasing is a message
@@ -178,6 +256,15 @@ struct ElementCallStage: View {
                 guard fullscreenID == nil, scrollOffset > maxOffset else { return }
                 withAnimation(animation) {
                     scrollPosition.scrollTo(y: maxOffset)
+                }
+            }
+            .onChange(of: controlsClearance) { old, new in
+                // The bar coming back while the grid is at its end would land on the last row; the
+                // end moves down with it instead (R7). Only ever at rest: during a drag, what brings
+                // the bar back is scrolling toward the start, which leaves the end anyway.
+                guard new > old, fullscreenID == nil, scrollOffset >= stage.maxScrollOffset - (new - old) - 1 else { return }
+                withAnimation(animation) {
+                    scrollPosition.scrollTo(y: stage.maxScrollOffset)
                 }
             }
             .onChange(of: scrollRequest) { _, request in
@@ -209,6 +296,143 @@ struct ElementCallStage: View {
                 reanchor(in: stage, gridTop: gridTop(in: stage))
             }
         }
+    }
+    
+    /// UIKit applies an inset change in one step: near the top it moves the content to keep it
+    /// inside the new range, and mid-scroll it moves nothing. The chrome slides, so at the top the
+    /// grid jumped to where the top bar was still sliding to. The jump is undone with an offset in
+    /// the same update, and the offset is then animated away on the chrome's slide. Mid-scroll the
+    /// jump is zero and so is the offset. With reduce motion on the content changes place without
+    /// sliding (017 R25), which is what the jump already does.
+    ///
+    /// Never around full screen. Going in or out changes the margin in the same update as the
+    /// tile's grow, and the unanimated write here took the grow's animation with it: the tile
+    /// snapped to full size instead of growing out of its cell.
+    private func slideGridForInsetChange(from old: CGPoint, to new: CGPoint) {
+        guard let chromeAnimation, new.x != old.x, fullscreenID == nil, raisedTileID == nil else { return }
+        let jump = new.y - old.y
+        guard abs(jump) > 0.5 else { return }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { gridSlide += jump }
+        // A separate update: in the same one, SwiftUI would coalesce the two writes and there
+        // would be nothing to animate from.
+        DispatchQueue.main.async {
+            withAnimation(chromeAnimation) { gridSlide = 0 }
+        }
+    }
+    
+    /// The chrome's slide, for the part of a pinned position that comes from the top margin; none
+    /// with reduce motion on, where the content changes place without sliding (017 R25).
+    private var chromeAnimation: Animation? {
+        reduceMotion ? nil : ElementCallChromeVisibility.slide
+    }
+    
+    /// Places a pinned view — the spotlight, a full-screen tile, the dots under the spotlight — at
+    /// the offset, in two parts that animate differently. The part that is the scroller's raw
+    /// offset follows the finger and never animates. The part that is the top inset is the
+    /// chrome's margin, and slides with the chrome: as one unanimated pin, the spotlight jumped to
+    /// where the top bar was still sliding towards.
+    ///
+    /// The raw part is keyed on what the *scroller* did, never on this view's own pin. A tile going
+    /// full screen from a scrolled grid changes its pin from 0 to the offset in the same
+    /// transaction as its frame; keyed on the pin, that move lost its animation and the tile
+    /// snapped to full size instead of growing.
+    ///
+    /// The inset part slides on the stage's own `topClearance`, not on the inset the scroller
+    /// reports back: the report lands a frame after the chrome starts to move, and a spotlight
+    /// sliding one frame behind the top bar's band left a gap between them as it went. The report
+    /// also counts the safe area the scroller extends under, which the clearance does not; that
+    /// part is carried as `insetBase`, or the spotlight settled under the status bar.
+    private struct Pinned: ViewModifier {
+        /// This view's pin: the offset if it is pinned, else zero.
+        let pin: CGFloat
+        let scroll: ScrollParts
+        /// Nil until the scroller has reported: until then there is no inset to split off, and the
+        /// pin is placed whole, where it was placed before any of this.
+        let insetBase: CGFloat?
+        let topClearance: CGFloat
+        let animation: Animation?
+        
+        func body(content: Content) -> some View {
+            let isPinned = pin != 0
+            let base = isPinned ? insetBase : nil
+            return content
+                .offset(y: isPinned ? (base == nil ? pin : pin - scroll.insetTop) : 0)
+                .animation(nil, value: scroll.raw)
+                // Explicit, and keyed here: the stack's arrangement animation is keyed on metrics
+                // the clearance is part of, and would otherwise slide this on the stage's slower
+                // spring while the band slid on the chrome's.
+                .offset(y: base.map { $0 + topClearance } ?? 0)
+                .animation(animation, value: topClearance)
+        }
+    }
+    
+    /// The two parts of the offset, as the scroller reports them.
+    private struct ScrollParts: Equatable {
+        let raw: CGFloat
+        let insetTop: CGFloat
+    }
+    
+    private var scrollParts: ScrollParts {
+        ScrollParts(raw: scrollOffset - scrollInsetTop, insetTop: scrollInsetTop)
+    }
+    
+    /// The scroller's raw offset, which an inset change leaves alone, unlike ``scrollOffset``: read
+    /// through the margin, the chrome hiding would itself look like a scroll toward the start and
+    /// bring the chrome straight back.
+    private struct UserScrollSample: Equatable {
+        let offset: CGFloat
+        /// Inside the scrollable range; outside it is the bounce, which is neither direction (R23).
+        let isInBounds: Bool
+        let contentHeight: CGFloat
+        
+        init(_ geometry: ScrollGeometry) {
+            offset = geometry.contentOffset.y
+            contentHeight = geometry.contentSize.height
+            let top = -geometry.contentInsets.top
+            let bottom = max(top, geometry.contentSize.height + geometry.contentInsets.bottom - geometry.containerSize.height)
+            isInBounds = offset >= top && offset <= bottom
+        }
+    }
+    
+    /// Far enough to be a scroll: a finger resting on the glass drifts by a point or two, and
+    /// reporting that would flick the chrome back and forth.
+    private static let scrollDirectionThreshold: CGFloat = 8
+    
+    /// The least the grid must be able to scroll, as a share of the screen, before scrolling toward
+    /// its end hides the chrome (017 R18). With less, there is nothing the chrome is keeping from
+    /// view, and a hide on what is mostly the bounce at the end reads as a glitch. A tap still hides
+    /// it.
+    static let scrollHideMinimumFraction: CGFloat = 0.5
+    
+    private func reportUserScroll(_ sample: UserScrollSample, in stage: ElementCallStageLayout) {
+        // Only the finger and its fling. `.animating` is the app's own scrolling (R23).
+        guard scrollPhase == .interacting || scrollPhase == .decelerating else { return }
+        // A direction is measured between two points of one scroll over one content, never across
+        // anything else that moves the offset. The bounce past an end is one. The other is the
+        // content changing height under the scroller: the chrome hiding drops the controls'
+        // clearance, the end comes up, and the scroller pulls a fling at the end back inside it,
+        // which read as a scroll toward the start and brought the chrome straight back.
+        guard sample.isInBounds, sample.contentHeight == scrollDirectionContentHeight,
+              let origin = scrollDirectionOrigin else {
+            scrollDirectionOrigin = sample.isInBounds ? sample.offset : nil
+            scrollDirectionContentHeight = sample.isInBounds ? sample.contentHeight : nil
+            return
+        }
+        let delta = sample.offset - origin
+        guard abs(delta) >= Self.scrollDirectionThreshold else { return }
+        scrollDirectionOrigin = sample.offset
+        let towardEnd = delta > 0
+        // A fling never turns round by itself, so a move against it is the bounce at an end. The
+        // range is no help there: the scroller's geometry puts the end some 25 pt past where the
+        // bounce settles, and the last of the bounce back read as a scroll toward the start.
+        guard scrollPhase != .decelerating || flingTowardEnd == nil || towardEnd == flingTowardEnd else { return }
+        lastReportedTowardEnd = towardEnd
+        // Measured on the layout, which knows how far the grid really goes; toward the start always
+        // reports, so chrome a long grid hid still comes back on a short one.
+        guard !towardEnd || stage.maxScrollOffset >= stage.viewport.height * Self.scrollHideMinimumFraction else { return }
+        onUserScroll(towardEnd)
     }
     
     /// What the stack animates on: the inputs that change the arrangement, never the offset. Keyed
@@ -270,11 +494,10 @@ struct ElementCallStage: View {
                 showHero(direction == .increment ? 1 : -1, in: stage)
             }
             .position(x: placement.frame.midX, y: placement.frame.midY - pin)
-            .offset(y: pin)
-            // Nil when the offset moves, never when the arrangement does. Keyed on the pin itself,
-            // a tile going full screen from a scrolled grid changed it from 0 to the offset in the
-            // same transaction as its frame, and snapped to full size instead of growing.
-            .animation(nil, value: stage.viewport.minY)
+            .modifier(Pinned(pin: pin, scroll: scrollParts, insetBase: scrollInsetBase, topClearance: topClearance, animation: chromeAnimation))
+            // After the pin's unanimated part, so the slide back is not caught by it. Pinned views
+            // slide with the inset already.
+            .offset(y: pin == 0 ? gridSlide : 0)
             .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
             .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
     }
@@ -340,7 +563,9 @@ struct ElementCallStage: View {
     private func reanchor(in stage: ElementCallStageLayout, gridTop: CGFloat) {
         guard fullscreenID == nil else { return }
         let area = stage.viewport.size
-        if let anchor, anchor.area != area,
+        // A change of width only: the chrome coming and going changes the height alone, and must
+        // leave the offset where the user put it (017 R6). A rotation always changes the width.
+        if let anchor, anchor.area.width != area.width,
            let placement = stage.placements.first(where: { $0.id == anchor.tileID && !$0.isSpotlight }) {
             let target = min(stage.maxScrollOffset, max(0, placement.frame.minY - gridTop))
             if abs(target - scrollOffset) > 1 {
