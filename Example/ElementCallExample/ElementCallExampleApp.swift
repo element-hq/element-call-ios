@@ -19,12 +19,24 @@ import SwiftUI
 /// a menu it does not care about. With the argument present the hierarchy is exactly what it was
 /// before the catalogue existed. The keys are shared with Android's sample: see
 /// `element-call-feature-hq/harness/fixtures.md`.
+///
+/// `-chromeReturnDelay <seconds>` replaces how long chrome a scroll hid takes to come back. For the
+/// UI tests that check it went: on a slow CI runner the check came after the default two seconds,
+/// and saw it already back.
 @main
 struct ElementCallExampleApp: App {
     var body: some Scene {
         WindowGroup {
             ElementCallExampleRootView(target: .fromLaunchArguments())
+                .environment(\.elementCallChromeReturnDelay, Self.chromeReturnDelay ?? EnvironmentValues().elementCallChromeReturnDelay)
         }
+    }
+    
+    private static var chromeReturnDelay: Duration? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-chromeReturnDelay"),
+              let seconds = arguments[safe: index + 1].flatMap(Double.init) else { return nil }
+        return .seconds(seconds)
     }
 }
 

@@ -33,7 +33,7 @@ struct ElementCallChromeVisibility: Equatable {
         case tap
         /// The user's own scrolling, never the app's (R23). Portrait only (R22).
         case userScrolled(towardEnd: Bool)
-        /// ``returnDelay`` has passed since the user's scrolling fully stopped (R20).
+        /// `elementCallChromeReturnDelay` has passed since the user's scrolling fully stopped (R20).
         case scrollIdleElapsed
         /// A tile has stopped being full screen: left by the user, or by its member leaving (R27, R28).
         case fullscreenEnded(byDeparture: Bool)
@@ -45,9 +45,6 @@ struct ElementCallChromeVisibility: Equatable {
     /// How the chrome slides, and with it whatever the stage pins to the chrome's edge, so the two
     /// move as one.
     static let slide: Animation = .spring(duration: 0.25, bounce: 0)
-    
-    /// How long after scrolling stops chrome hidden by it comes back (R20).
-    static let returnDelay: Duration = .seconds(2)
     
     private(set) var isVisible = true
     /// Why it is hidden; nil while it is visible.

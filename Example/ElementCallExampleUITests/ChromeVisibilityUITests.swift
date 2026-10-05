@@ -29,9 +29,19 @@ final class ChromeVisibilityUITests: XCTestCase {
         super.tearDown()
     }
     
-    private func launch(_ fixture: String) {
+    /// Long enough that chrome a scroll hid is still away when a test looks, however slow the
+    /// runner. Every query walks the whole tree, and over two hundred tiles on CI a few of them took
+    /// longer than the real two seconds, so the test saw the chrome already back.
+    private static let heldReturnDelay: TimeInterval = 60
+    /// For a test that waits for the return: long enough to see it go first, short enough to wait out.
+    private static let observableReturnDelay: TimeInterval = 8
+    
+    private func launch(_ fixture: String, chromeReturnDelay: TimeInterval? = nil) {
         XCUIDevice.shared.orientation = .portrait
         app.launchArguments = ["-fixture", fixture]
+        if let chromeReturnDelay {
+            app.launchArguments += ["-chromeReturnDelay", String(chromeReturnDelay)]
+        }
         app.launch()
         let window = app.windows.firstMatch
         let deadline = Date().addingTimeInterval(5)
@@ -216,15 +226,22 @@ final class ChromeVisibilityUITests: XCTestCase {
     
     /// Toward the end hides, toward the start shows at once (R18, R19).
     func testScrollingTowardTheEndHidesAndTowardTheStartShows() {
-        launch("two_hundred")
+        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         waitForChrome(visible: true)
         
         app.swipeUp()
-        waitForChrome(visible: false, timeout: 1)
-        app.swipeDown()
-        waitForChrome(visible: true, timeout: 1)
+        waitForChrome(visible: false, timeout: 3)
+        // Back by the scroll toward the start, since the return is a minute away. Not
+        // `app.swipeDown()`: that starts above the middle of the window, on the spotlight, and a
+        // drag there never scrolls the grid. The timer used to bring the chrome back regardless,
+        // which hid that this swipe moved nothing.
+        let window = app.windows.firstMatch
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45))
+            .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)),
+                   withVelocity: .fast, thenHoldForDuration: 0)
+        waitForChrome(visible: true, timeout: 3)
     }
     
     /// A grid that barely scrolls keeps its chrome through a scroll, bounce and all (R18); a tap
@@ -246,19 +263,19 @@ final class ChromeVisibilityUITests: XCTestCase {
     /// Scroll-hidden chrome comes back once the scrolling has stopped (R20): within the return delay
     /// of the fling ending, with slack for the fling itself.
     func testScrollHiddenChromeComesBack() {
-        launch("two_hundred")
+        launch("two_hundred", chromeReturnDelay: Self.observableReturnDelay)
         XCTAssertTrue(tile("alice").waitForExistence(timeout: 5))
         
         app.swipeUp()
-        waitForChrome(visible: false, timeout: 1)
-        waitForChrome(visible: true, timeout: 5)
+        waitForChrome(visible: false, timeout: 3)
+        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 20)
     }
     
     /// A fling that reaches the end bounces back from it, and the bounce is not a scroll toward the
     /// start (R23): the chrome stays away through it, and still comes back by itself once
     /// everything has stopped (R20).
     func testAFlingToTheEndStaysHiddenThroughTheBounceAndComesBack() {
-        launch("listen_mode")
+        launch("listen_mode", chromeReturnDelay: Self.observableReturnDelay)
         XCTAssertTrue(tile("alice").waitForExistence(timeout: 5))
         let window = app.windows.firstMatch
         for _ in 0..<3 {
@@ -269,14 +286,14 @@ final class ChromeVisibilityUITests: XCTestCase {
         // Inside the return delay: anything up now came back on the bounce.
         Thread.sleep(forTimeInterval: 0.5)
         XCTAssertFalse(isUp(hangUp), "the bounce at the end did not bring the chrome back")
-        waitForChrome(visible: true, timeout: 5)
+        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 20)
     }
     
     /// The chrome going mid-drag moves nothing under the finger (R6). A slow drag with no fling: the
     /// row travels the finger's distance less the touch slop, where a clearance that changed with
     /// the chrome would add to it.
     func testHidingWhileDraggingKeepsTheRowUnderTheFinger() {
-        launch("two_hundred")
+        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         let before = alice.frame.minY

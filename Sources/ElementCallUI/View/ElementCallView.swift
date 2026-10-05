@@ -17,6 +17,7 @@ struct ElementCallView: View {
     @Environment(\.elementCallStyle) private var style
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    @Environment(\.elementCallChromeReturnDelay) private var chromeReturnDelay
     @Bindable var context: ElementCallScreenContext
     /// Measured while drawn and kept while not, so the clearance it reserves can change in the same
     /// transaction as the chrome rather than a layout pass later. Started at what they measure at
@@ -135,7 +136,7 @@ struct ElementCallView: View {
             // further scroll or tap does; the rule itself is the value's, so a late arrival after
             // a tap-hide changes nothing (R21).
             guard scrollIdleToken != nil else { return }
-            try? await Task.sleep(for: ElementCallChromeVisibility.returnDelay)
+            try? await Task.sleep(for: chromeReturnDelay)
             guard !Task.isCancelled else { return }
             applyStageChrome(.scrollIdleElapsed)
         }
