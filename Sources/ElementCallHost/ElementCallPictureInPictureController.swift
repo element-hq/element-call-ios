@@ -69,7 +69,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     private var automaticStartTask: Task<Void, Never>?
     /// Whether a failed start is worth one more attempt. See ``start()``.
     private var pendingStartRetry = false
-    private weak var call: MatrixRTCCall?
+    private weak var call: MatrixRTCMediaSession?
     private var spotlightProvider: (() -> MatrixRTCTileID?)?
     
     override init() {
@@ -105,7 +105,7 @@ final class ElementCallPictureInPictureController: NSObject, AVPictureInPictureC
     }
     
     /// Binds to a call; the spotlight provider is read whenever the call's video state changes.
-    func bind(call: MatrixRTCCall, spotlightProvider: @escaping () -> MatrixRTCTileID?) {
+    func bind(call: MatrixRTCMediaSession, spotlightProvider: @escaping () -> MatrixRTCTileID?) {
         self.call = call
         self.spotlightProvider = spotlightProvider
         if pictureInPictureController == nil, AVPictureInPictureController.isPictureInPictureSupported() {

@@ -30,7 +30,7 @@ public nonisolated struct ElementCallOptions: Sendable {
     public var isPictureInPictureEnabled: Bool
     /// How membership is published. Pinned by the host because it has to match the other clients in
     /// the room, and it cannot change once a session has joined.
-    public var elementCallCompatibility: MatrixRTCElementCallCompat
+    public var membershipFormat: MatrixRTCMembershipFormat
     /// Whether the call screen offers its developer affordances, currently the per-tile stats
     /// overlay. That is raw RTP counters in 9pt monospace, so this belongs on whatever a host
     /// already uses to reveal developer surface, never on a feature flag ordinary users carry.
@@ -55,12 +55,12 @@ public nonisolated struct ElementCallOptions: Sendable {
     public var isAutomaticPictureInPictureForAudioCallsEnabled: Bool
     
     public init(isPictureInPictureEnabled: Bool = true,
-                elementCallCompatibility: MatrixRTCElementCallCompat = .stateEvents,
+                membershipFormat: MatrixRTCMembershipFormat = .roomState,
                 isDeveloperModeEnabled: Bool = false,
                 isScreenSharingEnabled: Bool = false,
                 isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false) {
         self.isPictureInPictureEnabled = isPictureInPictureEnabled
-        self.elementCallCompatibility = elementCallCompatibility
+        self.membershipFormat = membershipFormat
         self.isDeveloperModeEnabled = isDeveloperModeEnabled
         self.isScreenSharingEnabled = isScreenSharingEnabled
         self.isAutomaticPictureInPictureForAudioCallsEnabled = isAutomaticPictureInPictureForAudioCallsEnabled

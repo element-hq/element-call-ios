@@ -67,7 +67,7 @@ public final class ElementCallScreenContext {
     /// Builds a context around a state written by hand, with nothing behind it.
     ///
     /// This is the seam that makes a connected call renderable without one. The live view model
-    /// needs a `MatrixRTCCall` to produce tiles, and that class wraps handles from the Rust core and
+    /// needs a `MatrixRTCMediaSession` to produce tiles, and that class wraps handles from the Rust core and
     /// cannot be constructed in a test. The view state it projects into is a plain struct, so a
     /// preview skips the projection and writes the answer. Tiles claiming video draw their avatar,
     /// because there is no call to pull frames from, which is what a snapshot wants anyway.
@@ -162,7 +162,7 @@ public final class ElementCallScreenViewModel {
     public let context: ElementCallScreenContext
     
     /// The call whose frames the tiles draw; nil until media is connected.
-    public var call: MatrixRTCCall? {
+    public var call: MatrixRTCMediaSession? {
         controller.call
     }
     
@@ -273,7 +273,7 @@ public final class ElementCallScreenViewModel {
         state.isLoudspeaker = controller.isLoudspeaker
         state.isTileStatsVisible = controller.isTileStatsVisible
         state.isMaximized = controller.isMaximized
-        state.memberCount = controller.session?.memberCount ?? 0
+        state.memberCount = controller.rtcCall?.memberCount ?? 0
         // Above the guard below: these two are the only controls that mean anything before there is
         // a call, and without them a mute tapped while joining draws itself back unmuted.
         state.isMicrophoneMuted = controller.isMicrophoneMuted
@@ -415,7 +415,7 @@ public final class ElementCallScreenViewModel {
     }
     
     /// The stats overlay's text for one tile, from everything the call knows about that stream.
-    private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCCall) -> String? {
+    private static func stats(for tile: MatrixRTCTile, in call: MatrixRTCMediaSession) -> String? {
         describe(call.receiveStats[MatrixRTCStreamRef(tile.id)],
                  audio: tile.kind == .screenShare ? nil : call.receiveStats[MatrixRTCStreamRef(memberID: tile.memberID, kind: .microphone)],
                  kind: tile.kind,

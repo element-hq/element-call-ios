@@ -112,7 +112,7 @@ public enum ElementCallPreviewFixtures {
         return state
     }
     
-    public static func noCall() -> MatrixRTCCall? {
+    public static func noCall() -> MatrixRTCMediaSession? {
         nil
     }
 }
