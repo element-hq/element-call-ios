@@ -58,12 +58,6 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         let timeout: Task<Void, Never>
     }
     
-    private struct ToDeviceFeed {
-        var subscribers = [UUID: AsyncStream<MatrixRTCToDeviceMessage>.Continuation]()
-        /// Closed for good by the teardown; a subscriber after that is finished at once.
-        var isOpen = true
-    }
-    
     private let widgetID: String
     private let runDriver: @Sendable () async -> Void
     private let requestTimeout: Duration
@@ -87,12 +81,11 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     /// Whether the machine's initial state push has arrived, after which `state` is complete.
     private var hasInitialState = false
     private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation)]()
-    private var timelineSubscribers = [UUID: (eventTypes: Set<String>, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation)]()
-    private var redactionSubscribers = [UUID: AsyncStream<String>.Continuation]()
-    /// Outside the actor so `toDeviceMessages()` registers before it returns. A message has no
-    /// replay, unlike state, so a subscriber registered from a task of its own missed whatever
-    /// arrived first -- a key exchange, on a loaded machine.
-    private nonisolated let toDeviceFeed = Mutex(ToDeviceFeed())
+    /// The feeds with no replay, unlike state: see ``LiveFeed``.
+    private nonisolated let toDeviceFeed = LiveFeed<MatrixRTCToDeviceMessage, Void>()
+    /// Filtered by event type.
+    private nonisolated let timelineFeed = LiveFeed<[ElementCallRoomEvent], Set<String>>()
+    private nonisolated let redactionFeed = LiveFeed<String, Void>()
     private let logger: (any ElementCallLoggingProtocol)?
     
     /// - Parameters:
@@ -237,42 +230,15 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     }
     
     nonisolated func timelineEvents(eventTypes: [String]) -> AsyncStream<[ElementCallRoomEvent]> {
-        let (stream, continuation) = AsyncStream<[ElementCallRoomEvent]>.makeStream()
-        let id = UUID()
-        Task { await self.addTimelineSubscriber(id: id, eventTypes: Set(eventTypes), continuation: continuation) }
-        continuation.onTermination = { _ in
-            Task { await self.removeTimelineSubscriber(id: id) }
-        }
-        return stream
+        timelineFeed.subscribe(filter: Set(eventTypes))
     }
     
     nonisolated func redactions() -> AsyncStream<String> {
-        let (stream, continuation) = AsyncStream<String>.makeStream()
-        let id = UUID()
-        Task { await self.addRedactionSubscriber(id: id, continuation: continuation) }
-        continuation.onTermination = { _ in
-            Task { await self.removeRedactionSubscriber(id: id) }
-        }
-        return stream
+        redactionFeed.subscribe(filter: ())
     }
     
     nonisolated func toDeviceMessages() -> AsyncStream<MatrixRTCToDeviceMessage> {
-        let (stream, continuation) = AsyncStream<MatrixRTCToDeviceMessage>.makeStream()
-        let id = UUID()
-        let isOpen = toDeviceFeed.withLock { feed in
-            if feed.isOpen {
-                feed.subscribers[id] = continuation
-            }
-            return feed.isOpen
-        }
-        guard isOpen else {
-            continuation.finish()
-            return stream
-        }
-        continuation.onTermination = { [weak self] _ in
-            _ = self?.toDeviceFeed.withLock { $0.subscribers.removeValue(forKey: id) }
-        }
-        return stream
+        toDeviceFeed.subscribe(filter: ())
     }
     
     private func addStateSubscriber(id: UUID, eventType: String, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation) {
@@ -288,30 +254,6 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     
     private func removeStateSubscriber(id: UUID) {
         stateSubscribers[id] = nil
-    }
-    
-    private func addTimelineSubscriber(id: UUID, eventTypes: Set<String>, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation) {
-        guard phase != .stopped else {
-            continuation.finish()
-            return
-        }
-        timelineSubscribers[id] = (eventTypes, continuation)
-    }
-    
-    private func removeTimelineSubscriber(id: UUID) {
-        timelineSubscribers[id] = nil
-    }
-    
-    private func addRedactionSubscriber(id: UUID, continuation: AsyncStream<String>.Continuation) {
-        guard phase != .stopped else {
-            continuation.finish()
-            return
-        }
-        redactionSubscribers[id] = continuation
-    }
-    
-    private func removeRedactionSubscriber(id: UUID) {
-        redactionSubscribers[id] = nil
     }
     
     // MARK: - Requests
@@ -499,12 +441,10 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
                 log(.warning, "ignoring a redaction that names no event")
                 return
             }
-            redactionSubscribers.values.forEach { $0.yield(redacted) }
+            redactionFeed.publish(redacted)
             return
         }
-        for (eventTypes, continuation) in timelineSubscribers.values where eventTypes.contains(event.eventType) {
-            continuation.yield([event])
-        }
+        timelineFeed.publish([event]) { $0.contains(event.eventType) }
     }
     
     /// The driver does not say whether a room event was encrypted, or by which device, so none is
@@ -554,7 +494,7 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
                                                isSenderCrossSigned: wasEncrypted,
                                                wasEncrypted: wasEncrypted,
                                                contentJSON: contentJSON)
-        toDeviceFeed.withLock { $0.subscribers.values }.forEach { $0.yield(message) }
+        toDeviceFeed.publish(message)
     }
     
     /// The device the key message claims to come from: Element Call has written it at the top level
@@ -589,16 +529,9 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         }
         stateSubscribers.values.forEach { $0.continuation.finish() }
         stateSubscribers.removeAll()
-        timelineSubscribers.values.forEach { $0.continuation.finish() }
-        timelineSubscribers.removeAll()
-        redactionSubscribers.values.forEach { $0.finish() }
-        redactionSubscribers.removeAll()
-        let toDeviceSubscribers = toDeviceFeed.withLock { feed in
-            feed.isOpen = false
-            defer { feed.subscribers.removeAll() }
-            return feed.subscribers.values
-        }
-        toDeviceSubscribers.forEach { $0.finish() }
+        timelineFeed.close()
+        redactionFeed.close()
+        toDeviceFeed.close()
         channel = nil
     }
     
@@ -616,5 +549,58 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         guard JSONSerialization.isValidJSONObject(object),
               let data = try? JSONSerialization.data(withJSONObject: object, options: .sortedKeys) else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+}
+
+/// Subscribers to a feed with no replay: a to-device message, a timeline event, a redaction. Unlike
+/// state, what arrives before a subscriber exists is gone, so a subscriber is registered under the
+/// lock before `subscribe` returns. One registered from a task of its own missed whatever arrived
+/// first -- a key exchange, on a loaded machine.
+private final nonisolated class LiveFeed<Element: Sendable, Filter: Sendable>: Sendable {
+    private struct Subscriber {
+        let filter: Filter
+        let continuation: AsyncStream<Element>.Continuation
+    }
+    
+    private struct State {
+        var subscribers = [UUID: Subscriber]()
+        /// Closed for good by the teardown; a subscriber after that is finished at once.
+        var isOpen = true
+    }
+    
+    private let state = Mutex(State())
+    
+    func subscribe(filter: Filter) -> AsyncStream<Element> {
+        let (stream, continuation) = AsyncStream<Element>.makeStream()
+        let id = UUID()
+        let isOpen = state.withLock { state in
+            if state.isOpen {
+                state.subscribers[id] = Subscriber(filter: filter, continuation: continuation)
+            }
+            return state.isOpen
+        }
+        guard isOpen else {
+            continuation.finish()
+            return stream
+        }
+        continuation.onTermination = { [weak self] _ in
+            _ = self?.state.withLock { $0.subscribers.removeValue(forKey: id) }
+        }
+        return stream
+    }
+    
+    func publish(_ element: Element, to matches: (Filter) -> Bool = { _ in true }) {
+        state.withLock { $0.subscribers.values }
+            .filter { matches($0.filter) }
+            .forEach { $0.continuation.yield(element) }
+    }
+    
+    func close() {
+        let subscribers = state.withLock { state in
+            state.isOpen = false
+            defer { state.subscribers.removeAll() }
+            return state.subscribers.values
+        }
+        subscribers.forEach { $0.continuation.finish() }
     }
 }

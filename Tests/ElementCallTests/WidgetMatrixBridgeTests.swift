@@ -219,6 +219,21 @@ nonisolated struct WidgetMatrixBridgeTests {
         #expect(batch.first?.encryptionInfo == nil)
     }
     
+    /// The timeline has no replay, so its feeds are open from the moment they are asked for and
+    /// close for good with the bridge.
+    @Test
+    func timelineFeedsEndWithTheBridgeAndStayClosed() async throws {
+        let bridge = try await negotiated(makeBridge())
+        var reactions = bridge.timelineEvents(eventTypes: ["m.reaction"]).makeAsyncIterator()
+        var redactions = bridge.redactions().makeAsyncIterator()
+        await bridge.stop()
+        #expect(await reactions.next() == nil)
+        #expect(await redactions.next() == nil)
+        
+        var late = bridge.timelineEvents(eventTypes: ["m.reaction"]).makeAsyncIterator()
+        #expect(await late.next() == nil)
+    }
+    
     /// Room version 11 moved `redacts` into the content; both shapes are in the wild.
     @Test
     func redactionsAreDeliveredInBothShapes() async throws {
