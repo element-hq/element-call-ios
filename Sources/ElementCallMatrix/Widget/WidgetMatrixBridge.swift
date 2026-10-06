@@ -19,14 +19,14 @@ import Synchronization
 //   - `Room.sendDelayedEvent` / `sendDelayedStateEvent` returning the delay ID, and
 //     `updateDelayedEvent(cancel|restart)`.
 //   - A room-state feed delivering the full list of a type per change, with event ID, sender, state
-//     key, timestamp and content.
+//     key, timestamp and content, and a timeline feed of raw message-like events and redactions.
 //   - `Client.sendToDeviceMessage` returning per-recipient failures.
 //   - `Client.subscribeToToDeviceMessages` delivering encryption info: attested sender, sender
 //     device ID and cross-signing status. The widget path gives only type, content, sender and
 //     whether it was encrypted, which is why the trust note on `toDeviceMessage(from:)` exists.
 //   - `Room.sendStickyRaw` (MSC4354), without which only the state-event compatibility mode works.
 //
-// Then give `ElementCallSDKTransport` direct SDK calls in place of its per-room bridge. Its
+// Then give `ElementCallSDKRoom` direct SDK calls in place of its bridge. `ElementCallSDKTransport`'s
 // `openBridge` is the only place a bridge is created, so that is the only seam to unpick.
 
 /// One widget driver for one room, as the RTC core's Matrix bridge.
@@ -41,6 +41,11 @@ import Synchronization
 /// State arrives as deltas (`update_state` from sync, `send_event` for timeline-borne state) while the
 /// core wants the full state on every tick. Room state is replace-only, a leave being a present `{}`
 /// event, so the latest event per state key *is* the full state and the map below re-emits it whole.
+///
+/// The machine pushes the initial state of every granted type in one `update_state`, a type with no
+/// events included. Until that push nothing is known, so nothing is emitted; after it, an empty set
+/// is the truth and is emitted like any other. The core waits for a first set of every type before
+/// the room is ready, so holding back an empty one would stall the join.
 actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     nonisolated let roomID: String
     
@@ -78,8 +83,12 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     private var pending = [String: PendingRequest]()
     
     /// Event type → state key → latest event: the current state of every type we receive.
-    private var state = [String: [String: MatrixRTCRoomStateEvent]]()
-    private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation)]()
+    private var state = [String: [String: ElementCallRoomEvent]]()
+    /// Whether the machine's initial state push has arrived, after which `state` is complete.
+    private var hasInitialState = false
+    private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation)]()
+    private var timelineSubscribers = [UUID: (eventTypes: Set<String>, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation)]()
+    private var redactionSubscribers = [UUID: AsyncStream<String>.Continuation]()
     /// Outside the actor so `toDeviceMessages()` registers before it returns. A message has no
     /// replay, unlike state, so a subscriber registered from a task of its own missed whatever
     /// arrived first -- a key exchange, on a loaded machine.
@@ -189,29 +198,16 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     
     /// MSC4515. The driver forwards this to `Client::discover_rtc_transports`, which reads the
     /// discovery endpoint and falls back to the well-known `rtc_foci`, with caching, so none of that
-    /// has to be reimplemented here.
-    func rtcTransports() async -> Result<[MatrixRTCTransport], MatrixRTCRoomBridgeError> {
+    /// has to be reimplemented here. Passed on verbatim: the core picks from it.
+    func rtcTransports() async -> Result<String, MatrixRTCRoomBridgeError> {
         await request(action: "org.matrix.msc4515.get_rtc_transports", data: [:]).flatMap { response in
-            guard let transports = response["rtc_transports"] as? [[String: Any]] else {
+            guard let transports = response["rtc_transports"] as? [Any],
+                  JSONSerialization.isValidJSONObject(transports),
+                  let data = try? JSONSerialization.data(withJSONObject: transports),
+                  let json = String(data: data, encoding: .utf8) else {
                 return .failure(.invalidResponse("no rtc_transports in the get_rtc_transports response"))
             }
-            return .success(Self.parseTransports(transports))
-        }
-    }
-    
-    /// Both the discovery endpoint and the well-known describe a transport the same way, so this is
-    /// the shape either source produces.
-    static func parseTransports(_ transports: [[String: Any]]) -> [MatrixRTCTransport] {
-        transports.compactMap { transport in
-            guard let type = transport["type"] as? String else { return nil }
-            if type == "livekit" {
-                guard let urlString = transport["livekit_service_url"] as? String,
-                      let url = URL(string: urlString) else { return nil }
-                return .liveKit(serviceURL: url)
-            }
-            // Kept rather than dropped: the core logs what it cannot use, which is the difference
-            // between a homeserver offering nothing and offering something we do not speak.
-            return .unsupported(type: type)
+            return .success(json)
         }
     }
     
@@ -230,12 +226,32 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     
     // MARK: - Feeds
     
-    nonisolated func stateEvents(eventType: String) -> AsyncStream<[MatrixRTCRoomStateEvent]> {
-        let (stream, continuation) = AsyncStream<[MatrixRTCRoomStateEvent]>.makeStream()
+    nonisolated func stateEvents(eventType: String) -> AsyncStream<[ElementCallRoomEvent]> {
+        let (stream, continuation) = AsyncStream<[ElementCallRoomEvent]>.makeStream()
         let id = UUID()
         Task { await self.addStateSubscriber(id: id, eventType: eventType, continuation: continuation) }
         continuation.onTermination = { _ in
             Task { await self.removeStateSubscriber(id: id) }
+        }
+        return stream
+    }
+    
+    nonisolated func timelineEvents(eventTypes: [String]) -> AsyncStream<[ElementCallRoomEvent]> {
+        let (stream, continuation) = AsyncStream<[ElementCallRoomEvent]>.makeStream()
+        let id = UUID()
+        Task { await self.addTimelineSubscriber(id: id, eventTypes: Set(eventTypes), continuation: continuation) }
+        continuation.onTermination = { _ in
+            Task { await self.removeTimelineSubscriber(id: id) }
+        }
+        return stream
+    }
+    
+    nonisolated func redactions() -> AsyncStream<String> {
+        let (stream, continuation) = AsyncStream<String>.makeStream()
+        let id = UUID()
+        Task { await self.addRedactionSubscriber(id: id, continuation: continuation) }
+        continuation.onTermination = { _ in
+            Task { await self.removeRedactionSubscriber(id: id) }
         }
         return stream
     }
@@ -259,19 +275,43 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         return stream
     }
     
-    private func addStateSubscriber(id: UUID, eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation) {
+    private func addStateSubscriber(id: UUID, eventType: String, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation) {
         guard phase != .stopped else {
             continuation.finish()
             return
         }
         stateSubscribers[id] = (eventType, continuation)
-        if let current = state[eventType], !current.isEmpty {
-            continuation.yield(Array(current.values))
+        if hasInitialState {
+            continuation.yield(Array(state[eventType, default: [:]].values))
         }
     }
     
     private func removeStateSubscriber(id: UUID) {
         stateSubscribers[id] = nil
+    }
+    
+    private func addTimelineSubscriber(id: UUID, eventTypes: Set<String>, continuation: AsyncStream<[ElementCallRoomEvent]>.Continuation) {
+        guard phase != .stopped else {
+            continuation.finish()
+            return
+        }
+        timelineSubscribers[id] = (eventTypes, continuation)
+    }
+    
+    private func removeTimelineSubscriber(id: UUID) {
+        timelineSubscribers[id] = nil
+    }
+    
+    private func addRedactionSubscriber(id: UUID, continuation: AsyncStream<String>.Continuation) {
+        guard phase != .stopped else {
+            continuation.finish()
+            return
+        }
+        redactionSubscribers[id] = continuation
+    }
+    
+    private func removeRedactionSubscriber(id: UUID) {
+        redactionSubscribers[id] = nil
     }
     
     // MARK: - Requests
@@ -348,10 +388,19 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
                     changedTypes.insert(eventType)
                 }
             }
+            if !hasInitialState {
+                // The initial push: every subscribed type now has a current set, empty or not.
+                hasInitialState = true
+                changedTypes.formUnion(stateSubscribers.values.map(\.eventType))
+            }
             changedTypes.forEach(emitSnapshot)
         case "send_event":
-            if data["state_key"] != nil, let eventType = upsert(data) {
-                emitSnapshot(of: eventType)
+            if data["state_key"] != nil {
+                if let eventType = upsert(data) {
+                    emitSnapshot(of: eventType)
+                }
+            } else {
+                deliverTimelineEvent(data)
             }
         case "send_to_device":
             deliverToDevice(data)
@@ -418,35 +467,64 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     /// state key. One batch yields one snapshot, so emitting is the caller's.
     /// - Returns: the event type when the state changed.
     private func upsert(_ event: [String: Any]) -> String? {
-        guard let eventType = event["type"] as? String,
-              let stateKey = event["state_key"] as? String,
-              let sender = event["sender"] as? String,
-              let content = event["content"] as? [String: Any],
-              let contentJSON = Self.serialize(content) else {
+        guard let roomEvent = Self.roomEvent(from: event), let stateKey = roomEvent.stateKey else {
             log(.warning, "ignoring a malformed state event")
             return nil
         }
-        let eventID = event["event_id"] as? String
-        if let eventID, state[eventType]?[stateKey]?.eventID == eventID {
+        if state[roomEvent.eventType]?[stateKey]?.eventID == roomEvent.eventID {
             return nil // The same change through both routes.
         }
-        let timestamp = (event["origin_server_ts"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
-        state[eventType, default: [:]][stateKey] = MatrixRTCRoomStateEvent(eventID: eventID,
-                                                                           eventType: eventType,
-                                                                           stateKey: stateKey,
-                                                                           sender: sender,
-                                                                           originServerTimestamp: timestamp,
-                                                                           contentJSON: contentJSON)
-        return eventType
+        state[roomEvent.eventType, default: [:]][stateKey] = roomEvent
+        return roomEvent.eventType
     }
     
-    /// Hands subscribers the whole current state of the type.
+    /// Hands subscribers the whole current state of the type, empty included.
     private func emitSnapshot(of eventType: String) {
         let snapshot = Array(state[eventType, default: [:]].values)
-        guard !snapshot.isEmpty else { return }
         for (subscribedType, continuation) in stateSubscribers.values where subscribedType == eventType {
             continuation.yield(snapshot)
         }
+    }
+    
+    /// A message-like event from the timeline. A redaction names what it redacts at the top level
+    /// before room version 11 and in its content from then on.
+    private func deliverTimelineEvent(_ data: [String: Any]) {
+        guard let event = Self.roomEvent(from: data) else {
+            log(.warning, "ignoring a malformed timeline event")
+            return
+        }
+        if event.eventType == MatrixRTCEventTypes.redaction {
+            let content = data["content"] as? [String: Any]
+            guard let redacted = (data["redacts"] ?? content?["redacts"]) as? String else {
+                log(.warning, "ignoring a redaction that names no event")
+                return
+            }
+            redactionSubscribers.values.forEach { $0.yield(redacted) }
+            return
+        }
+        for (eventTypes, continuation) in timelineSubscribers.values where eventTypes.contains(event.eventType) {
+            continuation.yield([event])
+        }
+    }
+    
+    /// The driver does not say whether a room event was encrypted, or by which device, so none is
+    /// claimed. That costs nothing for state, which is cleartext, nor for reactions, which the core
+    /// binds to their member by sender.
+    private nonisolated static func roomEvent(from event: [String: Any]) -> ElementCallRoomEvent? {
+        guard let eventType = event["type"] as? String,
+              let eventID = event["event_id"] as? String,
+              let sender = event["sender"] as? String,
+              let content = event["content"] as? [String: Any],
+              let contentJSON = serialize(content) else {
+            return nil
+        }
+        return ElementCallRoomEvent(eventID: eventID,
+                                    sender: sender,
+                                    eventType: eventType,
+                                    stateKey: event["state_key"] as? String,
+                                    originServerTimestamp: (event["origin_server_ts"] as? NSNumber)?.uint64Value ?? 0,
+                                    contentJSON: contentJSON,
+                                    encryptionInfo: nil)
     }
     
     /// The driver hands over `{type, content, sender, encrypted}` only: it has already dropped
@@ -511,6 +589,10 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         }
         stateSubscribers.values.forEach { $0.continuation.finish() }
         stateSubscribers.removeAll()
+        timelineSubscribers.values.forEach { $0.continuation.finish() }
+        timelineSubscribers.removeAll()
+        redactionSubscribers.values.forEach { $0.finish() }
+        redactionSubscribers.removeAll()
         let toDeviceSubscribers = toDeviceFeed.withLock { feed in
             feed.isOpen = false
             defer { feed.subscribers.removeAll() }

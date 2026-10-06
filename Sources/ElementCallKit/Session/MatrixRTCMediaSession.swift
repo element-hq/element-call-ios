@@ -12,7 +12,7 @@ import Synchronization
 import UIKit
 
 /// The media half of a session: publishes the microphone, camera and screen, plays every remote
-/// member and hands out video frames for tiles. Owned by `MatrixRTCSession`.
+/// member and hands out video frames for tiles. Owned by `MatrixRTCCall`.
 @MainActor
 @Observable
 public final class MatrixRTCMediaSession {

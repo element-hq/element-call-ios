@@ -327,18 +327,34 @@ Swift packages are released. Do not add a `binaryTarget` or a build-and-attach s
 workflow. [RELEASING.md](RELEASING.md) has the reasoning and the trigger that would justify revisiting
 it.
 
+## The core's Matrix backend
+
+The core reaches Matrix through one object, `MatrixRTCBackend`, which routes its flat, room-ID calls
+to the `ElementCallMatrixRoomProtocol` that `MatrixRTCClient` opened. Two things about it are easy to
+break:
+
+- **Every set-shaped feed of a room delivers its current set first, an empty one included.** The
+  core treats a room as ready only once each subject has delivered once, and has no deadline of its
+  own; holding back an empty set makes the join hang until `MatrixRTCClient.seedingTimeout`. The
+  joined members are the exception that proves it: they always include us, so an empty read is the
+  store not having loaded and is rightly held back.
+- **Failures are passed on, never classified.** `MatrixRTCTransportError.failed` carries the
+  homeserver's `errcode` and status; the core decides which refusals retire the delayed leave.
+
+The room is closed only after `MatrixRTCRoom.shutdown()`, because the core leaves through it.
+
 ## What is temporary
 
 `Sources/ElementCallMatrix/Widget/` drives the SDK's widget driver in process as a stand-in for
-bindings the released SDK lacks: delayed events, a room-state feed, to-device messaging. It is
-**scheduled for deletion**, and `WidgetMatrixBridge.swift`'s header lists the exact bindings that
+bindings the released SDK lacks: delayed events, room-state and timeline feeds, to-device messaging. It
+is **scheduled for deletion**, and `WidgetMatrixBridge.swift`'s header lists the exact bindings that
 retire it and the removal steps. Do not build new features on it, and do not let it leak past
-`ElementCallSDKTransport`.
+`ElementCallSDKTransport` and `ElementCallSDKRoom`.
 
-`openBridge` is the **only** place a bridge is created, deliberately. An earlier version had two
-creation paths and only one wired up the to-device pump, so media keys reached nobody and every remote
-tile went black. The bridge and its pump are one value now so the type system forbids that. Keep it
-that way.
+`openBridge`, reached only through `openRoom`, is the **only** place a bridge is created,
+deliberately. An earlier version had two creation paths and only one wired up the to-device pump, so
+media keys reached nobody and every remote tile went black. The bridge and its pump are one value now
+so the type system forbids that. Keep it that way.
 
 ---
 

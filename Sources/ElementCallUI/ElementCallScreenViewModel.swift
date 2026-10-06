@@ -273,7 +273,7 @@ public final class ElementCallScreenViewModel {
         state.isLoudspeaker = controller.isLoudspeaker
         state.isTileStatsVisible = controller.isTileStatsVisible
         state.isMaximized = controller.isMaximized
-        state.memberCount = controller.session?.memberCount ?? 0
+        state.memberCount = controller.rtcCall?.memberCount ?? 0
         // Above the guard below: these two are the only controls that mean anything before there is
         // a call, and without them a mute tapped while joining draws itself back unmuted.
         state.isMicrophoneMuted = controller.isMicrophoneMuted

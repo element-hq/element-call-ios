@@ -34,10 +34,8 @@ struct PreJoinControlsTests {
     /// test that needs to speak *through* one builds the controller itself. The same wiring
     /// otherwise.
     private func makeJoiningController(isAudioCall: Bool = false) -> (ElementCallController, ElementCallFakeSystem) {
-        let transport = ElementCallFakeTransport()
         let system = ElementCallFakeSystem()
-        let controller = ElementCallController(rtcService: MatrixRTCService(transport: transport),
-                                               transport: transport,
+        let controller = ElementCallController(rtcClient: MatrixRTCClient(transport: ElementCallFakeTransport()),
                                                system: system,
                                                // The same everything-on options `fake(...)` uses, so
                                                // the two controllers differ only in who holds the ports.

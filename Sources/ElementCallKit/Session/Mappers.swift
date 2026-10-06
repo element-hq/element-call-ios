@@ -31,20 +31,11 @@ nonisolated extension MatrixRTCStreamKind {
 }
 
 nonisolated extension MatrixRTCMembershipFormat {
-    var ffi: FfiElementCallCompat {
+    var ffi: FfiMembershipFormat {
         switch self {
-        case .current: .off
-        case .sticky2025: .stickyEvents
-        case .roomState: .stateEvents
-        }
-    }
-}
-
-nonisolated extension MatrixRTCTransport {
-    var ffi: FfiTransportConfig? {
-        switch self {
-        case .liveKit(let serviceURL): FfiTransportConfig(type: "livekit", livekitServiceUrl: serviceURL.absoluteString)
-        case .unsupported: nil
+        case .current: .current
+        case .sticky2025: .sticky2025
+        case .roomState: .roomState
         }
     }
 }
@@ -203,6 +194,7 @@ nonisolated extension MatrixRTCCallEvent {
         case .ended(let reason):
             switch reason {
             case .left: self = .ended(.left)
+            case .slotClosed: self = .ended(.slotClosed)
             case .connectionClosed(let message): self = .ended(.connectionClosed(message: message))
             }
         }

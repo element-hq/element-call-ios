@@ -85,7 +85,6 @@ let stack = ElementCallStack(transport: ElementCallSDKTransport(client: client, 
                                                      icons: MyIcons(),
                                                      avatars: MyAvatars()),
                              logger: logger)
-await stack.start()
 ```
 
 Then start a call and present the screen:
@@ -97,17 +96,14 @@ stack.controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: t
 ElementCallScreen(viewModel: ElementCallScreenViewModel(controller: stack.controller))
 ```
 
-Build the stack **when the session is created, not when a call starts**. To-device delivery has no
-catch-up, so a stack that subscribes only after its own membership has gone out can miss keys sent in
-that window. Peers re-distribute on join, usually minting a fresh key, so a late start recovers rather
-than breaking, but avoiding the race means the first frames decrypt instead of arriving black for a
-moment.
+There is nothing to start. A call opens its room through the transport, the core subscribes to what
+the room needs, and the room is closed again when the call ends.
 
 ### What the host provides
 
 | Port | What you supply | Turnkey? |
 | --- | --- | --- |
-| `ElementCallMatrixTransportProtocol` | every Matrix send and feed | **yes**, use `ElementCallSDKTransport` |
+| `ElementCallMatrixTransportProtocol` | rooms (`ElementCallMatrixRoomProtocol`: every send and feed), to-device, OpenID | **yes**, use `ElementCallSDKTransport` |
 | `ElementCallSystemProvidingProtocol` | CallKit, plus audio-session and mute events coming back | no |
 | `ElementCallRoomContextProtocol` | room display name, direct flag, member profiles | no |
 | `ElementCallAvatarRenderingProtocol` | avatar views, so they match your app | no |

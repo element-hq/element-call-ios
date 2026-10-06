@@ -16,6 +16,17 @@ version will actually read it.
 `stickyEvents` and `stateEvents`), and `ElementCallOptions.elementCallCompatibility` is
 `membershipFormat`.
 
+**The core is room-first, and the Matrix port is per room.** `ElementCallStack.start()` and `stop()`
+are gone: there is nothing to start. A host implementing `ElementCallMatrixTransportProtocol` itself
+implements `openRoom(roomID:)`, returning an `ElementCallMatrixRoomProtocol` that carries every room
+send and feed and is closed when the call ends; transport discovery moves onto the room as raw JSON.
+Every set-shaped feed delivers its current set first, an empty one included, and events cross as raw
+`ElementCallRoomEvent`s. Report failures as `MatrixRTCTransportError.failed` with the homeserver's
+`errcode` and status rather than classifying them, and `MatrixRTCToDeviceMessage.isSenderCrossSigned`
+is optional, nil when the client does not say. `ElementCallController.session` is `rtcCall`, a
+`MatrixRTCCall`, and a call whose slot is closed ends with `MatrixRTCEndReason.slotClosed`. Hosts using
+`ElementCallSDKTransport` change nothing but the `start()` call.
+
 ## 0.1.0-rc.9 - 2026-09-29
 
 **`ElementCallLayout` and `ElementCallScreenViewState.layout` are removed, and
