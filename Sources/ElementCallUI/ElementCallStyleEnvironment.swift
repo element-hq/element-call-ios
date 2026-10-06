@@ -42,4 +42,9 @@ public extension EnvironmentValues {
     /// glass in a landscape frame comes out blank and a reference of the flat fallback at least
     /// says where the buttons are. Glass itself is checked on a device.
     @Entry var elementCallGlassEnabled = true
+    /// How long after the user stops scrolling the chrome a scroll hid comes back (017 R20). The
+    /// default in every shipping build; the example harness lengthens it for its UI tests, which
+    /// check the chrome is away after a scroll and on a slow CI runner did not get to look within
+    /// two seconds, so they saw it already back.
+    @Entry var elementCallChromeReturnDelay: Duration = .seconds(2)
 }

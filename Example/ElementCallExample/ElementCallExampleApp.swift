@@ -19,12 +19,24 @@ import SwiftUI
 /// a menu it does not care about. With the argument present the hierarchy is exactly what it was
 /// before the catalogue existed. The keys are shared with Android's sample: see
 /// `element-call-feature-hq/harness/fixtures.md`.
+///
+/// `-chromeReturnDelay <seconds>` replaces how long chrome a scroll hid takes to come back. For the
+/// UI tests that check it went: on a slow CI runner the check came after the default two seconds,
+/// and saw it already back.
 @main
 struct ElementCallExampleApp: App {
     var body: some Scene {
         WindowGroup {
             ElementCallExampleRootView(target: .fromLaunchArguments())
+                .environment(\.elementCallChromeReturnDelay, Self.chromeReturnDelay ?? EnvironmentValues().elementCallChromeReturnDelay)
         }
+    }
+    
+    private static var chromeReturnDelay: Duration? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-chromeReturnDelay"),
+              let seconds = arguments[safe: index + 1].flatMap(Double.init) else { return nil }
+        return .seconds(seconds)
     }
 }
 
@@ -41,6 +53,7 @@ struct ElementCallExampleRootView: View {
             // test walks during a call is the one it walked before any of this existed.
             if host.session == nil || host.isMinimized {
                 ElementCallExampleCatalogue(target: target, notice: host.notice, onPick: { host.open($0) }, onPickScenario: { host.open($0) })
+                    .transition(.opacity)
                     // An inset rather than an overlay: it pushes the list down instead of covering
                     // its first row, which is what a host does and what makes the point of the
                     // thing — you can see the catalogue behind the call — actually legible.
@@ -57,14 +70,24 @@ struct ElementCallExampleRootView: View {
             // every tap on the list and look like a broken list.
             if let session = host.session, !host.isMinimized {
                 callScreen(session)
+                    .transition(.opacity)
             }
         }
+        // Presenting the call is the host's to animate, so the harness does what a host would: a
+        // cross-fade between the catalogue and the call, both ways.
+        .animation(.easeInOut(duration: 0.3), value: host.session == nil || host.isMinimized)
         .onAppear {
             guard host.session == nil else { return }
-            switch target {
-            case .fixture(let fixture): host.open(fixture)
-            case .scenario(let scenario): host.open(scenario)
-            case .catalogue, .unknown: break
+            // Opened by a launch argument: straight to the call, with no fade from a catalogue the
+            // user never saw, so a UI test starts on the tree it expects.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                switch target {
+                case .fixture(let fixture): host.open(fixture)
+                case .scenario(let scenario): host.open(scenario)
+                case .catalogue, .unknown: break
+                }
             }
         }
     }

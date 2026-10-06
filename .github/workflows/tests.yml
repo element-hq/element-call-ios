@@ -198,12 +198,16 @@ jobs:
         working-directory: Example
         run: xcodegen generate
 
+      # Retried, and only here: a real touch on a shared three-core runner is timing-dependent
+      # however a test is written, and these ran about five times slower than on a Mac. The package
+      # tests are not retried, because a flake there has been a real race more than once.
       - name: Run UI tests
         run: |
           set -o pipefail && xcodebuild test \
             -project Example/ElementCallExample.xcodeproj \
             -scheme ElementCallExample \
             -destination "id=${{ steps.simulator.outputs.udid }}" \
+            -retry-tests-on-failure -test-iterations 3 \
             -resultBundlePath Logs/ElementCallExampleUITests.xcresult \
             | xcbeautify --renderer github-actions
 

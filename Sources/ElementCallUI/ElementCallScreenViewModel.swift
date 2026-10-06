@@ -45,6 +45,9 @@ public final class ElementCallScreenContext {
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
+    /// Whether the stage's own chrome is up, and why not (spec 017). Here for the reason the flag
+    /// above is: a preview and the harness can construct the context, and nothing else.
+    var stageChrome = ElementCallChromeVisibility()
     /// Asks the stage to scroll to an offset, in points from the top of the content. For a harness
     /// playing a scenario's `scroll` frames; a host never needs it. Each request carries its own
     /// identity, so asking for the same offset twice scrolls twice.

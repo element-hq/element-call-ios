@@ -51,7 +51,7 @@ struct ElementCallTileView: View, Equatable {
     /// of `onAction` rather than after it because that one is the trailing closure at every call
     /// site: a closure declared after it silently becomes the one a trailing closure binds to.
     var onToggleFullscreen: () -> Void = { }
-    /// Single tap, which only means anything while full screen, where it raises and lowers the chrome.
+    /// Single tap: raises and lowers the chrome, the full-screen one or the stage's.
     var onToggleChrome: () -> Void = { }
     let onAction: (ElementCallScreenViewAction) -> Void
     
@@ -182,15 +182,14 @@ struct ElementCallTileView: View, Equatable {
         }
         // The clip shape clips hit testing with it, so without this the corners do not answer.
         .contentShape(Rectangle())
-        // Attached first and so innermost, which is what makes it win: with the single tap first,
-        // that one resolves every double tap as two singles and full screen is unreachable. The
-        // precedence is the point, so it is stated here rather than left to modifier order to imply.
         .gesture(TapGesture(count: 2).onEnded { onToggleFullscreen() })
+        // Simultaneous rather than exclusive: an exclusive single tap waits out the system's
+        // double-tap window, which reads as a tap that did nothing. The screen waits a shorter
+        // window of its own instead, and a second tap inside it cancels the toggle (017 R16).
+        .simultaneousGesture(TapGesture(count: 1).onEnded { onToggleChrome() })
         // Masked off rather than branched away: an `if` around a modifier changes the view's
         // identity, which would tear down and rebuild the video view, i.e. detach and reattach the
         // stream, every time you entered or left full screen.
-        .gesture(TapGesture(count: 1).onEnded { onToggleChrome() },
-                 including: isFullscreen ? .all : .subviews)
         .gesture(zoomAndPan, including: isFullscreen ? .all : .subviews)
         .onChange(of: appearance) { _, appearance in
             guard appearance != .fullscreen else { return }

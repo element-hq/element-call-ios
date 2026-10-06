@@ -155,6 +155,11 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   all, whether the button in the top bar wins the touch, and whether the bar is hittable where a
   host puts it. Which branch the controller takes when asked to minimize is *not* one of them; that
   is `MinimizeRoutingTests`, in process, in milliseconds.
+- **CI runs these about five times slower than a Mac, and retries a failure up to twice.** Never
+  race a timer: a look at the tree on `two_hundred` can take longer than eight seconds there. A
+  test that checks something before a timer undoes it sets the timer from a launch argument, as
+  `-chromeReturnDelay` does. Only these tests are retried; the package tests are not, because a
+  flake there has been a real race.
 - **Every tile with video draws real frames**, from `MatrixRTCTestPattern` (the `video` fixture is
   the one built for looking at them): colour bars with a
   heavy border, because the questions are geometric. A border running off the edges is a crop, a
