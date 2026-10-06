@@ -33,8 +33,10 @@ final class ChromeVisibilityUITests: XCTestCase {
     /// runner. Every query walks the whole tree, and over two hundred tiles on CI a few of them took
     /// longer than the real two seconds, so the test saw the chrome already back.
     private static let heldReturnDelay: TimeInterval = 60
-    /// For a test that waits for the return: long enough to see it go first, short enough to wait out.
-    private static let observableReturnDelay: TimeInterval = 8
+    /// For a test that waits for the return: long enough to see it go first, short enough to wait
+    /// out. Eight seconds was not: CI ran these about five times slower than a Mac, and one look at
+    /// the tree took longer than that.
+    private static let observableReturnDelay: TimeInterval = 30
     
     private func launch(_ fixture: String, chromeReturnDelay: TimeInterval? = nil) {
         XCUIDevice.shared.orientation = .portrait
@@ -268,7 +270,7 @@ final class ChromeVisibilityUITests: XCTestCase {
         
         app.swipeUp()
         waitForChrome(visible: false, timeout: 3)
-        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 20)
+        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 30)
     }
     
     /// A fling that reaches the end bounces back from it, and the bounce is not a scroll toward the
@@ -286,7 +288,7 @@ final class ChromeVisibilityUITests: XCTestCase {
         // Inside the return delay: anything up now came back on the bounce.
         Thread.sleep(forTimeInterval: 0.5)
         XCTAssertFalse(isUp(hangUp), "the bounce at the end did not bring the chrome back")
-        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 20)
+        waitForChrome(visible: true, timeout: Self.observableReturnDelay + 30)
     }
     
     /// The chrome going mid-drag moves nothing under the finger (R6). A slow drag with no fling: the
