@@ -34,7 +34,7 @@ enum ElementCallTileAppearance {
 struct ElementCallTileView: View, Equatable {
     @Environment(\.elementCallStyle) private var style
     let tile: ElementCallTile
-    let callProvider: () -> MatrixRTCCall?
+    let callProvider: () -> MatrixRTCMediaSession?
     var isSpotlight = false
     var appearance: ElementCallTileAppearance = .card
     var memberCount = 0
@@ -392,7 +392,7 @@ struct ElementCallVideoView<Placeholder: View>: View {
     let memberID: String
     let kind: MatrixRTCStreamKind
     let isLocal: Bool
-    let callProvider: () -> MatrixRTCCall?
+    let callProvider: () -> MatrixRTCMediaSession?
     var presentation: VideoPresentation = .fill
     var onContentSizeChange: (CGSize) -> Void = { _ in }
     /// Shown until the stream delivers its first frame. See ``FrameGate``.

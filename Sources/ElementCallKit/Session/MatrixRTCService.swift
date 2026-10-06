@@ -67,7 +67,7 @@ public final class MatrixRTCService {
                             slotID: String = MatrixRTCConstants.roomCallSlotID,
                             application: String = MatrixRTCConstants.callApplication,
                             transport liveKit: MatrixRTCTransport,
-                            compat: MatrixRTCElementCallCompat,
+                            compat: MatrixRTCMembershipFormat,
                             notify: MatrixRTCNotify?) async throws -> MatrixRTCSession {
         if let existing = sessions[roomID] {
             throw MatrixRTCError.alreadyJoined(roomID: existing.roomID)

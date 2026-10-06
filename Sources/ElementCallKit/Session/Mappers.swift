@@ -30,12 +30,12 @@ nonisolated extension MatrixRTCStreamKind {
     }
 }
 
-nonisolated extension MatrixRTCElementCallCompat {
+nonisolated extension MatrixRTCMembershipFormat {
     var ffi: FfiElementCallCompat {
         switch self {
-        case .off: .off
-        case .stickyEvents: .stickyEvents
-        case .stateEvents: .stateEvents
+        case .current: .off
+        case .sticky2025: .stickyEvents
+        case .roomState: .stateEvents
         }
     }
 }

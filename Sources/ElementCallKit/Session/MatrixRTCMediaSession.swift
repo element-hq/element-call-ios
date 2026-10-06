@@ -15,7 +15,7 @@ import UIKit
 /// member and hands out video frames for tiles. Owned by `MatrixRTCSession`.
 @MainActor
 @Observable
-public final class MatrixRTCCall {
+public final class MatrixRTCMediaSession {
     public let localMemberID: String
     
     /// The transport's roster (not the membership projection; the two can legitimately differ).

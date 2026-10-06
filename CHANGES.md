@@ -11,7 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**`MatrixRTCCall` is renamed `MatrixRTCMediaSession`, and `MatrixRTCElementCallCompat` is renamed
+`MatrixRTCMembershipFormat`.** The cases are `current`, `sticky2025` and `roomState` (were `off`,
+`stickyEvents` and `stateEvents`), and `ElementCallOptions.elementCallCompatibility` is
+`membershipFormat`.
 
 ## 0.1.0-rc.9 - 2026-09-29
 

@@ -278,14 +278,14 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
 /// Walks a call through a scenario: advances the clock to each frame, feeds rosters to the session
 /// and waits for the call to have taken them, and hands actions back to whoever drives the stage.
 ///
-/// The player owns the call rather than the other way round because `MatrixRTCCall.init` is
+/// The player owns the call rather than the other way round because `MatrixRTCMediaSession.init` is
 /// internal: this is the one public way to make a call that has no session behind it, and it is
 /// public because the example harness runs on it, the same reason `ElementCallFakes` ship.
 public final class MatrixRTCScenarioPlayer {
     public let scenario: MatrixRTCScenario
     public let clock: MatrixRTCManualClock
     public let session: MatrixRTCScriptedSession
-    public let call: MatrixRTCCall
+    public let call: MatrixRTCMediaSession
     /// The index of the next frame `step()` applies.
     public private(set) var position = 0
     
@@ -297,7 +297,7 @@ public final class MatrixRTCScenarioPlayer {
         self.scenario = scenario
         clock = MatrixRTCManualClock()
         session = MatrixRTCScriptedSession(localMemberID: localMemberID, clock: clock)
-        call = MatrixRTCCall(localMemberID: localMemberID, mediaSession: session, clock: clock, capturesCamera: false)
+        call = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: session, clock: clock, capturesCamera: false)
     }
     
     /// Starts the call's pumps. Nothing has been applied yet; the first `step()` applies frame 0.

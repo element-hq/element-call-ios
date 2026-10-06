@@ -20,7 +20,7 @@ public extension EnvironmentValues {
 /// Where a tile's pictures come from when there is no call to pull them from.
 ///
 /// Nil in a shipping build, which is the only state it is ever in there: a real screen has a
-/// ``MatrixRTCCall`` and never consults this. It exists so the example harness can put moving video
+/// ``MatrixRTCMediaSession`` and never consults this. It exists so the example harness can put moving video
 /// on the real stage, because everything the renderer does — fitting against filling, zoom, pan, and
 /// the shape of the picture through a resize — is invisible in a harness whose tiles are all avatars,
 /// and that is exactly the part that is hardest to look at closely in a real call.

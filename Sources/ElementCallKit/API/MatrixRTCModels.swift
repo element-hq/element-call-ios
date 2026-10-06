@@ -98,14 +98,14 @@ public nonisolated struct MatrixRTCStreamRef: Sendable, Hashable {
     }
 }
 
-/// How the membership is published, fixed for the lifetime of a session.
-public nonisolated enum MatrixRTCElementCallCompat: String, Sendable, CaseIterable, Codable {
+/// How the membership is published, fixed when the room is opened.
+public nonisolated enum MatrixRTCMembershipFormat: String, Sendable, CaseIterable, Codable {
     /// MSC4143 as it stands.
-    case off
+    case current
     /// Membership as an MSC4354 sticky event with legacy fields alongside.
-    case stickyEvents
+    case sticky2025
     /// `org.matrix.msc3401.call.member` room state and delayed state events; what Element Web speaks today.
-    case stateEvents
+    case roomState
 }
 
 public nonisolated enum MatrixRTCTransport: Sendable, Hashable {

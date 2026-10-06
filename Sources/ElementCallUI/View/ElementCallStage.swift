@@ -35,7 +35,7 @@ struct ElementCallStage: View {
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
     let pictureInPictureSourceView: UIView
-    let callProvider: () -> MatrixRTCCall?
+    let callProvider: () -> MatrixRTCMediaSession?
     /// How far down from the top the chrome drawn over the stage reaches; zero when nothing is kept
     /// clear there. A content margin rather than a smaller frame: see ``body``.
     var topClearance: CGFloat = 0

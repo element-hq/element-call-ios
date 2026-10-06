@@ -58,7 +58,7 @@ public final class ElementCallController {
     public var errorMessage: String?
     
     public private(set) var session: MatrixRTCSession?
-    public private(set) var call: MatrixRTCCall?
+    public private(set) var call: MatrixRTCMediaSession?
     
     /// The user's media intent while there is no call to hold it. The control bar is on screen from
     /// `.joining` onwards -- it is drawn whenever the screen is maximized, with no gate on the
@@ -339,7 +339,7 @@ public final class ElementCallController {
         }
     }
     
-    private func bindPictureInPictureIfEnabled(_ call: MatrixRTCCall) {
+    private func bindPictureInPictureIfEnabled(_ call: MatrixRTCMediaSession) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
         pictureInPicture.bind(call: call) { [weak self] in self?.spotlightTileID }
@@ -393,7 +393,7 @@ public final class ElementCallController {
         guard let (session, transport) = await joinSession(for: callData, room: room) else { return }
         
         connection = .connectingMedia
-        let call: MatrixRTCCall
+        let call: MatrixRTCMediaSession
         do {
             call = try await session.connectMedia(transport: transport)
         } catch {
@@ -446,7 +446,7 @@ public final class ElementCallController {
             return nil
         }
         
-        let compat = options.elementCallCompatibility
+        let compat = options.membershipFormat
         log(.info, "joining with Element Call compatibility \(compat)")
         
         let session: MatrixRTCSession
@@ -468,7 +468,7 @@ public final class ElementCallController {
     }
     
     /// Microphone, then camera for a video call. The call counts as connected once the microphone is up.
-    private func publishMedia(on call: MatrixRTCCall,
+    private func publishMedia(on call: MatrixRTCMediaSession,
                               session: MatrixRTCSession,
                               room: any ElementCallRoomContextProtocol) async {
         // Where nothing else owns the session, we do: the simulator, and an iOS app on macOS,
@@ -576,7 +576,7 @@ public final class ElementCallController {
     
     /// Tears down what a join produced after the call was ended under it. Leaving is idempotent, so a
     /// session that already left costs nothing to leave again.
-    private func abandon(session: MatrixRTCSession, call: MatrixRTCCall? = nil, roomID: String) async {
+    private func abandon(session: MatrixRTCSession, call: MatrixRTCMediaSession? = nil, roomID: String) async {
         log(.info, "join of \(roomID) was cancelled, releasing what it set up")
         await call?.disconnect()
         await session.leave()
@@ -646,7 +646,7 @@ public final class ElementCallController {
                          room: any ElementCallRoomContextProtocol,
                          connection: ElementCallConnection,
                          connectedAt: Date? = nil,
-                         call: MatrixRTCCall? = nil) {
+                         call: MatrixRTCMediaSession? = nil) {
         self.callData = callData
         self.room = room
         self.connection = connection

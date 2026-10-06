@@ -19,7 +19,7 @@ final nonisolated class RoomStateFeeder: Sendable {
     private let transport: ElementCallMatrixTransportProtocol
     private let roomID: String
     private let slotID: String
-    private let compat: MatrixRTCElementCallCompat
+    private let compat: MatrixRTCMembershipFormat
     private let onMemberCount: @Sendable (Int) -> Void
     
     private let tasks: Mutex<[Task<Void, Never>]> = .init([])
@@ -30,7 +30,7 @@ final nonisolated class RoomStateFeeder: Sendable {
          transport: ElementCallMatrixTransportProtocol,
          roomID: String,
          slotID: String,
-         compat: MatrixRTCElementCallCompat,
+         compat: MatrixRTCMembershipFormat,
          onMemberCount: @escaping @Sendable (Int) -> Void) {
         self.manager = manager
         self.transport = transport
@@ -85,9 +85,9 @@ final nonisolated class RoomStateFeeder: Sendable {
     /// Memberships. Call after the join and after `subscribeMembershipSnapshots`.
     func startMemberships() {
         let task: Task<Void, Never> = switch compat {
-        case .stateEvents:
+        case .roomState:
             Task { [self] in await feedStateMemberships() }
-        case .off, .stickyEvents:
+        case .current, .sticky2025:
             // Sticky-event memberships need the SDK's sticky feed; not wired on iOS yet.
             Task { MatrixRTCLog.warning("Membership feed for compat mode \(compat) is not implemented on iOS") }
         }

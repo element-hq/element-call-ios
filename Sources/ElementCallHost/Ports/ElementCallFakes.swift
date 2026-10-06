@@ -190,7 +190,7 @@ public extension ElementCallController {
                      style: ElementCallStyle = .stock,
                      // A scripted call (`MatrixRTCScenarioPlayer`), so a real view model can run
                      // over a controller that never joined. Nil for the stills the previews want.
-                     call: MatrixRTCCall? = nil) -> ElementCallController {
+                     call: MatrixRTCMediaSession? = nil) -> ElementCallController {
         let transport = ElementCallFakeTransport()
         let controller = ElementCallController(rtcService: MatrixRTCService(transport: transport),
                                                transport: transport,

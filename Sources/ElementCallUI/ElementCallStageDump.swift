@@ -27,7 +27,7 @@ enum ElementCallStageDump {
     static func render(frame: MatrixRTCScenario.Frame,
                        layout: ElementCallStageLayout,
                        tiles: [ElementCallTile],
-                       call: MatrixRTCCall) -> String {
+                       call: MatrixRTCMediaSession) -> String {
         var lines = ["== \(describe(frame.time)) \(frame.text)"]
         let window = layout.detailWindow
         let subscribed = call.tiles.order.map(\.id).filter { id in

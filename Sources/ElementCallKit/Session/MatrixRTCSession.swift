@@ -26,7 +26,7 @@ public final class MatrixRTCSession {
     public private(set) var members: [MatrixRTCMembership] = []
     /// The core's own count, right whenever read; the projection above can lag in some compat modes.
     public private(set) var memberCount = 0
-    public private(set) var call: MatrixRTCCall?
+    public private(set) var call: MatrixRTCMediaSession?
     
     private let manager: RtcSessionManagerHandle
     private let transport: ElementCallMatrixTransportProtocol
@@ -90,7 +90,7 @@ public final class MatrixRTCSession {
     }
     
     /// Attaches media. The core knows which membership this session joined as, so no member ID is passed.
-    public func connectMedia(transport liveKit: MatrixRTCTransport) async throws -> MatrixRTCCall {
+    public func connectMedia(transport liveKit: MatrixRTCTransport) async throws -> MatrixRTCMediaSession {
         if let call {
             return call
         }
@@ -110,7 +110,7 @@ public final class MatrixRTCSession {
             throw MatrixRTCError.media("\(error)")
         }
         
-        let call = MatrixRTCCall(localMemberID: localMemberID, mediaSession: mediaSession)
+        let call = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: mediaSession)
         self.call = call
         await call.start()
         MatrixRTCLog.info("Media connected for \(roomID)/\(slotID) as \(localMemberID)")

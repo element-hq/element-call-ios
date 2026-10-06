@@ -6,7 +6,7 @@
 //
 
 // `@testable` for `applySystemMute`, which a host drives through its CallKit delegate rather than
-// by calling it, and for `MatrixRTCCall`'s internal initialiser.
+// by calling it, and for `MatrixRTCMediaSession`'s internal initialiser.
 @testable import ElementCallHost
 @testable import ElementCallKit
 @testable import ElementCallUI
@@ -107,7 +107,7 @@ struct PreJoinControlsTests {
     @Test
     func theMuteGoesIntoThePublishRatherThanAfterIt() async throws {
         let session = FakeMediaSession()
-        let call = MatrixRTCCall(localMemberID: "@me:example.org_DEVICE", mediaSession: session)
+        let call = MatrixRTCMediaSession(localMemberID: "@me:example.org_DEVICE", mediaSession: session)
         
         try await call.publishMicrophone(muted: true)
         
@@ -120,7 +120,7 @@ struct PreJoinControlsTests {
     @Test
     func anUnmutedJoinPublishesUnmuted() async throws {
         let session = FakeMediaSession()
-        let call = MatrixRTCCall(localMemberID: "@me:example.org_DEVICE", mediaSession: session)
+        let call = MatrixRTCMediaSession(localMemberID: "@me:example.org_DEVICE", mediaSession: session)
         
         try await call.publishMicrophone(muted: false)
         
