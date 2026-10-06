@@ -8,6 +8,7 @@
 import ElementCallHost
 import ElementCallKit
 import Foundation
+import Synchronization
 
 // Temporary: the widget-driver stopgap. The released SDK bindings lack delayed events, a room-state
 // feed and to-device messaging, but their widget driver implements all of them for Element Call web.
@@ -52,6 +53,12 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         let timeout: Task<Void, Never>
     }
     
+    private struct ToDeviceFeed {
+        var subscribers = [UUID: AsyncStream<MatrixRTCToDeviceMessage>.Continuation]()
+        /// Closed for good by the teardown; a subscriber after that is finished at once.
+        var isOpen = true
+    }
+    
     private let widgetID: String
     private let runDriver: @Sendable () async -> Void
     private let requestTimeout: Duration
@@ -73,7 +80,10 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     /// Event type → state key → latest event: the current state of every type we receive.
     private var state = [String: [String: MatrixRTCRoomStateEvent]]()
     private var stateSubscribers = [UUID: (eventType: String, continuation: AsyncStream<[MatrixRTCRoomStateEvent]>.Continuation)]()
-    private var toDeviceSubscribers = [UUID: AsyncStream<MatrixRTCToDeviceMessage>.Continuation]()
+    /// Outside the actor so `toDeviceMessages()` registers before it returns. A message has no
+    /// replay, unlike state, so a subscriber registered from a task of its own missed whatever
+    /// arrived first -- a key exchange, on a loaded machine.
+    private nonisolated let toDeviceFeed = Mutex(ToDeviceFeed())
     private let logger: (any ElementCallLoggingProtocol)?
     
     /// - Parameters:
@@ -233,9 +243,18 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     nonisolated func toDeviceMessages() -> AsyncStream<MatrixRTCToDeviceMessage> {
         let (stream, continuation) = AsyncStream<MatrixRTCToDeviceMessage>.makeStream()
         let id = UUID()
-        Task { await self.addToDeviceSubscriber(id: id, continuation: continuation) }
-        continuation.onTermination = { _ in
-            Task { await self.removeToDeviceSubscriber(id: id) }
+        let isOpen = toDeviceFeed.withLock { feed in
+            if feed.isOpen {
+                feed.subscribers[id] = continuation
+            }
+            return feed.isOpen
+        }
+        guard isOpen else {
+            continuation.finish()
+            return stream
+        }
+        continuation.onTermination = { [weak self] _ in
+            _ = self?.toDeviceFeed.withLock { $0.subscribers.removeValue(forKey: id) }
         }
         return stream
     }
@@ -253,18 +272,6 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
     
     private func removeStateSubscriber(id: UUID) {
         stateSubscribers[id] = nil
-    }
-    
-    private func addToDeviceSubscriber(id: UUID, continuation: AsyncStream<MatrixRTCToDeviceMessage>.Continuation) {
-        guard phase != .stopped else {
-            continuation.finish()
-            return
-        }
-        toDeviceSubscribers[id] = continuation
-    }
-    
-    private func removeToDeviceSubscriber(id: UUID) {
-        toDeviceSubscribers[id] = nil
     }
     
     // MARK: - Requests
@@ -469,7 +476,7 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
                                                isSenderCrossSigned: wasEncrypted,
                                                wasEncrypted: wasEncrypted,
                                                contentJSON: contentJSON)
-        toDeviceSubscribers.values.forEach { $0.yield(message) }
+        toDeviceFeed.withLock { $0.subscribers.values }.forEach { $0.yield(message) }
     }
     
     /// The device the key message claims to come from: Element Call has written it at the top level
@@ -504,8 +511,12 @@ actor WidgetMatrixBridge: MatrixRTCRoomBridgeProtocol {
         }
         stateSubscribers.values.forEach { $0.continuation.finish() }
         stateSubscribers.removeAll()
-        toDeviceSubscribers.values.forEach { $0.finish() }
-        toDeviceSubscribers.removeAll()
+        let toDeviceSubscribers = toDeviceFeed.withLock { feed in
+            feed.isOpen = false
+            defer { feed.subscribers.removeAll() }
+            return feed.subscribers.values
+        }
+        toDeviceSubscribers.forEach { $0.finish() }
         channel = nil
     }
     

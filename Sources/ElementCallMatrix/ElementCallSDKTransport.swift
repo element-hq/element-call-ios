@@ -80,12 +80,15 @@ public final class ElementCallSDKTransport: ElementCallMatrixTransportProtocol {
         guard let bridge = try WidgetDriverFactory.makeBridge(room: room(roomID), roomID: roomID, logger: logger) else {
             throw MatrixRTCTransportError.failed("Cannot open a Matrix bridge for \(roomID)")
         }
+        // Subscribed before the start, so nothing the driver hands over once it is running can
+        // arrive ahead of the subscriber. A failed start closes the feed, which ends it.
+        let toDeviceMessages = bridge.toDeviceMessages()
         if case .failure(let error) = await bridge.start() {
             throw error.transportError
         }
         
         let forwarder = Task { [relay = toDeviceRelay] in
-            for await message in bridge.toDeviceMessages() {
+            for await message in toDeviceMessages {
                 relay.publish(message)
             }
         }
