@@ -23,10 +23,26 @@ struct ElementCallTilePlacement: Identifiable, Equatable {
     /// is not in the order.
     var orderIndex: Int?
     var zIndex: Double
+    /// How the picture sits in the frame. Last and defaulted so the grid's placements need not say.
+    var contentFit: ElementCallTileFit = .standard
     
     var id: MatrixRTCTileID {
         tile.id
     }
+}
+
+/// How a placement asks its picture to sit in the frame.
+///
+/// A rule rather than a value because the layout cannot see a remote stream's shape, for the reason
+/// the full-screen arrangement gives: the tile resolves it against the aspect its renderer reports.
+enum ElementCallTileFit: Equatable {
+    /// The tile's own rule: a camera fills, a share fits, the spotlight sits between the two.
+    case standard
+    /// Shown whole (019 R3).
+    case fit
+    /// Shown whole when the picture is landscape and the frame is not, filled otherwise: the one
+    /// exception R4 makes to filling the screen.
+    case fitWhenLandscape
 }
 
 /// How much of a tile's video is still worth asking the SFU for.
@@ -84,6 +100,10 @@ struct ElementCallStageLayout: Equatable {
         /// orientations: in landscape the bar floats over the spotlight, which runs under it,
         /// and only the grid's content end keeps clear of it.
         var controlsClearance: CGFloat
+        /// How far above the content's zero the screen's top edge is: the portrait top bar's room
+        /// and the top safe area. Only a picture that runs behind the top bar reaches up into it
+        /// (019 R3, R4).
+        var topBleed: CGFloat = 0
         
         static let horizontalMargin: CGFloat = 16
         static let spacing: CGFloat = 12
@@ -166,6 +186,15 @@ struct ElementCallStageLayout: Equatable {
         /// Tiles that were live on the previous pass, for the edge hysteresis.
         var liveTileIDs: Set<MatrixRTCTileID> = []
         var metrics: Metrics
+        // What only the small-call layout reads (019). Last and defaulted, so a grid test states
+        // none of them.
+        var arrivalOrder = ElementCallArrivalOrder()
+        /// `ElementCallSmallCallLayout.speaker(...)`'s choice, held through silence.
+        var speakerID: MatrixRTCTileID?
+        var ownCorner: ElementCallOwnTileCorner = .bottomRight
+        /// Our own picture's upright width over height, once one has been drawn.
+        var ownVideoAspect: CGFloat?
+        var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
     }
     
     /// What the layout asks the core for full records of: a rank range over the remote order for
@@ -206,6 +235,12 @@ struct ElementCallStageLayout: Equatable {
     /// nobody is looking at it. **Declared last** because the memberwise initialiser follows
     /// declaration order and the arrangements below call it with trailing labels.
     var hiddenTileIDs: Set<MatrixRTCTileID> = []
+    /// Nothing scrolls: the content is exactly one viewport, and the stage disables its scroller so
+    /// it does not even bounce, which would compete with dragging our own tile (019 R30).
+    var isStatic = false
+    /// The order a screen reader walks the tiles in, when it is not the order they are drawn in
+    /// (019 R27). Empty means the stage's own order.
+    var readingOrder: [MatrixRTCTileID] = []
     
     /// The furthest the content can scroll. What a shrinking grid settles to (R42).
     var maxScrollOffset: CGFloat {

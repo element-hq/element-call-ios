@@ -24,6 +24,12 @@ enum ElementCallTileAppearance {
     /// and zoomable. Its chrome is ``ElementCallFullscreenChrome``, drawn by the screen, because
     /// keeping the name pill clear of the floating controls needs to know where those are.
     case fullscreen
+    /// The whole screen in a small call, behind the chrome (019 R3, R4): the card's chrome, the
+    /// speaking ring included, with square corners. Not ``fullscreen``, which would hide the name
+    /// and the ring, allow a zoom, and be read by the screen as a tile gone full screen.
+    case fullBleed
+    /// Our own tile floating over a small call (019 R2): a smaller card.
+    case floating
 }
 
 /// One participant: video (or the avatar when the camera is off), name and mic badge, the flip
@@ -95,8 +101,9 @@ struct ElementCallTileView: View, Equatable {
     
     private var cornerRadius: CGFloat {
         switch appearance {
-        case .fullscreen, .spotlight: 0
+        case .fullscreen, .spotlight, .fullBleed: 0
         case .card: 16
+        case .floating: 12
         }
     }
     
@@ -113,7 +120,7 @@ struct ElementCallTileView: View, Equatable {
             picture
             
             switch appearance {
-            case .card, .spotlight:
+            case .card, .spotlight, .fullBleed, .floating:
                 cardChrome
             case .fullscreen:
                 // Drawn by the screen instead, where the controls' clearance is known.
