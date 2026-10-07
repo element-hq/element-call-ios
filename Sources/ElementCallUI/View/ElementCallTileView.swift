@@ -64,6 +64,11 @@ struct ElementCallTileView: View, Equatable {
     var allowsFullscreen = true
     /// The device has a camera on each side, so the flip button does something (019 R24).
     var canSwitchCamera = true
+    /// The corner our own tile floats in, or nil when it is not floating. Spoken in its label, and
+    /// the corners it is not in are offered as actions (019 R25, R26).
+    var floatingCorner: ElementCallOwnTileCorner?
+    /// A screen reader asked to move our floating tile: a drag does not exist for VoiceOver (R25).
+    var onMoveToCorner: (ElementCallOwnTileCorner) -> Void = { _ in }
     /// The picture's upright width over height once a frame lands, for a layout that takes its
     /// shape from it (019 R10, R29). Left out of `==`, like the other closures.
     var onContentAspectChange: (CGFloat?) -> Void = { _ in }
@@ -103,6 +108,7 @@ struct ElementCallTileView: View, Equatable {
             && lhs.contentFit == rhs.contentFit
             && lhs.allowsFullscreen == rhs.allowsFullscreen
             && lhs.canSwitchCamera == rhs.canSwitchCamera
+            && lhs.floatingCorner == rhs.floatingCorner
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
@@ -162,8 +168,9 @@ struct ElementCallTileView: View, Equatable {
         .overlay { outline }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .accessibilityElement(children: .contain)
-        // The name is still spoken when it is not drawn.
-        .accessibilityLabel(isNameHidden ? Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName) : Text(""))
+        // The name is still spoken when it is not drawn. Our own tile says more, since it shows
+        // neither name nor microphone: whether our camera is on, and where it floats (019 R26).
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
@@ -171,6 +178,39 @@ struct ElementCallTileView: View, Equatable {
             if allowsFullscreen {
                 Button("Full screen") { onToggleFullscreen() }
             }
+            if let floatingCorner {
+                ForEach(Self.cornersToMoveTo(from: floatingCorner), id: \.self) { corner in
+                    Button("Move to \(Self.spokenName(of: corner))") { onMoveToCorner(corner) }
+                }
+            }
+        }
+    }
+    
+    private var accessibilityLabel: Text {
+        if tile.isLocal {
+            return Text(Self.ownLabel(name: tile.displayName, hasVideo: tile.hasVideo, corner: floatingCorner))
+        }
+        guard isNameHidden else { return Text("") }
+        return Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+    }
+    
+    /// "You, camera on, bottom right": the corner only while it floats, since inline it is simply
+    /// the first tile (019 R26, R27).
+    static func ownLabel(name: String, hasVideo: Bool, corner: ElementCallOwnTileCorner?) -> String {
+        ([name, hasVideo ? "camera on" : "camera off"] + (corner.map { [spokenName(of: $0)] } ?? [])).joined(separator: ", ")
+    }
+    
+    /// The other three corners, in reading order (019 R25).
+    static func cornersToMoveTo(from corner: ElementCallOwnTileCorner) -> [ElementCallOwnTileCorner] {
+        ElementCallOwnTileCorner.allCases.filter { $0 != corner }
+    }
+    
+    static func spokenName(of corner: ElementCallOwnTileCorner) -> String {
+        switch corner {
+        case .topLeft: "top left"
+        case .topRight: "top right"
+        case .bottomLeft: "bottom left"
+        case .bottomRight: "bottom right"
         }
     }
     

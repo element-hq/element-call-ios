@@ -562,6 +562,10 @@ struct ElementCallStage: View {
                                    contentFit: placement.contentFit,
                                    allowsFullscreen: !isOwnSmallCallTile,
                                    canSwitchCamera: canSwitchCamera,
+                                   floatingCorner: placement.appearance == .floating ? ownCorner : nil,
+                                   // The same animation as a drag's release, so a move asked for by
+                                   // VoiceOver is the same move (019 R25).
+                                   onMoveToCorner: { corner in withAnimation(animation) { onMoveOwnTile(corner) } },
                                    onContentAspectChange: { aspect in
                                        guard placement.tile.isLocal, aspect != ownVideoAspect else { return }
                                        ownVideoAspect = aspect

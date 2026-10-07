@@ -439,4 +439,33 @@ struct ElementCallSmallCallLayoutTests {
         #expect(grid.pictureInPictureTile.id == share.id)
         #expect(!grid.pictureInPictureTile.isExact)
     }
+    
+    // MARK: - Accessibility (R25-R27)
+    
+    /// R26: our tile says whether our camera is on, and where it floats; inline, no corner.
+    @Test
+    func ourTileIsAnnouncedWithItsCameraAndCorner() {
+        #expect(ElementCallTileView.ownLabel(name: "You", hasVideo: true, corner: .bottomRight) == "You, camera on, bottom right")
+        #expect(ElementCallTileView.ownLabel(name: "You", hasVideo: false, corner: .topLeft) == "You, camera off, top left")
+        #expect(ElementCallTileView.ownLabel(name: "You", hasVideo: true, corner: nil) == "You, camera on")
+    }
+    
+    /// R25: every corner but the one it is in, so VoiceOver can reach all four without a drag.
+    @Test
+    func theOtherThreeCornersAreOfferedAsActions() {
+        for corner in ElementCallOwnTileCorner.allCases {
+            let offered = ElementCallTileView.cornersToMoveTo(from: corner)
+            #expect(offered.count == 3)
+            #expect(!offered.contains(corner))
+        }
+        #expect(ElementCallTileView.spokenName(of: .bottomLeft) == "bottom left")
+    }
+    
+    /// R27: alone, our tile is all there is to read; with others, it comes after them.
+    @Test
+    func aloneOrFloatingOurTileIsReadLast() {
+        #expect(arrange([]).readingOrder == [me.id])
+        let remote = Self.people(["Bob", "Carol"])
+        #expect(arrange(remote).readingOrder == remote.map(\.id) + [me.id])
+    }
 }
