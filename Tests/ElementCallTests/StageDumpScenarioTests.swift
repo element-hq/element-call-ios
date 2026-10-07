@@ -186,7 +186,13 @@ final class ScenarioStage {
               fullscreenID: context.fullscreenTileID,
               scrollOffset: scrollOffset,
               liveTileIDs: liveTileIDs,
-              metrics: metrics)
+              metrics: metrics,
+              arrivalOrder: context.viewState.arrivalOrder,
+              speakerID: context.viewState.smallCallSpeakerID,
+              // The chrome is always up in a scenario: what `ElementCallView` passes then, with the
+              // top bar at the height it measures at the default text size.
+              floatingInsets: .init(top: metrics.isLandscape ? 44 + ElementCallView.topChromeSpacing : 0,
+                                    bottom: ElementCallView.controlsClearance))
     }
     
     /// The side effects the stage runs on a change of arrangement.

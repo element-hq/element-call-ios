@@ -31,6 +31,14 @@ struct ElementCallStage: View {
     /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
     /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
     var fullscreenID: MatrixRTCTileID?
+    /// What the small-call layout places by and raises (019 R7, R9). Kept by the view model, not
+    /// here: the stage unmounts while minimized, and both have to outlive that.
+    var arrivalOrder = ElementCallArrivalOrder()
+    var speakerID: MatrixRTCTileID?
+    /// Room the chrome takes at the top and the bottom, which only our floating tile keeps clear of
+    /// (019 R19). Not part of ``Arrangement``: it changes inside the chrome's own animation, so the
+    /// tile moves with the bar rather than on the stage's slower spring behind it.
+    var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
@@ -130,7 +138,10 @@ struct ElementCallStage: View {
                                                              fullscreenID: fullscreenID,
                                                              scrollOffset: scrollOffset,
                                                              liveTileIDs: liveTileIDs,
-                                                             metrics: metrics))
+                                                             metrics: metrics,
+                                                             arrivalOrder: arrivalOrder,
+                                                             speakerID: speakerID,
+                                                             floatingInsets: floatingInsets))
             ScrollView(.vertical) {
                 ZStack(alignment: .topLeading) {
                     fullscreenScrim(in: stage)
@@ -180,11 +191,13 @@ struct ElementCallStage: View {
                     guard fullscreenID == nil, raisedTileID != nil else { return }
                     transaction.addAnimationCompletion { raisedTileID = nil }
                 }
-                .animation(animation, value: Arrangement(tiles: tiles, spotlightID: spotlightID, fullscreenID: fullscreenID, metrics: metrics))
+                .animation(animation, value: Arrangement(tiles: tiles, spotlightID: spotlightID, fullscreenID: fullscreenID, speakerID: speakerID, metrics: metrics))
             }
-            // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen.
+            // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen, or
+            // in a small call, where a scroller whose content is one screen would still bounce
+            // (019 R30).
             .scrollIndicators(.hidden)
-            .scrollDisabled(fullscreenID != nil)
+            .scrollDisabled(fullscreenID != nil || stage.isStatic)
             .scrollPosition($scrollPosition)
             // The top bar's room as a margin and not a shorter frame. UIKit leaves the offset alone
             // when an inset changes, so the chrome going mid-drag moves nothing under the finger
@@ -464,6 +477,8 @@ struct ElementCallStage: View {
         let tiles: [ElementCallTile]
         let spotlightID: MatrixRTCTileID?
         let fullscreenID: MatrixRTCTileID?
+        /// The small call's raised speaker, which moves and grows a tile (019 R9).
+        let speakerID: MatrixRTCTileID?
         let metrics: ElementCallStageLayout.Metrics
     }
     
@@ -493,11 +508,15 @@ struct ElementCallStage: View {
                                    appearance: placement.appearance,
                                    memberCount: memberCount,
                                    heroStack: placement.isSpotlight ? stage.heroStack : nil,
-                                   isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height,
+                                   // A small call's full-bleed tile has no name either: its corner is
+                                   // under the control bar and the home indicator (019 R3, R4).
+                                   isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height
+                                       || placement.appearance == .fullBleed,
                                    // Never for a composed tile: a paused one keeps its video view, and
                                    // with it the last frame, so scrolling it in shows a picture rather
                                    // than an avatar (R49). The call is what stops its stream meanwhile.
                                    isVideoSuspended: false,
+                                   contentFit: placement.contentFit,
                                    onToggleFullscreen: { onToggleFullscreen(placement.id) },
                                    onToggleChrome: onToggleChrome,
                                    onAction: onAction)
@@ -510,7 +529,7 @@ struct ElementCallStage: View {
             .frame(width: placement.frame.width, height: placement.frame.height)
             // Screen readers traverse the spotlight first, then the grid in rank order (R69), and
             // step through the stack with an adjustable action rather than a swipe (R25).
-            .accessibilitySortPriority(placement.isSpotlight ? 1 : 0)
+            .accessibilitySortPriority(sortPriority(of: placement, in: stage))
             .accessibilityAdjustableAction { direction in
                 guard placement.isSpotlight else { return }
                 showHero(direction == .increment ? 1 : -1, in: stage)
@@ -522,6 +541,15 @@ struct ElementCallStage: View {
             .offset(y: pin == 0 ? gridSlide : 0)
             .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
             .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
+    }
+    
+    /// Higher reads first. A small call states its order outright (019 R27): the overlap and our
+    /// floating tile put tiles in no geometric order a screen reader could follow.
+    private func sortPriority(of placement: ElementCallTilePlacement, in stage: ElementCallStageLayout) -> Double {
+        if let index = stage.readingOrder.firstIndex(of: placement.id) {
+            return Double(stage.readingOrder.count - index)
+        }
+        return placement.isSpotlight ? 1 : 0
     }
     
     /// The next or previous hero in the stack, clamped: the stack does not wrap (R23).
@@ -612,13 +640,16 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
     /// This is the view state's own rule, and it reads the array as the ranking it now is.
     static func stage(tiles: [ElementCallTile],
                       fullscreen: MatrixRTCTileID? = nil) -> some View {
-        ElementCallStage(tiles: tiles,
-                         spotlightID: Fixtures.connected(tiles: tiles).spotlightID,
-                         fullscreenID: fullscreen,
-                         memberCount: tiles.count,
-                         pictureInPictureSourceView: UIView(),
-                         callProvider: Fixtures.noCall,
-                         controlsClearance: ElementCallView.controlsClearance) { _ in }
+        let state = Fixtures.connected(tiles: tiles)
+        return ElementCallStage(tiles: tiles,
+                                spotlightID: state.spotlightID,
+                                fullscreenID: fullscreen,
+                                arrivalOrder: state.arrivalOrder,
+                                speakerID: state.smallCallSpeakerID,
+                                memberCount: tiles.count,
+                                pictureInPictureSourceView: UIView(),
+                                callProvider: Fixtures.noCall,
+                                controlsClearance: ElementCallView.controlsClearance) { _ in }
             .background(ElementCallStyle.stock.theme.bgCanvasDefault)
             .environment(\.colorScheme, .dark)
     }
@@ -634,6 +665,14 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Two people")
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol])
             .previewDisplayName("Three people")
+        // Carol is speaking, so she is on top of the overlap and larger (019 R9).
+        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan")])
+            .previewDisplayName("Four people")
+        // Nobody has spoken: the 2nd tile is on top at its own size (019 R6).
+        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.tile("Carol"), Fixtures.tile("Dan")])
+            .previewDisplayName("Four people, nobody speaking")
+        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan"), Fixtures.tile("Erin")])
+            .previewDisplayName("Five people")
         stage(tiles: Fixtures.group, fullscreen: Fixtures.bob.id)
             .previewDisplayName("Full screen")
         // A member on two tiles: the one case in which every member-keyed assumption that survived

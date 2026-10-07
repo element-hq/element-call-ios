@@ -49,11 +49,15 @@ struct ElementCallTileView: View, Equatable {
     var heroStack: ElementCallStageLayout.HeroStack?
     /// The landscape spotlight: the design draws no name on it, the bar floats over its bottom
     /// edge where the name would be, and landscape is for the shared screen above all. Open
-    /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay.
+    /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay. A small call's
+    /// full-bleed tile too (019 R3, R4), for the same reason. The name is still spoken.
     var isNameHidden = false
     /// The avatar stands in so no decoder runs for it. The stage never sets it for a composed tile
     /// (a paused tile keeps its last picture); the harness and the previews use it.
     var isVideoSuspended = false
+    /// How the layout asks for the picture to sit in the frame; resolved here, where its shape is
+    /// known (019 R3, R4).
+    var contentFit: ElementCallTileFit = .standard
     /// Double tap: in and out of full screen. Defaulted so the previews need not name it, and ahead
     /// of `onAction` rather than after it because that one is the trailing closure at every call
     /// site: a closure declared after it silently becomes the one a trailing closure binds to.
@@ -87,6 +91,7 @@ struct ElementCallTileView: View, Equatable {
             && lhs.heroStack == rhs.heroStack
             && lhs.isNameHidden == rhs.isNameHidden
             && lhs.isVideoSuspended == rhs.isVideoSuspended
+            && lhs.contentFit == rhs.contentFit
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
@@ -165,7 +170,7 @@ struct ElementCallTileView: View, Equatable {
                 // cropping a document to a 1.2-wide cell throws away whatever somebody is pointing
                 // at. A camera still starts filled, because a centre-cropped face still reads as a
                 // face and letterboxing every cell makes a grid look like a contact sheet.
-                AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : isSpotlight ? Self.spotlightCameraFit : 0) { fit in
+                AnimatableFit(fit: fit) { fit in
                     ElementCallVideoView(memberID: tile.memberID,
                                          kind: tile.kind.videoStreamKind,
                                          isLocal: tile.isLocal,
@@ -341,6 +346,24 @@ struct ElementCallTileView: View, Equatable {
         .accessibilityLabel("Switch camera")
     }
     
+    /// Where the picture sits between filled (0) and fitted (1).
+    private var fit: CGFloat {
+        if isFullscreen || tile.isScreenShare {
+            return 1
+        }
+        switch contentFit {
+        case .fit:
+            return 1
+        case .fitWhenLandscape:
+            // R4's one exception: a landscape picture on a frame taller than it is wide is shown
+            // whole. Until the first frame says otherwise, it fills.
+            let isLandscapePicture = (contentAspect ?? 0) > 1
+            return isLandscapePicture && size.height > size.width ? 1 : 0
+        case .standard:
+            return isSpotlight ? Self.spotlightCameraFit : 0
+        }
+    }
+    
     /// Inside the tile's bounds and over the picture, so a tile that starts or stops talking does not
     /// change size or move.
     @ViewBuilder
@@ -350,9 +373,10 @@ struct ElementCallTileView: View, Equatable {
         // talking at once.
         if tile.isScreenShare || isFullscreen {
             EmptyView()
-        } else if tile.isSpeaking, appearance == .card, !isSpotlight {
-            // Grid only: the design leaves the spotlight bare, its position already says who is
-            // talking. Speaking wins over a raised hand, which still has its badge.
+        } else if tile.isSpeaking, appearance == .card || appearance == .fullBleed || appearance == .floating, !isSpotlight {
+            // Every tile but the spotlight: the design leaves that bare, its position already says
+            // who is talking. A small call's tiles are ringed like the grid's (019 R9). Speaking
+            // wins over a raised hand, which still has its badge.
             ZStack {
                 ForEach(Array(style.theme.activeSpeakerBorder(in: size).enumerated()), id: \.offset) { _, layer in
                     RoundedRectangle(cornerRadius: cornerRadius)

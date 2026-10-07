@@ -193,6 +193,14 @@ struct ElementCallView: View {
         !isStageShown || context.stageChrome.isVisible
     }
     
+    /// What our floating tile keeps clear of while the chrome is up (019 R19). Nothing at the top in
+    /// portrait: the content already starts under the top bar, which never leaves there.
+    private func floatingInsets(isLandscape: Bool) -> ElementCallSmallCallLayout.FloatingInsets {
+        let isVisible = isStageChromeVisible
+        return .init(top: isLandscape && isVisible ? topBarHeight + Self.topChromeSpacing : 0,
+                     bottom: isVisible ? Self.controlsClearance : 0)
+    }
+    
     /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
     private var isStageShown: Bool {
         let state = context.viewState
@@ -452,6 +460,9 @@ struct ElementCallView: View {
             ElementCallStage(tiles: state.tiles,
                              spotlightID: state.spotlightID,
                              fullscreenID: fullscreenTile?.id,
+                             arrivalOrder: state.arrivalOrder,
+                             speakerID: state.smallCallSpeakerID,
+                             floatingInsets: floatingInsets(isLandscape: isLandscape),
                              scrollRequest: context.scrollRequest,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
