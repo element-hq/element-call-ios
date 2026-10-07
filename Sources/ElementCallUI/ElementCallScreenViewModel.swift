@@ -198,6 +198,7 @@ public final class ElementCallScreenViewModel {
         // would be missing from that first frame.
         context.viewState.isDeveloperModeEnabled = controller.options.isDeveloperModeEnabled
         context.viewState.isScreenSharingEnabled = controller.options.isScreenSharingEnabled
+        context.viewState.canSwitchCamera = MatrixRTCMediaSession.canSwitchCamera
         
         if let room {
             room.displayNamePublisher
@@ -287,6 +288,9 @@ public final class ElementCallScreenViewModel {
         guard let call = controller.call else {
             state.tiles = []
             state.spotlightID = nil
+            // So the next call on a reused view model starts its order and its speaker afresh.
+            state.arrivalOrder = ElementCallArrivalOrder()
+            state.smallCallSpeakerID = nil
             lastSpeakerID = nil
             controller.setSpotlightTile(nil)
             publish(state)
@@ -324,6 +328,12 @@ public final class ElementCallScreenViewModel {
         } else {
             nil
         }
+        // Observed whichever layout is up, so the small layout always finds the order kept (019 R32).
+        // The speaker carried over from the last refresh is the one the rule holds.
+        state.arrivalOrder.observe(state.tiles)
+        state.smallCallSpeakerID = ElementCallSmallCallLayout.speaker(tiles: state.tiles,
+                                                                      arrivalOrder: state.arrivalOrder,
+                                                                      held: state.smallCallSpeakerID)
         // The user's pick is followed by identity for as long as it is a hero; the moment the
         // choice lands elsewhere it is stale, and keeping it would bring that hero straight back
         // to the front if it ever returned.

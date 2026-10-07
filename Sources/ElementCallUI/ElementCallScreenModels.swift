@@ -91,6 +91,14 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// and this is the one copy the stage, the Picture in Picture window and the tests all read.
     /// Never ourselves, and never the head of the ranking just for being the head of it.
     public var spotlightID: MatrixRTCTileID?
+    /// The remote people in the order they arrived, which the small-call layout places them by
+    /// instead of the ranking (019 R7). Kept in the grid too, so entering the small layout finds it.
+    var arrivalOrder = ElementCallArrivalOrder()
+    /// Who the small-call layout raises and Picture in Picture follows (019 R9, R15). Stored for the
+    /// reason `spotlightID` is: it holds the last speaker through silence.
+    public var smallCallSpeakerID: MatrixRTCTileID?
+    /// Whether the device has a camera on each side, so the flip button means something (019 R24).
+    public var canSwitchCamera = false
     
     public var isVideoCall: Bool {
         isCameraEnabled || tiles.contains { $0.hasVideo || $0.isScreenShare }

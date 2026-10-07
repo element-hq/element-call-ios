@@ -328,6 +328,12 @@ public final class MatrixRTCMediaSession {
         MatrixRTCLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
     }
     
+    /// Whether the device has both a front and a back camera. Without them ``switchCamera()`` falls
+    /// back to the one camera there is, so a flip button would do nothing visible (019 R24).
+    public static var canSwitchCamera: Bool {
+        CameraCapturer.hasFrontAndBack
+    }
+    
     public func switchCamera() throws {
         guard capturesCamera else {
             isFrontCamera.toggle()
