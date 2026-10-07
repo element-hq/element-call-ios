@@ -480,6 +480,8 @@ struct ElementCallView: View {
                              speakerID: state.smallCallSpeakerID,
                              floatingInsets: floatingInsets(isLandscape: isLandscape),
                              extendsUnderSideSafeAreas: isFullBleed,
+                             ownCorner: context.ownTileCorner,
+                             canSwitchCamera: state.canSwitchCamera,
                              scrollRequest: context.scrollRequest,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
@@ -504,7 +506,8 @@ struct ElementCallView: View {
                              onScrollIdle: stageScrollDidStop,
                              // A way of looking, so it lives on the context beside the fullscreen
                              // tile; the view model resolves it by identity on the next refresh.
-                             onShowHero: { context.shownHeroID = $0 }) { action in
+                             onShowHero: { context.shownHeroID = $0 },
+                             onMoveOwnTile: { context.ownTileCorner = $0 }) { action in
                 context.send(viewAction: action)
             }
             .onAppear { applyStageChrome(.stageAppeared(isLandscape: isLandscape)) }

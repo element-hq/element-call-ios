@@ -42,6 +42,11 @@ public final class ElementCallScreenContext {
         }
     }
     
+    /// The corner our own floating tile is in (019 R18, R20). A way of looking, like the tile full
+    /// screen, so it lives here rather than in `viewState`: it outlives rotation, the grid and
+    /// minimizing, and only the end of the call puts it back.
+    public var ownTileCorner: ElementCallOwnTileCorner = .bottomRight
+    
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
@@ -291,6 +296,11 @@ public final class ElementCallScreenViewModel {
             // So the next call on a reused view model starts its order and its speaker afresh.
             state.arrivalOrder = ElementCallArrivalOrder()
             state.smallCallSpeakerID = nil
+            // Only on a change: Observation notifies on every set, and this runs on every wake
+            // while there is no call.
+            if context.ownTileCorner != .bottomRight {
+                context.ownTileCorner = .bottomRight
+            }
             lastSpeakerID = nil
             controller.setSpotlightTile(nil)
             publish(state)

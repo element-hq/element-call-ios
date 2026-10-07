@@ -58,6 +58,14 @@ struct ElementCallTileView: View, Equatable {
     /// How the layout asks for the picture to sit in the frame; resolved here, where its shape is
     /// known (019 R3, R4).
     var contentFit: ElementCallTileFit = .standard
+    /// Whether a double tap, or VoiceOver's action, may take this tile full screen. Not our own
+    /// tile in a small call (019 R14).
+    var allowsFullscreen = true
+    /// The device has a camera on each side, so the flip button does something (019 R24).
+    var canSwitchCamera = true
+    /// The picture's upright width over height once a frame lands, for a layout that takes its
+    /// shape from it (019 R10, R29). Left out of `==`, like the other closures.
+    var onContentAspectChange: (CGFloat?) -> Void = { _ in }
     /// Double tap: in and out of full screen. Defaulted so the previews need not name it, and ahead
     /// of `onAction` rather than after it because that one is the trailing closure at every call
     /// site: a closure declared after it silently becomes the one a trailing closure binds to.
@@ -92,6 +100,8 @@ struct ElementCallTileView: View, Equatable {
             && lhs.isNameHidden == rhs.isNameHidden
             && lhs.isVideoSuspended == rhs.isVideoSuspended
             && lhs.contentFit == rhs.contentFit
+            && lhs.allowsFullscreen == rhs.allowsFullscreen
+            && lhs.canSwitchCamera == rhs.canSwitchCamera
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
@@ -156,7 +166,11 @@ struct ElementCallTileView: View, Equatable {
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
-        .accessibilityAction(named: Text("Full screen")) { onToggleFullscreen() }
+        .accessibilityActions {
+            if allowsFullscreen {
+                Button("Full screen") { onToggleFullscreen() }
+            }
+        }
     }
     
     private var picture: some View {
@@ -176,7 +190,10 @@ struct ElementCallTileView: View, Equatable {
                                          isLocal: tile.isLocal,
                                          callProvider: callProvider,
                                          presentation: presentation(fit: fit),
-                                         onContentSizeChange: { contentAspect = $0.height > 0 ? $0.width / $0.height : nil },
+                                         onContentSizeChange: { size in
+                                             contentAspect = size.height > 0 ? size.width / size.height : nil
+                                             onContentAspectChange(contentAspect)
+                                         },
                                          // `hasVideo` is a claim about signalling, not about pixels.
                                          // When the two disagree the tile would be a black rectangle,
                                          // so the avatar holds the space until a frame actually lands.
@@ -192,7 +209,13 @@ struct ElementCallTileView: View, Equatable {
         }
         // The clip shape clips hit testing with it, so without this the corners do not answer.
         .contentShape(Rectangle())
-        .gesture(TapGesture(count: 2).onEnded { onToggleFullscreen() })
+        // Attached even where full screen is not allowed, so the tap is still this tile's and does
+        // not fall through to the stage, which would toggle the chrome (019 R14, R23).
+        .gesture(TapGesture(count: 2).onEnded {
+            if allowsFullscreen {
+                onToggleFullscreen()
+            }
+        })
         // Simultaneous rather than exclusive: an exclusive single tap waits out the system's
         // double-tap window, which reads as a tap that did nothing. The screen waits a shorter
         // window of its own instead, and a second tap inside it cancels the toggle (017 R16).
@@ -329,7 +352,7 @@ struct ElementCallTileView: View, Equatable {
                         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.heroIndicator)
                 }
                 Spacer()
-                if tile.isLocal, tile.hasVideo {
+                if tile.isLocal, tile.hasVideo, canSwitchCamera {
                     switchCameraButton
                 }
             }
