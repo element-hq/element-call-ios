@@ -27,6 +27,9 @@ is optional, nil when the client does not say. `ElementCallController.session` i
 `MatrixRTCCall`, and a call whose slot is closed ends with `MatrixRTCEndReason.slotClosed`. Hosts using
 `ElementCallSDKTransport` change nothing but the `start()` call.
 
+**`ElementCallThemeProtocol` gains `activeSpeakerBorder(in:)`, the fill of the speaking ring.** It
+defaults to the design's gradient; implement it to brand the ring, returning one colour for a plain one.
+
 ## 0.1.0-rc.9 - 2026-09-29
 
 **`ElementCallLayout` and `ElementCallScreenViewState.layout` are removed, and
