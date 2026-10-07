@@ -100,6 +100,14 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// Whether the device has a camera on each side, so the flip button means something (019 R24).
     public var canSwitchCamera = false
     
+    /// The tile the Picture in Picture window continues, and whether it must be that one. In a
+    /// small call it is the speaker, else the first to arrive, else ourselves, and exactly that
+    /// tile (019 R15); otherwise the spotlight, with the window's own fallbacks (003 R68).
+    public var pictureInPictureTile: (id: MatrixRTCTileID?, isExact: Bool) {
+        guard ElementCallSmallCallLayout.applies(to: tiles) else { return (spotlightID, false) }
+        return (ElementCallSmallCallLayout.pictureInPictureTile(tiles: tiles, arrivalOrder: arrivalOrder, speakerID: smallCallSpeakerID), true)
+    }
+    
     public var isVideoCall: Bool {
         isCameraEnabled || tiles.contains { $0.hasVideo || $0.isScreenShare }
     }

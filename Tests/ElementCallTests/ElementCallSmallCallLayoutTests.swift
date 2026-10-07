@@ -393,4 +393,17 @@ struct ElementCallSmallCallLayoutTests {
         #expect(Layout.pictureInPictureTile(tiles: tiles, arrivalOrder: order, speakerID: nil) == bob.id)
         #expect(Layout.pictureInPictureTile(tiles: [me], arrivalOrder: arrival([me]), speakerID: nil) == me.id)
     }
+    
+    /// The window follows the small call's choice exactly, and the grid's spotlight with fallbacks.
+    @Test
+    func theWindowIsTheSmallCallsChoiceExactlyAndTheSpotlightOtherwise() {
+        let carol = Fixtures.tile("Carol", isSpeaking: true)
+        let small = Fixtures.connected(tiles: [me, Fixtures.tile("Bob"), carol])
+        #expect(small.pictureInPictureTile.id == carol.id)
+        #expect(small.pictureInPictureTile.isExact)
+        let share = Fixtures.share("Bob")
+        let grid = Fixtures.connected(tiles: [me, share, Fixtures.tile("Bob"), carol])
+        #expect(grid.pictureInPictureTile.id == share.id)
+        #expect(!grid.pictureInPictureTile.isExact)
+    }
 }

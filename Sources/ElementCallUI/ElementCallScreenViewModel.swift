@@ -352,7 +352,8 @@ public final class ElementCallScreenViewModel {
         }
         // The window continues what the stage shows, so the controller learns it from here rather
         // than deriving its own answer from the ranking; the setter declines an equal value.
-        controller.setSpotlightTile(spotlight.tileID)
+        let pictureInPicture = state.pictureInPictureTile
+        controller.setSpotlightTile(pictureInPicture.id, isExact: pictureInPicture.isExact)
         
         publish(state)
     }

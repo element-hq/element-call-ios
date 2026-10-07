@@ -147,8 +147,8 @@ final class ScenarioStage {
             slots.removeAll()
             await player.settle()
             // What `ElementCallView` declares while the stage is unmounted.
-            let spotlightID = context.viewState.spotlightID
-            let also = [spotlightID, player.call.pictureInPictureCandidate(spotlight: spotlightID)].compactMap { $0 }
+            let pictureInPicture = context.viewState.pictureInPictureTile
+            let also = [pictureInPicture.id, player.call.pictureInPictureCandidate(spotlight: pictureInPicture.id, isExact: pictureInPicture.isExact)].compactMap { $0 }
             player.call.setDetailWindow(.init(ranks: 0..<ElementCallView.minimizedDetailWindowLength, also: Set(also)))
         case .restore:
             isMaximized = true

@@ -160,8 +160,8 @@ struct ElementCallView: View {
     /// remote video" flag); the stage declares its own again the moment it is back.
     private func declareMinimizedDetailWindow() {
         guard let call = callProvider() else { return }
-        let spotlightID = context.viewState.spotlightID
-        let also = [spotlightID, call.pictureInPictureCandidate(spotlight: spotlightID)].compactMap { $0 }
+        let pictureInPicture = context.viewState.pictureInPictureTile
+        let also = [pictureInPicture.id, call.pictureInPictureCandidate(spotlight: pictureInPicture.id, isExact: pictureInPicture.isExact)].compactMap { $0 }
         call.setDetailWindow(.init(ranks: 0..<Self.minimizedDetailWindowLength, also: Set(also)))
     }
     

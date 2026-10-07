@@ -42,7 +42,7 @@ enum ElementCallSmallCallLayout {
     private typealias Metrics = ElementCallStageLayout.Metrics
     
     /// Tiles, ourselves included, up to which this layout applies (R1).
-    static let maximumTiles = 5
+    nonisolated static let maximumTiles = 5
     
     /// R6's starting values, to be tuned on a device: the share of the stage width each of the
     /// three overlapping tiles takes, the narrowest any of them may get, and the most of a tile's
@@ -73,7 +73,7 @@ enum ElementCallSmallCallLayout {
     /// because a hero is "a share today, a pin later" and R8 is about shares. Our own share is
     /// never a tile, so it does not switch layouts. No margin and no memory: crossing five and six
     /// switches on every crossing (R33).
-    static func applies(to tiles: [ElementCallTile]) -> Bool {
+    nonisolated static func applies(to tiles: [ElementCallTile]) -> Bool {
         !tiles.contains { $0.isScreenShare && !$0.isLocal }
             && tiles.count { !$0.isScreenShare } <= maximumTiles
     }
@@ -162,7 +162,7 @@ enum ElementCallSmallCallLayout {
     /// The remote person tiles in arrival order. A tile the order has not seen yet goes after it in
     /// the order given, so a caller with no arrival record (a grid test, the first pass of a
     /// preview) gets the tiles as listed rather than none.
-    static func remoteInArrivalOrder(_ tiles: [ElementCallTile], arrivalOrder: ElementCallArrivalOrder) -> [ElementCallTile] {
+    nonisolated static func remoteInArrivalOrder(_ tiles: [ElementCallTile], arrivalOrder: ElementCallArrivalOrder) -> [ElementCallTile] {
         let remote = tiles.filter { !$0.isLocal && !$0.isScreenShare }
         let byID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
         let arrived = arrivalOrder.ids.compactMap { byID[$0] }
@@ -305,7 +305,7 @@ enum ElementCallSmallCallLayout {
     ///   - held: the previous answer. Kept while it is still speaking, so two people talking over
     ///     each other do not swap on every word, and kept through silence, so the last speaker
     ///     stays rather than the slot emptying (R9). Dropped once they leave.
-    static func speaker(tiles: [ElementCallTile],
+    nonisolated static func speaker(tiles: [ElementCallTile],
                         arrivalOrder: ElementCallArrivalOrder,
                         held: MatrixRTCTileID?) -> MatrixRTCTileID? {
         let remote = remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder)
@@ -323,7 +323,7 @@ enum ElementCallSmallCallLayout {
     
     /// The tile the Picture in Picture window continues while the small layout is up (R15): the
     /// speaker, else whoever arrived first, else ourselves when we are alone.
-    static func pictureInPictureTile(tiles: [ElementCallTile],
+    nonisolated static func pictureInPictureTile(tiles: [ElementCallTile],
                                      arrivalOrder: ElementCallArrivalOrder,
                                      speakerID: MatrixRTCTileID?) -> MatrixRTCTileID? {
         speakerID ?? remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder).first?.id ?? tiles.first(where: \.isLocal)?.id
