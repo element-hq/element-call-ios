@@ -78,6 +78,13 @@ enum ElementCallSmallCallLayout {
             && tiles.count { !$0.isScreenShare } <= maximumTiles
     }
     
+    /// Whether the arrangement is one picture behind all the chrome (R3, R4): ourselves alone, or one
+    /// other person. The screen extends the stage under the side safe areas for these, which is
+    /// why it asks here rather than reading the arrangement, which needs the stage's size first.
+    static func isFullBleed(_ tiles: [ElementCallTile]) -> Bool {
+        !tiles.isEmpty && applies(to: tiles) && tiles.count { !$0.isLocal && !$0.isScreenShare } <= 1
+    }
+    
     // MARK: - Arrangement
     
     /// Remote tiles by arrival, never by rank (R7), so nobody moves when someone else talks (R13).

@@ -39,6 +39,9 @@ struct ElementCallStage: View {
     /// (019 R19). Not part of ``Arrangement``: it changes inside the chrome's own animation, so the
     /// tile moves with the bar rather than on the stage's slower spring behind it.
     var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
+    /// The screen has extended the stage under the side safe areas, for a picture that runs edge to
+    /// edge (019 R3, R4). Only then are the side insets the stage's to keep clear of.
+    var extendsUnderSideSafeAreas = false
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
@@ -132,7 +135,12 @@ struct ElementCallStage: View {
             // viewport is what is not covered by the chrome kept clear above it.
             let metrics = ElementCallStageLayout.Metrics(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom - topClearance),
                                                          bottomInset: insets.bottom,
-                                                         controlsClearance: controlsClearance)
+                                                         leadingInset: extendsUnderSideSafeAreas ? insets.leading : 0,
+                                                         trailingInset: extendsUnderSideSafeAreas ? insets.trailing : 0,
+                                                         controlsClearance: controlsClearance,
+                                                         // From the reader rather than the scroller's
+                                                         // report, which a snapshot never waits for.
+                                                         topBleed: topClearance + insets.top)
             let stage = ElementCallStageLayout.compute(.init(tiles: tiles,
                                                              spotlightID: spotlightID,
                                                              fullscreenID: fullscreenID,
