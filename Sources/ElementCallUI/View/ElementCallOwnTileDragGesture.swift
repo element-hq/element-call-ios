@@ -25,8 +25,9 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
     let tileFrame: CGRect?
     /// The finger's travel so far.
     let onChange: (CGSize) -> Void
-    /// The finger lifted after a drag; where it was is what `onChange` last said.
-    let onEnd: () -> Void
+    /// The finger lifted after a drag, moving at this velocity in points per second; where it was is
+    /// what `onChange` last said.
+    let onEnd: (CGSize) -> Void
     /// The system took the touch away; the tile goes back to its corner.
     let onCancel: () -> Void
     
@@ -55,7 +56,8 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
         case .began, .changed:
             gesture.onChange(travel)
         case .ended:
-            gesture.onEnd()
+            let velocity = recognizer.velocity(in: view)
+            gesture.onEnd(CGSize(width: velocity.x, height: velocity.y))
         case .cancelled, .failed:
             gesture.onCancel()
         default:

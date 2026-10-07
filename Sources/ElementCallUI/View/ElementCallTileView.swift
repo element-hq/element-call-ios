@@ -24,7 +24,7 @@ enum ElementCallTileAppearance {
     /// and zoomable. Its chrome is ``ElementCallFullscreenChrome``, drawn by the screen, because
     /// keeping the name pill clear of the floating controls needs to know where those are.
     case fullscreen
-    /// The whole screen in a small call, behind the chrome (019 R3, R4): the card's chrome, the
+    /// The whole screen in a small call, behind the chrome (019 R4): the card's chrome, the
     /// speaking ring included, with square corners. Not ``fullscreen``, which would hide the name
     /// and the ring, allow a zoom, and be read by the screen as a tile gone full screen.
     case fullBleed
@@ -50,13 +50,14 @@ struct ElementCallTileView: View, Equatable {
     /// The landscape spotlight: the design draws no name on it, the bar floats over its bottom
     /// edge where the name would be, and landscape is for the shared screen above all. Open
     /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay. A small call's
-    /// full-bleed tile too (019 R3, R4), for the same reason. The name is still spoken.
+    /// full-bleed tile too (019 R4), for the same reason, and our floating tile. The name is still
+    /// spoken.
     var isNameHidden = false
     /// The avatar stands in so no decoder runs for it. The stage never sets it for a composed tile
     /// (a paused tile keeps its last picture); the harness and the previews use it.
     var isVideoSuspended = false
     /// How the layout asks for the picture to sit in the frame; resolved here, where its shape is
-    /// known (019 R3, R4).
+    /// known (019 R4).
     var contentFit: ElementCallTileFit = .standard
     /// Whether a double tap, or VoiceOver's action, may take this tile full screen. Not our own
     /// tile in a small call (019 R14).
@@ -375,8 +376,6 @@ struct ElementCallTileView: View, Equatable {
             return 1
         }
         switch contentFit {
-        case .fit:
-            return 1
         case .fitWhenLandscape:
             // R4's one exception: a landscape picture on a frame taller than it is wide is shown
             // whole. Until the first frame says otherwise, it fills.
@@ -409,8 +408,15 @@ struct ElementCallTileView: View, Equatable {
         } else if tile.hasHandRaised {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(style.theme.iconAccentPrimary, lineWidth: 3)
+        } else if appearance == .floating {
+            // Our floating tile overlaps the tiles it floats over, and with the camera off it is the
+            // same fill as they are: without an edge it blended into the one beneath.
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(style.theme.borderInteractiveSecondary, lineWidth: Self.floatingBorderWidth)
         }
     }
+    
+    static let floatingBorderWidth: CGFloat = 1.5
     
     private func badge(@ViewBuilder content: () -> some View) -> some View {
         HStack(spacing: 4) { content() }

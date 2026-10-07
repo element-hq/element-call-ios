@@ -7,6 +7,7 @@
 
 import ElementCallKit
 import SwiftUI
+import UIKit
 
 /// The corner our own floating tile sits in (019 R18, R20). Physical rather than leading and
 /// trailing: a right-to-left locale does not mirror it.
@@ -44,26 +45,21 @@ enum ElementCallSmallCallLayout {
     /// Tiles, ourselves included, up to which this layout applies (R1).
     nonisolated static let maximumTiles = 5
     
-    /// R6's starting values, to be tuned on a device: the share of the stage width each of the
-    /// three overlapping tiles takes, the narrowest any of them may get, and the most of a tile's
-    /// height its neighbour may cover before they shrink.
+    /// R6's values, being tuned on a device: the most of the stage width each of the three tiles
+    /// takes, and the narrowest any of them may get.
     static let staggerWidthFraction: CGFloat = 0.8
     static let staggerMinimumWidth: CGFloat = 200
-    static let staggerMaximumOverlap: CGFloat = 0.5
-    /// How much the speaker's tile grows in the overlap (R9), as a fraction of each side.
-    static let speakerBoost: CGFloat = 0.1
     
-    /// R17, R28.
-    static let floatingPortraitSize = CGSize(width: 140, height: 210)
-    static let floatingLandscapeSize = CGSize(width: 210, height: 140)
-    static let floatingAvatarSize = CGSize(width: 140, height: 140)
+    /// R17, R28. Smaller than the spec's 140 × 210, which read as too big on a phone; being tuned
+    /// on the device (hq 019 ios.md, appendix).
+    static let floatingPortraitSize = CGSize(width: 100, height: 150)
+    static let floatingLandscapeSize = CGSize(width: 150, height: 100)
+    static let floatingAvatarSize = CGSize(width: 100, height: 100)
     static let floatingMargin = Metrics.horizontalMargin
     
     /// Above every tile it floats over, and below a tile going full screen and its scrim, which
     /// replace it like everything else.
     static let floatingZIndex: Double = 2
-    /// The speaker's tile in the overlap, above its neighbours (R6, R9).
-    static let staggerTopZIndex = 0.5
     
     // MARK: - Selection
     
@@ -78,18 +74,18 @@ enum ElementCallSmallCallLayout {
             && tiles.count { !$0.isScreenShare } <= maximumTiles
     }
     
-    /// Whether the arrangement is one picture behind all the chrome (R3, R4): ourselves alone, or one
-    /// other person. The screen extends the stage under the side safe areas for these, which is
-    /// why it asks here rather than reading the arrangement, which needs the stage's size first.
+    /// Whether the arrangement is one picture behind all the chrome: one other person (R4). The
+    /// screen extends the stage under the side safe areas for it, which is why it asks here rather
+    /// than reading the arrangement, which needs the stage's size first.
     static func isFullBleed(_ tiles: [ElementCallTile]) -> Bool {
-        !tiles.isEmpty && applies(to: tiles) && tiles.count { !$0.isLocal && !$0.isScreenShare } <= 1
+        applies(to: tiles) && tiles.count { !$0.isLocal && !$0.isScreenShare } == 1
     }
     
     // MARK: - Arrangement
     
     /// Remote tiles by arrival, never by rank (R7), so nobody moves when someone else talks (R13).
-    /// Our own tile floats (R2) and is placed apart from them, unless it is inline: alone (R3) or
-    /// in landscape with three tiles or more (R16).
+    /// Our own tile floats (R2) and is placed apart from them, alone included (R3), unless it is
+    /// inline: in landscape with three tiles or more (R16).
     ///
     /// Everything is on screen, so everything is live and nothing is hidden or released, and the
     /// detail window covers every remote tile (R12). Each placement still carries its *rank* rather
@@ -99,7 +95,7 @@ enum ElementCallSmallCallLayout {
         let own = input.tiles.first(where: \.isLocal)
         let remote = remoteInArrivalOrder(input.tiles, arrivalOrder: input.arrivalOrder)
         let ranks = Dictionary(uniqueKeysWithValues: input.tiles.filter { !$0.isLocal }.enumerated().map { ($1.id, $0) })
-        let isFloating = own != nil && !remote.isEmpty && (!metrics.isLandscape || remote.count == 1)
+        let isFloating = own != nil && (!metrics.isLandscape || remote.count <= 1)
         
         var placements = [ElementCallTilePlacement]()
         func place(_ tile: ElementCallTile, _ frame: CGRect, _ appearance: ElementCallTileAppearance, zIndex: Double = 0, fit: ElementCallTileFit = .standard) {
@@ -113,9 +109,9 @@ enum ElementCallSmallCallLayout {
                                                        contentFit: fit))
         }
         
-        if remote.isEmpty, let own {
-            // R3: the whole screen and the picture whole, so you can check your hair.
-            place(own, fullBleedFrame(metrics), .fullBleed, fit: .fit)
+        if remote.isEmpty {
+            // R3: only us, in our corner like any other small call. A whole-screen tile of our own
+            // put the flip button under the control bar, and moved our tile on the first arrival.
         } else if remote.count == 1 {
             // R4: filled, except a landscape picture on a portrait stage, which is shown whole.
             place(remote[0], fullBleedFrame(metrics), .fullBleed, fit: metrics.isLandscape ? .standard : .fitWhenLandscape)
@@ -128,12 +124,11 @@ enum ElementCallSmallCallLayout {
                 place(tile, frame, .card)
             }
         } else if remote.count == 3 {
-            let top = remote.first { $0.id == input.speakerID } ?? remote[1]
+            // The speaker is ringed and nothing else (R9): with the rows not overlapping there is
+            // nothing to be on top of, and growing the speaker ate the gap beside it, unevenly, since
+            // a top or bottom row could only grow inwards.
             for (tile, frame) in zip(remote, staggerFrames(metrics: metrics)) {
-                let isTop = tile.id == top.id
-                // Only the speaker grows; the 2nd tile on top for want of one keeps its size (R9).
-                let grown = isTop && tile.id == input.speakerID ? boosted(frame, metrics: metrics) : frame
-                place(tile, grown, .card, zIndex: isTop ? staggerTopZIndex : 0)
+                place(tile, frame, .card)
             }
         } else {
             for (tile, frame) in zip(remote, twoColumnFrames(count: remote.count, metrics: metrics)) {
@@ -170,7 +165,7 @@ enum ElementCallSmallCallLayout {
         return arrived + remote.filter { !known.contains($0.id) }
     }
     
-    /// The whole screen, behind both bars (R3, R4). In content coordinates, which start under the
+    /// The whole screen, behind both bars (R4). In content coordinates, which start under the
     /// portrait top bar, so it reaches above zero by the room the bar and the status bar take. The
     /// sides are the stage's own, which runs under the side safe areas while this is up; the bottom
     /// already includes the home indicator.
@@ -178,39 +173,35 @@ enum ElementCallSmallCallLayout {
         CGRect(x: 0, y: -metrics.topBleed, width: metrics.area.width, height: metrics.area.height + metrics.topBleed)
     }
     
-    /// R5: two 3:4 tiles side by side at the top, leaving the bottom for our floating tile.
-    private static func pairFrames(metrics: Metrics) -> [CGRect] {
-        let width = (metrics.cardsWidth - Metrics.spacing) / 2
-        let height = width / (3.0 / 4.0)
-        return (0..<2).map { CGRect(x: metrics.cardsLeading + CGFloat($0) * (width + Metrics.spacing), y: 0, width: width, height: height) }
+    /// R5: two 4:3 tiles one above the other, from the top, as wide as the stage allows: the full
+    /// width, unless two rows that wide do not fit above the controls (an SE), when they are as wide
+    /// as fits and centred. Our floating tile overlaps the lower one (R2).
+    static func pairFrames(metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
+        let height = min(metrics.cardsWidth / Metrics.tileAspect, (metrics.cardsBottom - Metrics.spacing) / 2)
+        let width = height * Metrics.tileAspect
+        let leading = metrics.cardsLeading + (metrics.cardsWidth - width) / 2
+        return (0..<2).map { CGRect(x: leading, y: CGFloat($0) * (height + Metrics.spacing), width: width, height: height) }
     }
     
     /// R6: three 4:3 rows, left, right, left, the first at the top and the third at the bottom of the
-    /// band, overlapping by whatever it takes to fit. Past ``staggerMaximumOverlap`` they shrink
-    /// instead, but never below ``staggerMinimumWidth``, which only a split screen or a very short
-    /// stage reaches.
+    /// band, with at least the ordinary gap between them. At ``staggerWidthFraction`` three rows do
+    /// not fit a phone's band, so they shrink until they do, but never below ``staggerMinimumWidth``,
+    /// which only a split screen or a very short stage reaches and where they then overlap. They
+    /// used to overlap instead of shrinking, as R6 first said, which hid the middle tile's name
+    /// under the third.
     static func staggerFrames(metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
         let band = metrics.cardsBottom
         var width = min(max(staggerWidthFraction * metrics.cardsWidth, staggerMinimumWidth), metrics.cardsWidth)
         var height = width / Metrics.tileAspect
-        if (3 * height - band) / 2 > staggerMaximumOverlap * height {
-            // The height at which neighbours overlap by exactly the maximum.
-            height = band / (3 - 2 * staggerMaximumOverlap)
-            width = min(max(height * Metrics.tileAspect, staggerMinimumWidth), metrics.cardsWidth)
+        let heightThatFits = (band - 2 * Metrics.spacing) / 3
+        if height > heightThatFits {
+            width = min(max(heightThatFits * Metrics.tileAspect, staggerMinimumWidth), metrics.cardsWidth)
             height = width / Metrics.tileAspect
         }
         let lowest = band - height
         let ys = [0, lowest / 2, lowest]
         let xs = [metrics.cardsLeading, metrics.cardsTrailing - width, metrics.cardsLeading]
         return zip(xs, ys).map { CGRect(x: $0, y: $1, width: width, height: height) }
-    }
-    
-    /// R9: grown around its centre, then moved back inside the band if that pushed it out.
-    private static func boosted(_ frame: CGRect, metrics: Metrics) -> CGRect {
-        let grown = frame.insetBy(dx: -frame.width * speakerBoost / 2, dy: -frame.height * speakerBoost / 2)
-        let x = min(max(grown.minX, metrics.cardsLeading), metrics.cardsTrailing - grown.width)
-        let y = min(max(grown.minY, 0), metrics.cardsBottom - grown.height)
-        return CGRect(origin: CGPoint(x: x, y: y), size: grown.size)
     }
     
     /// R11: 4:3 in two columns at the top of the stage, not centred, leaving the bottom for our
@@ -287,6 +278,22 @@ enum ElementCallSmallCallLayout {
         }
     }
     
+    /// The corner a released tile goes to (R21): the one nearest where it would coast to from the
+    /// finger's velocity, so a flick towards a corner reaches it from wherever it was let go. A slow
+    /// release projects almost nowhere, and is the corner of the quadrant it was dropped in.
+    static func releaseCorner(center: CGPoint, velocity: CGSize, in bounds: CGRect) -> ElementCallOwnTileCorner {
+        nearestCorner(to: CGPoint(x: center.x + projectedDistance(velocity.width),
+                                  y: center.y + projectedDistance(velocity.height)),
+                      in: bounds)
+    }
+    
+    /// How far something moving at `velocity` points per second coasts before it stops, at the
+    /// rate a scroll view decelerates. The projection Apple's own fluid interfaces use for a flick.
+    static func projectedDistance(_ velocity: CGFloat) -> CGFloat {
+        let rate = UIScrollView.DecelerationRate.normal.rawValue
+        return velocity / 1000 * rate / (1 - rate)
+    }
+    
     /// A drag's translation, held so the whole tile stays inside the bounds (R21).
     static func clampedDrag(_ translation: CGSize, from frame: CGRect, in bounds: CGRect) -> CGSize {
         CGSize(width: min(max(translation.width, bounds.minX - frame.minX), bounds.maxX - frame.maxX),
@@ -295,19 +302,17 @@ enum ElementCallSmallCallLayout {
     
     // MARK: - Speaker
     
-    /// Who counts as speaking for the small layout: the tile on top of the overlap (R6, R9) and the
-    /// one Picture in Picture continues (R15). One choice for both, so the window never shows
-    /// someone other than the tile the stage is raising.
+    /// Who counts as speaking for the small layout: the one Picture in Picture continues (R15).
     ///
     /// - Parameters:
     ///   - tiles: the composed tiles, ourselves included; we are never the speaker (R15).
     ///   - arrivalOrder: breaks a tie between two people starting to speak at once.
     ///   - held: the previous answer. Kept while it is still speaking, so two people talking over
     ///     each other do not swap on every word, and kept through silence, so the last speaker
-    ///     stays rather than the slot emptying (R9). Dropped once they leave.
+    ///     stays rather than the window emptying (R15). Dropped once they leave.
     nonisolated static func speaker(tiles: [ElementCallTile],
-                        arrivalOrder: ElementCallArrivalOrder,
-                        held: MatrixRTCTileID?) -> MatrixRTCTileID? {
+                                    arrivalOrder: ElementCallArrivalOrder,
+                                    held: MatrixRTCTileID?) -> MatrixRTCTileID? {
         let remote = remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder)
         if let held, remote.contains(where: { $0.id == held && $0.isSpeaking }) {
             return held
@@ -324,8 +329,8 @@ enum ElementCallSmallCallLayout {
     /// The tile the Picture in Picture window continues while the small layout is up (R15): the
     /// speaker, else whoever arrived first, else ourselves when we are alone.
     nonisolated static func pictureInPictureTile(tiles: [ElementCallTile],
-                                     arrivalOrder: ElementCallArrivalOrder,
-                                     speakerID: MatrixRTCTileID?) -> MatrixRTCTileID? {
+                                                 arrivalOrder: ElementCallArrivalOrder,
+                                                 speakerID: MatrixRTCTileID?) -> MatrixRTCTileID? {
         speakerID ?? remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder).first?.id ?? tiles.first(where: \.isLocal)?.id
     }
 }

@@ -38,8 +38,6 @@ struct ElementCallTilePlacement: Identifiable, Equatable {
 enum ElementCallTileFit: Equatable {
     /// The tile's own rule: a camera fills, a share fits, the spotlight sits between the two.
     case standard
-    /// Shown whole (019 R3).
-    case fit
     /// Shown whole when the picture is landscape and the frame is not, filled otherwise: the one
     /// exception R4 makes to filling the screen.
     case fitWhenLandscape
@@ -103,7 +101,7 @@ struct ElementCallStageLayout: Equatable {
         var controlsClearance: CGFloat
         /// How far above the content's zero the screen's top edge is: the portrait top bar's room
         /// and the top safe area. Only a picture that runs behind the top bar reaches up into it
-        /// (019 R3, R4).
+        /// (019 R4).
         var topBleed: CGFloat = 0
         
         static let horizontalMargin: CGFloat = 16

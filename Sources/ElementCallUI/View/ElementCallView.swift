@@ -56,7 +56,7 @@ struct ElementCallView: View {
                         // A fitted picture is centred on what it is given, so full screen gives
                         // it the screen: centred on the notch-shaped remainder instead, the
                         // letterbox above and below would not match. A small call's full-bleed
-                        // picture likewise (019 R3, R4); its top and bottom the stage reaches
+                        // picture likewise (019 R4); its top and bottom the stage reaches
                         // already, so only the sides are given up here.
                         .ignoresSafeArea(.container, edges: fullscreenTile != nil ? .all : isFullBleed ? .horizontal : [])
                     
@@ -195,7 +195,7 @@ struct ElementCallView: View {
         !isStageShown || context.stageChrome.isVisible
     }
     
-    /// One picture behind all the chrome: a small call of one or two (019 R3, R4).
+    /// One picture behind all the chrome: a one-to-one small call (019 R4).
     private var isFullBleed: Bool {
         fullscreenTile == nil && ElementCallSmallCallLayout.isFullBleed(context.viewState.tiles)
     }
@@ -558,7 +558,7 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Failed")
         screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
             .previewDisplayName("Connected group")
-        // Alone in the call: the model's ranked list is empty and our own tile is the whole stage.
+        // Alone in the call: the model's ranked list is empty and our own tile is all there is.
         // This used to render as a spinner you could not get out of.
         screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice]))
             .previewDisplayName("Alone in the call")

@@ -105,15 +105,20 @@ struct ElementCallSmallCallLayoutTests {
     
     // MARK: - Alone and one to one (R3, R4)
     
+    /// R3: alone, our tile floats in its corner as in any other small call, in both orientations.
     @Test
-    func aloneOurTileTakesTheWholeScreenFitted() throws {
-        let layout = arrange([])
-        let own = try placement(of: me, in: layout)
-        #expect(own.appearance == .fullBleed)
-        #expect(own.contentFit == .fit)
-        #expect(own.frame == CGRect(x: 0, y: -120, width: 402, height: 876))
-        #expect(layout.isStatic)
-        #expect(layout.readingOrder == [me.id])
+    func aloneOurTileFloatsInItsCorner() throws {
+        for metrics in [Self.iPhone17, Self.landscape] {
+            let layout = arrange([], metrics: metrics)
+            let own = try placement(of: me, in: layout)
+            #expect(own.appearance == .floating)
+            #expect(own.frame == Layout.floatingFrame(corner: .bottomRight, size: own.frame.size, metrics: metrics, insets: Self.chromeShown))
+            #expect(layout.placements.count == 1)
+            #expect(layout.isStatic)
+            #expect(layout.readingOrder == [me.id])
+        }
+        #expect(!Layout.isFullBleed([me]))
+        #expect(Layout.isFullBleed([me, Fixtures.tile("Bob")]))
     }
     
     /// R4: the other person runs behind both bars, and is shown whole only for a landscape picture
@@ -137,70 +142,76 @@ struct ElementCallSmallCallLayoutTests {
     
     // MARK: - Portrait (R5, R6, R11)
     
-    /// R5: side by side, 3:4, at the top, clear of the floating tile in either bottom corner.
+    /// R5: one above the other, 4:3, as wide as the stage allows, from the top.
     @Test(arguments: Phone.allCases)
-    func threeTilesThePairIsSideBySideAtTheTop(phone: Phone) throws {
+    func threeTilesThePairIsStackedFullWidthFromTheTop(phone: Phone) throws {
         let metrics = phone.metrics
         let remote = Self.people(["Bob", "Carol"])
         let layout = arrange(remote, metrics: metrics)
         let first = try frame(of: remote[0], in: layout)
         let second = try frame(of: remote[1], in: layout)
-        #expect(first.minY == 0 && second.minY == 0)
+        #expect(first.minY == 0)
+        #expect(second.minY == first.maxY + 12)
+        #expect(first.minX == second.minX)
         #expect(first.size == second.size)
-        #expect(close(first.width / first.height, 3.0 / 4.0, within: 0.001))
-        #expect(close(first.width * 2 + 12, metrics.cardsWidth))
-        for corner in [ElementCallOwnTileCorner.bottomLeft, .bottomRight] {
-            let floating = try frame(of: me, in: arrange(remote, corner: corner, metrics: metrics))
-            #expect(!floating.intersects(first) && !floating.intersects(second))
-        }
+        #expect(close(first.width / first.height, 4.0 / 3.0, within: 0.001))
+        // As wide as they can be: the full width on an iPhone 17, and on an SE as wide as two rows
+        // fitting above the controls allow.
+        #expect(close(first.width, min(metrics.cardsWidth, (metrics.cardsBottom - 12) / 2 * 4 / 3)))
+        #expect(second.maxY <= metrics.cardsBottom)
     }
     
-    /// R6 at 80%: the overlaps `ios.md` works out, left, right, left.
-    @Test(arguments: [(Phone.iPhone17, CGFloat(20), [CGFloat(0), 202, 404]), (.iPhoneSE, 61.2, [0, 144.6, 289.2])])
-    func fourTilesStaggerLeftRightLeftAndOverlap(phone: Phone, overlap: CGFloat, ys: [CGFloat]) throws {
+    /// R5 on a stage too short for two full-width rows: they shrink, still 4:3, and stay centred.
+    @Test
+    func thePairShrinksOnAShortStage() {
+        let short = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 560), bottomInset: 0, controlsClearance: 84)
+        let frames = Layout.pairFrames(metrics: short)
+        #expect(close(frames[1].maxY, short.cardsBottom))
+        #expect(frames[0].width < short.cardsWidth)
+        #expect(close(frames[0].width / frames[0].height, 4.0 / 3.0, within: 0.001))
+        #expect(close(frames[0].midX, (short.cardsLeading + short.cardsTrailing) / 2))
+    }
+    
+    /// R6: left, right, left, from the top of the band to its bottom, with the ordinary gap between
+    /// rows rather than an overlap. Neither phone fits three rows at 80%, so both shrink: 268 pt on
+    /// an iPhone 17, 209 pt on an SE.
+    @Test(arguments: Phone.allCases)
+    func fourTilesStaggerLeftRightLeftWithoutOverlapping(phone: Phone) throws {
         let metrics = phone.metrics
         let remote = Self.people(["Bob", "Carol", "Dan"])
         let frames = try remote.map { try frame(of: $0, in: arrange(remote, metrics: metrics)) }
-        #expect(frames.allSatisfy { close($0.width, 0.8 * metrics.cardsWidth) })
-        #expect(frames.allSatisfy { close($0.width / $0.height, 4.0 / 3.0, within: 0.001) })
-        #expect(zip(frames.map(\.minY), ys).allSatisfy { close($0, $1) })
-        #expect(close(frames[0].maxY - frames[1].minY, overlap))
+        let height = (metrics.cardsBottom - 24) / 3
+        #expect(frames.allSatisfy { close($0.height, height) && close($0.width, height * 4 / 3) })
+        #expect(frames[0].width < 0.8 * metrics.cardsWidth)
+        #expect(frames[0].minY == 0)
+        #expect(close(frames[1].minY - frames[0].maxY, 12))
+        #expect(close(frames[2].minY - frames[1].maxY, 12))
+        #expect(close(frames[2].maxY, metrics.cardsBottom))
         #expect(frames[0].minX == metrics.cardsLeading && frames[2].minX == metrics.cardsLeading)
         #expect(frames[1].maxX == metrics.cardsTrailing)
     }
     
-    /// R6: a stage too short for three rows at the maximum overlap shrinks them, never below the
-    /// minimum width.
+    /// R6: a stage tall enough keeps them at 80%, spread with a wider gap.
     @Test
-    func theStaggerShrinksOnAShortStageButNotBelowItsMinimum() {
+    func theStaggerStaysAtItsWidthWhenItFits() {
+        let tall = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 900), bottomInset: 0, controlsClearance: 84)
+        let frames = Layout.staggerFrames(metrics: tall)
+        #expect(close(frames[0].width, 0.8 * tall.cardsWidth))
+        #expect(frames[1].minY - frames[0].maxY >= 12)
+    }
+    
+    /// R6: never below the minimum width, where a very short stage then overlaps them.
+    @Test
+    func theStaggerShrinksButNotBelowItsMinimum() {
         let short = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 420), bottomInset: 0, controlsClearance: 84)
         let frames = Layout.staggerFrames(metrics: short)
-        #expect(frames[0].width < 0.8 * short.cardsWidth)
-        #expect(frames[0].width >= Layout.staggerMinimumWidth)
-        let shorter = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 300), bottomInset: 0, controlsClearance: 84)
-        #expect(Layout.staggerFrames(metrics: shorter)[0].width == Layout.staggerMinimumWidth)
+        #expect(frames[0].width == Layout.staggerMinimumWidth)
+        #expect(frames[0].maxY > frames[1].minY)
     }
     
-    /// R6, R9: with nobody having spoken the 2nd tile is on top at its own size; the speaker comes
-    /// to the top and grows, held there through silence by the speaker choice.
-    @Test
-    func theSpeakerComesToTheTopOfTheStaggerAndGrows() throws {
-        let remote = Self.people(["Bob", "Carol", "Dan"])
-        let quiet = arrange(remote)
-        #expect(try placement(of: remote[1], in: quiet).zIndex == Layout.staggerTopZIndex)
-        #expect(try placement(of: remote[0], in: quiet).zIndex == 0)
-        
-        let speaking = arrange(remote, speaker: remote[2].id)
-        let top = try placement(of: remote[2], in: speaking)
-        #expect(top.zIndex == Layout.staggerTopZIndex)
-        #expect(try close(top.frame.width, frame(of: remote[2], in: quiet).width * (1 + Layout.speakerBoost)))
-        #expect(top.frame.maxY <= Self.iPhone17.cardsBottom)
-        #expect(try placement(of: remote[1], in: speaking).zIndex == 0)
-        #expect(try frame(of: remote[1], in: speaking) == frame(of: remote[1], in: quiet))
-    }
-    
-    /// R9: only the overlap moves for a speaker. Everywhere else the frames are the same whoever talks.
-    @Test(arguments: [1, 2, 4])
+    /// R9: a speaker is shown by the ring alone. No arrangement moves, grows or raises a tile for
+    /// whoever talks, the stack of three included.
+    @Test(arguments: [1, 2, 3, 4])
     func outsideTheStaggerTheSpeakerMovesNothing(remoteCount: Int) {
         let remote = Self.people(Array(["Bob", "Carol", "Dan", "Erin"].prefix(remoteCount)))
         #expect(arrange(remote).placements == arrange(remote, speaker: remote[0].id).placements)
@@ -297,20 +308,26 @@ struct ElementCallSmallCallLayoutTests {
     
     @Test
     func theFloatingTileTakesTheShapeOfThePicture() {
-        #expect(Layout.floatingSize(hasVideo: false, videoAspect: 16.0 / 9.0, isLandscape: false) == CGSize(width: 140, height: 140))
-        #expect(Layout.floatingSize(hasVideo: true, videoAspect: 9.0 / 16.0, isLandscape: true) == CGSize(width: 140, height: 210))
-        #expect(Layout.floatingSize(hasVideo: true, videoAspect: 4.0 / 3.0, isLandscape: false) == CGSize(width: 210, height: 140))
+        #expect(Layout.floatingSize(hasVideo: false, videoAspect: 16.0 / 9.0, isLandscape: false) == Layout.floatingAvatarSize)
+        #expect(Layout.floatingSize(hasVideo: true, videoAspect: 9.0 / 16.0, isLandscape: true) == Layout.floatingPortraitSize)
+        #expect(Layout.floatingSize(hasVideo: true, videoAspect: 4.0 / 3.0, isLandscape: false) == Layout.floatingLandscapeSize)
         // Before the first frame, the stage's orientation.
-        #expect(Layout.floatingSize(hasVideo: true, videoAspect: nil, isLandscape: false) == CGSize(width: 140, height: 210))
-        #expect(Layout.floatingSize(hasVideo: true, videoAspect: nil, isLandscape: true) == CGSize(width: 210, height: 140))
+        #expect(Layout.floatingSize(hasVideo: true, videoAspect: nil, isLandscape: false) == Layout.floatingPortraitSize)
+        #expect(Layout.floatingSize(hasVideo: true, videoAspect: nil, isLandscape: true) == Layout.floatingLandscapeSize)
+        // A portrait shape and its landscape turn, and a square: whatever the sizes are tuned to.
+        #expect(Layout.floatingPortraitSize.width == Layout.floatingLandscapeSize.height)
+        #expect(Layout.floatingAvatarSize.width == Layout.floatingAvatarSize.height)
     }
     
-    /// R19, and `ios.md`'s figures: bottom right over a shown bar is x 246…386, y 412…622.
+    /// R19: bottom right over a shown bar ends 16 pt inside the cards' trailing edge and 16 pt above
+    /// the bar, which on an iPhone 17 is x 386, y 622.
     @Test
     func theFloatingTileSitsInItsCornerClearOfTheChrome() {
         let size = Layout.floatingPortraitSize
         let metrics = Self.iPhone17
-        #expect(Layout.floatingFrame(corner: .bottomRight, size: size, metrics: metrics, insets: Self.chromeShown) == CGRect(x: 246, y: 412, width: 140, height: 210))
+        let bottomRight = Layout.floatingFrame(corner: .bottomRight, size: size, metrics: metrics, insets: Self.chromeShown)
+        #expect(bottomRight.maxX == 386 && bottomRight.maxY == 622)
+        #expect(bottomRight.size == size)
         #expect(Layout.floatingFrame(corner: .bottomRight, size: size, metrics: metrics, insets: .zero).maxY == metrics.safeBottom - 16)
         #expect(Layout.floatingFrame(corner: .topLeft, size: size, metrics: metrics, insets: .init(top: 60, bottom: 84)).origin == CGPoint(x: 16, y: 76))
     }
@@ -329,6 +346,22 @@ struct ElementCallSmallCallLayoutTests {
         #expect(Layout.clampedDrag(CGSize(width: 500, height: 500), from: frame, in: bounds) == .zero)
         #expect(Layout.clampedDrag(CGSize(width: -1000, height: -1000), from: frame, in: bounds) == CGSize(width: -230, height: -390))
         #expect(Layout.clampedDrag(CGSize(width: -10, height: 0), from: frame, in: bounds) == CGSize(width: -10, height: 0))
+    }
+    
+    /// R21 with inertia: a flick goes to the corner it was thrown towards, a slow release stays in
+    /// the quadrant it was dropped in.
+    @Test
+    func aFlickCarriesTheTileToTheCornerItWasThrownTowards() {
+        let bounds = CGRect(x: 16, y: 16, width: 370, height: 600)
+        let bottomRight = CGPoint(x: 300, y: 500)
+        // Barely moving: where it was let go.
+        #expect(Layout.releaseCorner(center: bottomRight, velocity: CGSize(width: 0, height: -50), in: bounds) == .bottomRight)
+        // Flicked upwards from the bottom half: the top corner on the same side.
+        #expect(Layout.releaseCorner(center: bottomRight, velocity: CGSize(width: 0, height: -1500), in: bounds) == .topRight)
+        // Flicked up and to the left: the far corner.
+        #expect(Layout.releaseCorner(center: bottomRight, velocity: CGSize(width: -1500, height: -1500), in: bounds) == .topLeft)
+        // About half a second of coasting, as a scroll view's normal rate gives.
+        #expect(abs(Layout.projectedDistance(1000) - 499) < 1)
     }
     
     /// R18: corners are physical, so the arithmetic has no notion of reading direction to follow.

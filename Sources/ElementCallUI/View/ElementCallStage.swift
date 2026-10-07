@@ -32,8 +32,9 @@ struct ElementCallStage: View {
     /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
     /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
     var fullscreenID: MatrixRTCTileID?
-    /// What the small-call layout places by and raises (019 R7, R9). Kept by the view model, not
-    /// here: the stage unmounts while minimized, and both have to outlive that.
+    /// What the small-call layout places by, and who the Picture in Picture source view is anchored
+    /// on (019 R7, R15). Kept by the view model, not here: the stage unmounts while minimized, and
+    /// both have to outlive that.
     var arrivalOrder = ElementCallArrivalOrder()
     var speakerID: MatrixRTCTileID?
     /// Room the chrome takes at the top and the bottom, which only our floating tile keeps clear of
@@ -41,7 +42,7 @@ struct ElementCallStage: View {
     /// tile moves with the bar rather than on the stage's slower spring behind it.
     var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
     /// The screen has extended the stage under the side safe areas, for a picture that runs edge to
-    /// edge (019 R3, R4). Only then are the side insets the stage's to keep clear of.
+    /// edge (019 R4). Only then are the side insets the stage's to keep clear of.
     var extendsUnderSideSafeAreas = false
     /// Where our floating tile sits; the context's, so it outlives this view (019 R20).
     var ownCorner: ElementCallOwnTileCorner = .bottomRight
@@ -222,7 +223,6 @@ struct ElementCallStage: View {
                 .animation(animation, value: Arrangement(tiles: tiles,
                                                          spotlightID: spotlightID,
                                                          fullscreenID: fullscreenID,
-                                                         speakerID: speakerID,
                                                          ownCorner: ownCorner,
                                                          ownVideoAspect: ownVideoAspect,
                                                          metrics: metrics))
@@ -511,8 +511,6 @@ struct ElementCallStage: View {
         let tiles: [ElementCallTile]
         let spotlightID: MatrixRTCTileID?
         let fullscreenID: MatrixRTCTileID?
-        /// The small call's raised speaker, which moves and grows a tile (019 R9).
-        let speakerID: MatrixRTCTileID?
         /// Our floating tile's corner and shape, so a move from VoiceOver and a change of shape
         /// spring as a drag's release does (019 R25, R29).
         let ownCorner: ElementCallOwnTileCorner
@@ -551,9 +549,12 @@ struct ElementCallStage: View {
                                    memberCount: memberCount,
                                    heroStack: placement.isSpotlight ? stage.heroStack : nil,
                                    // A small call's full-bleed tile has no name either: its corner is
-                                   // under the control bar and the home indicator (019 R3, R4).
+                                   // under the control bar and the home indicator (019 R4). Nor has
+                                   // our floating tile, which is too small to carry it and is
+                                   // obviously us; our mute state is on the control bar.
                                    isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height
-                                       || placement.appearance == .fullBleed,
+                                       || placement.appearance == .fullBleed
+                                       || placement.appearance == .floating,
                                    // Never for a composed tile: a paused one keeps its video view, and
                                    // with it the last frame, so scrolling it in shows a picture rather
                                    // than an avatar (R49). The call is what stops its stream meanwhile.
@@ -593,7 +594,8 @@ struct ElementCallStage: View {
     }
     
     /// Our floating tile follows the finger, held inside the stage (019 R21), and on release springs
-    /// to the corner of the quadrant its centre is in. A cancelled drag springs back.
+    /// to the corner it was heading for: a flick carries it, a slow release does not. A cancelled
+    /// drag springs back.
     ///
     /// The arithmetic is physical throughout, as the corners are; only what is drawn, and the rect a
     /// touch is accepted in, are converted to the stage's leading-relative positions.
@@ -605,10 +607,12 @@ struct ElementCallStage: View {
                                                  guard let floating else { return }
                                                  ownTileDrag = ElementCallSmallCallLayout.clampedDrag(travel, from: floating, in: bounds)
                                              },
-                                             onEnd: {
+                                             onEnd: { velocity in
                                                  guard let floating else { return }
                                                  let dropped = floating.offsetBy(dx: ownTileDrag.width, dy: ownTileDrag.height)
-                                                 let corner = ElementCallSmallCallLayout.nearestCorner(to: CGPoint(x: dropped.midX, y: dropped.midY), in: bounds)
+                                                 let corner = ElementCallSmallCallLayout.releaseCorner(center: CGPoint(x: dropped.midX, y: dropped.midY),
+                                                                                                       velocity: velocity,
+                                                                                                       in: bounds)
                                                  withAnimation(animation) {
                                                      ownTileDrag = .zero
                                                      onMoveOwnTile(corner)
