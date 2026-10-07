@@ -47,6 +47,7 @@ struct ElementCallStage: View {
     /// Where our floating tile sits; the context's, so it outlives this view (019 R20).
     var ownCorner: ElementCallOwnTileCorner = .bottomRight
     var canSwitchCamera = true
+    var isFrontCamera = true
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
@@ -562,6 +563,7 @@ struct ElementCallStage: View {
                                    contentFit: placement.contentFit,
                                    allowsFullscreen: !isOwnSmallCallTile,
                                    canSwitchCamera: canSwitchCamera,
+                                   isFrontCamera: isFrontCamera,
                                    floatingCorner: placement.appearance == .floating ? ownCorner : nil,
                                    // The same animation as a drag's release, so a move asked for by
                                    // VoiceOver is the same move (019 R25).
@@ -777,6 +779,9 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
         // frame (019 R10, R17), and carries the flip button (R22).
         stage(tiles: [ElementCallPreviewFixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.bob])
             .previewDisplayName("Two people, our camera on")
+        // The one other person talking is not ringed: there is no one else it could be (019 R9).
+        stage(tiles: [Fixtures.alice, Fixtures.tile("Bob", isSpeaking: true)])
+            .previewDisplayName("Two people, the other speaking")
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol], ownCorner: .topLeft)
             .previewDisplayName("Three people, our tile top left")
         // Corners are physical: a right-to-left locale leaves our tile bottom right (019 R18).

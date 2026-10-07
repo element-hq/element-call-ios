@@ -31,6 +31,9 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
     /// The system took the touch away; the tile goes back to its corner.
     let onCancel: () -> Void
     
+    /// How long a finger may rest before lifting and still throw the tile.
+    static let heldRelease: TimeInterval = 0.1
+    
     func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator {
         Coordinator(converter: converter, gesture: self)
     }
@@ -51,12 +54,18 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
         guard let view = recognizer.view else { return }
         let translation = recognizer.translation(in: view)
         let travel = CGSize(width: translation.x, height: translation.y)
-        let gesture = context.coordinator.gesture
+        let coordinator = context.coordinator
+        let gesture = coordinator.gesture
         switch recognizer.state {
         case .began, .changed:
+            coordinator.lastMove = .now
             gesture.onChange(travel)
         case .ended:
-            let velocity = recognizer.velocity(in: view)
+            // The recognizer's velocity is that of the last movement, and a finger held still sends
+            // none, so a drag that paused before letting go was still thrown at the speed it had
+            // before the pause. Held for longer than this, the release is a drop.
+            let isHeld = coordinator.lastMove.map { Date.now.timeIntervalSince($0) > Self.heldRelease } ?? true
+            let velocity = isHeld ? .zero : recognizer.velocity(in: view)
             gesture.onEnd(CGSize(width: velocity.x, height: velocity.y))
         case .cancelled, .failed:
             gesture.onCancel()
@@ -68,6 +77,8 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         private let converter: CoordinateSpaceConverter
         var gesture: ElementCallOwnTileDragGesture
+        /// When the finger last moved, for telling a flick from a drop.
+        var lastMove: Date?
         
         init(converter: CoordinateSpaceConverter, gesture: ElementCallOwnTileDragGesture) {
             self.converter = converter

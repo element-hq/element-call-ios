@@ -482,6 +482,7 @@ struct ElementCallView: View {
                              extendsUnderSideSafeAreas: isFullBleed,
                              ownCorner: context.ownTileCorner,
                              canSwitchCamera: state.canSwitchCamera,
+                             isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,

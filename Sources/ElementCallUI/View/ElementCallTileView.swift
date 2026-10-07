@@ -24,9 +24,10 @@ enum ElementCallTileAppearance {
     /// and zoomable. Its chrome is ``ElementCallFullscreenChrome``, drawn by the screen, because
     /// keeping the name pill clear of the floating controls needs to know where those are.
     case fullscreen
-    /// The whole screen in a small call, behind the chrome (019 R4): the card's chrome, the
-    /// speaking ring included, with square corners. Not ``fullscreen``, which would hide the name
-    /// and the ring, allow a zoom, and be read by the screen as a tile gone full screen.
+    /// The other person in a one-to-one call, the whole screen behind the chrome (019 R4): square,
+    /// with no name and no speaking ring, but a raised hand still shows. Not ``fullscreen``, which
+    /// would allow a zoom and be read by the screen as a tile gone full screen, taking the top bar
+    /// and the control bar with it.
     case fullBleed
     /// Our own tile floating over a small call (019 R2): a smaller card.
     case floating
@@ -64,6 +65,8 @@ struct ElementCallTileView: View, Equatable {
     var allowsFullscreen = true
     /// The device has a camera on each side, so the flip button does something (019 R24).
     var canSwitchCamera = true
+    /// Which camera our own tile shows, spoken as the flip button's value.
+    var isFrontCamera = true
     /// The corner our own tile floats in, or nil when it is not floating. Spoken in its label, and
     /// the corners it is not in are offered as actions (019 R25, R26).
     var floatingCorner: ElementCallOwnTileCorner?
@@ -108,6 +111,7 @@ struct ElementCallTileView: View, Equatable {
             && lhs.contentFit == rhs.contentFit
             && lhs.allowsFullscreen == rhs.allowsFullscreen
             && lhs.canSwitchCamera == rhs.canSwitchCamera
+            && lhs.isFrontCamera == rhs.isFrontCamera
             && lhs.floatingCorner == rhs.floatingCorner
     }
     
@@ -408,6 +412,9 @@ struct ElementCallTileView: View, Equatable {
                 .background(Color.black.opacity(0.5), in: Circle())
         }
         .accessibilityLabel("Switch camera")
+        // Which camera is in use, so a VoiceOver user hears what the button changed, and a UI test
+        // can tell a tap that reached it from one that did not (019 R22).
+        .accessibilityValue(isFrontCamera ? "Front camera" : "Back camera")
     }
     
     /// Where the picture sits between filled (0) and fitted (1).
@@ -435,10 +442,11 @@ struct ElementCallTileView: View, Equatable {
         // talking at once.
         if tile.isScreenShare || isFullscreen {
             EmptyView()
-        } else if tile.isSpeaking, appearance == .card || appearance == .fullBleed || appearance == .floating, !isSpotlight {
-            // Every tile but the spotlight: the design leaves that bare, its position already says
-            // who is talking. A small call's tiles are ringed like the grid's (019 R9). Speaking
-            // wins over a raised hand, which still has its badge.
+        } else if tile.isSpeaking, appearance == .card || appearance == .floating, !isSpotlight {
+            // Not the spotlight, whose position already says who is talking, nor the one other
+            // person in a one-to-one call, who can be no one else. A small call's other tiles are
+            // ringed like the grid's (019 R9). Speaking wins over a raised hand, which still has
+            // its badge.
             ZStack {
                 ForEach(Array(style.theme.activeSpeakerBorder(in: size).enumerated()), id: \.offset) { _, layer in
                     RoundedRectangle(cornerRadius: cornerRadius)
