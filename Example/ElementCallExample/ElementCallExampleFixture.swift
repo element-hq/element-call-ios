@@ -37,6 +37,11 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case muted
     case minimizedVoice = "minimized_voice"
     case minimizedVideo = "minimized_video"
+    case alone
+    case oneToOneLandscape = "one_to_one_landscape"
+    case smallThree = "small_three"
+    case smallFour = "small_four"
+    case smallFive = "small_five"
     case joining
     case connectingMedia = "connecting_media"
     case failed
@@ -78,6 +83,11 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .muted: "Everyone muted"
         case .minimizedVoice: "Minimized voice call"
         case .minimizedVideo: "Minimized video call"
+        case .alone: "Alone"
+        case .oneToOneLandscape: "One to one, landscape camera"
+        case .smallThree: "Small call of three"
+        case .smallFour: "Small call of four"
+        case .smallFive: "Small call of five"
         case .joining: "Joining"
         case .connectingMedia: "Connecting media"
         case .failed: "Failed"
@@ -100,6 +110,11 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .muted: "A direct call with every microphone off."
         case .minimizedVoice: "A direct voice call, opened minimized to the bar."
         case .minimizedVideo: "A direct video call, opened minimized to the bar."
+        case .alone: "Only us, our own tile floating in its corner."
+        case .oneToOneLandscape: "Carol sends landscape: shown whole on a portrait stage."
+        case .smallThree: "Two stacked full width, our tile floating; inline in landscape."
+        case .smallFour: "Three staggered rows, Carol speaking; Dan's camera off."
+        case .smallFive: "Two by two, our tile floating; two rows in landscape."
         case .joining: "Before there is a call to render."
         case .connectingMedia: "Joined, waiting on media."
         case .failed: "The error the screen shows once and clears."
@@ -127,6 +142,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     var kind: Kind {
         typealias Fixtures = ElementCallPreviewFixtures
         let crowd = (1...16).map { Fixtures.tile("Member\($0)") }
+        let me = Fixtures.tile("Alice", isLocal: true, hasVideo: true)
         switch self {
         case .oneToOne:
             // Our camera on, so the tile draws its flip button: the one control inside a tile, and
@@ -155,7 +171,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .twoShares:
             return Self.connected(Fixtures.twoSharesGroup)
         case .video:
-            // Bob and Erin are the portrait cameras, the rest landscape: see `TestPatternVideo`.
+            // Bob and Erin are the portrait cameras, the rest landscape and ours the stage's shape:
+            // see `TestPatternVideo`.
             // Dan has his camera off, because a stage where every tile is a picture is not the one
             // anybody is in: an avatar is a plain SwiftUI view that resizes on its own, and it is
             // worth being able to see the two side by side through the same move.
@@ -181,6 +198,18 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return Self.connected([Fixtures.alice, Fixtures.tile("Bob")], isDirect: true)
         case .minimizedVideo:
             return Self.connected([Fixtures.alice, Fixtures.tile("Bob", hasVideo: true)], isDirect: true)
+        // Spec 019's small calls, one per arrangement. Remote tiles are listed in rank order, which
+        // in a fixture is also the order they arrived in.
+        case .alone:
+            return Self.connected([me])
+        case .oneToOneLandscape:
+            return Self.connected([me, Fixtures.tile("Carol", hasVideo: true)], isDirect: true)
+        case .smallThree:
+            return Self.connected([me, Fixtures.tile("Carol", hasVideo: true), Fixtures.tile("Bob", hasVideo: true)])
+        case .smallFour:
+            return Self.connected([me, Fixtures.tile("Carol", hasVideo: true, isSpeaking: true), Fixtures.tile("Bob", hasVideo: true), Fixtures.tile("Dan")])
+        case .smallFive:
+            return Self.connected([me] + [("Carol", true), ("Bob", true), ("Dan", false), ("Erin", true)].map { Fixtures.tile($0, hasVideo: $1) })
         case .joining:
             return .connecting(.joining)
         case .connectingMedia:
