@@ -44,6 +44,55 @@ public nonisolated protocol ElementCallThemeProtocol: Sendable {
     @MainActor var bodySM: Font { get }
     @MainActor var bodySMSemibold: Font { get }
     @MainActor var bodyLGSemibold: Font { get }
+    
+    /// The ring round a grid tile whose member is speaking, as layers drawn bottom first. Asked for
+    /// with the tile's own size because the design's diagonal is a CSS angle, and where that puts
+    /// the colours depends on the tile's proportions: computed once for the screen, a narrow tile
+    /// would show only the middle of the sweep. Return a single colour for a plain ring.
+    @MainActor func activeSpeakerBorder(in size: CGSize) -> [AnyShapeStyle]
+}
+
+public extension ElementCallThemeProtocol {
+    /// The design's gradient, so a host theme written before this existed keeps compiling and gets
+    /// the designed ring rather than none.
+    @MainActor func activeSpeakerBorder(in size: CGSize) -> [AnyShapeStyle] {
+        ElementCallActiveSpeakerGradient.layers(in: size)
+    }
+}
+
+/// The design's speaking ring: a vertical blue to teal gradient over a diagonal one, as the Figma's
+/// CSS layers them. Literal colours because Compound has no token for either; Android's
+/// `ActiveSpeakerBrush` uses the same two.
+public nonisolated enum ElementCallActiveSpeakerGradient {
+    private static let blue = Color(red: 13 / 255, green: 92 / 255, blue: 189 / 255)
+    private static let teal = Color(red: 13 / 255, green: 189 / 255, blue: 168 / 255)
+    private static let diagonalCSSDegrees = 119.36
+    
+    public static func layers(in size: CGSize) -> [AnyShapeStyle] {
+        let diagonal = diagonalEnds(in: size)
+        return [
+            AnyShapeStyle(LinearGradient(colors: [blue.opacity(0.7), teal.opacity(0.7)],
+                                         startPoint: diagonal.start,
+                                         endPoint: diagonal.end)),
+            AnyShapeStyle(LinearGradient(colors: [blue.opacity(0.9), teal.opacity(0.9)],
+                                         startPoint: .top,
+                                         endPoint: .bottom))
+        ]
+    }
+    
+    /// Where CSS puts a gradient line: through the centre, at the angle measured clockwise from up,
+    /// and |w·sin θ| + |h·cos θ| long, which is exactly long enough for the end colours to land in
+    /// the corners. In unit points, since that is what a gradient filling a shape is laid out in.
+    static func diagonalEnds(in size: CGSize) -> (start: UnitPoint, end: UnitPoint) {
+        guard size.width > 0, size.height > 0 else { return (.topLeading, .bottomTrailing) }
+        let angle = diagonalCSSDegrees * .pi / 180
+        let dx = sin(angle)
+        let dy = -cos(angle)
+        let half = (abs(size.width * dx) + abs(size.height * dy)) / 2
+        let offsetX = dx * half / size.width
+        let offsetY = dy * half / size.height
+        return (UnitPoint(x: 0.5 - offsetX, y: 0.5 - offsetY), UnitPoint(x: 0.5 + offsetX, y: 0.5 + offsetY))
+    }
 }
 
 // MARK: - Icons

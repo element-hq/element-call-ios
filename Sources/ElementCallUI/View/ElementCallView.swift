@@ -358,8 +358,18 @@ struct ElementCallView: View {
                 // A disabled button rather than a Section header or a bare Text: an empty Section
                 // is dropped by SwiftUI, and a Menu does not render loose Text. Disabled gives a
                 // dimmed, unselectable row, which is what this is.
-                Button("version: \(ElementCallVersion.current)") { }
-                    .disabled(true)
+                //
+                // One row with a second Text rather than two rows: a menu ignores `.font`, and the
+                // second Text is drawn as the system's smaller subtitle, which is the only way to
+                // make the core line smaller.
+                Button { } label: {
+                    Text("version: \(ElementCallVersion.current)")
+                    Text("matrix-rust-rtc \(ElementCallVersion.core)")
+                }
+                .disabled(true)
+                // The menu draws the subtitle but leaves it out of the row's label, so VoiceOver,
+                // and the UI test, would only ever hear the first line.
+                .accessibilityLabel("version: \(ElementCallVersion.current), matrix-rust-rtc \(ElementCallVersion.core)")
             } label: {
                 style.icons.icon(.overflow)
             }

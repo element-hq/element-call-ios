@@ -23,4 +23,12 @@
 /// version, so what a host displays is the version it actually resolved.
 public nonisolated enum ElementCallVersion {
     public static let current = "0.1.0-rc.9"
+    
+    /// The matrix-rust-rtc release this package pins in `Package.swift`, shown beside `current` as
+    /// Android shows its own.
+    ///
+    /// Written by hand, in the same change that moves the pin, rather than stamped by the release:
+    /// the pin moves in ordinary pull requests. The bindings expose no version to read instead.
+    /// The `Tests` workflow fails when the two disagree.
+    public static let core = "0.5.0-rc.1"
 }

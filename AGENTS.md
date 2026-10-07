@@ -294,14 +294,18 @@ A release is a **tag**, nothing more. Bare semver — `0.1.0`, `0.2.0-rc.1` — 
 SwiftPM matches a host's `exactVersion` against, and **nothing is bumped in a pull request**: there
 is no `MARKETING_VERSION` and nobody edits a version by hand.
 
-There is one version constant, `ElementCallVersion.current`, which the call screen shows so a bug
-report can quote it. **`scripts/release.sh` stamps it**, in the same step that closes the
+There is one version constant of our own, `ElementCallVersion.current`, which the call screen shows
+so a bug report can quote it. **`scripts/release.sh` stamps it**, in the same step that closes the
 `## Unreleased` heading, so it lands inside the commit the release tags and a host resolving that tag
 gets a tree that describes itself. The script fails the release if the rewrite does not take, and
 `release.yml` names the file in its `git add` — the commit is path-explicit, not `git add -A`, so a
 new generated file has to be named there or it never reaches the tag. On `main` between releases the
 constant reads as the previous release, which is only ever visible in a build made from this
 repository rather than from a tag.
+
+`ElementCallVersion.core` sits beside it and names the matrix-rust-rtc release, which the menu shows
+as Android's does. It is the one version edited by hand, in the same change that moves the
+`Package.swift` pin, and the `Tests` workflow fails when the two disagree.
 
 The pipeline is `.github/workflows/release.yml` plus `scripts/release.sh`, which holds all of the
 validation and never touches the remote so it can be rehearsed locally. Release notes come from the

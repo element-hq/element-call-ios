@@ -76,5 +76,6 @@ struct DeveloperModeTests {
     func theVersionIsStamped() {
         #expect(!ElementCallVersion.current.isEmpty)
         #expect(ElementCallVersion.current.first?.isNumber == true)
+        #expect(ElementCallVersion.core.first?.isNumber == true)
     }
 }

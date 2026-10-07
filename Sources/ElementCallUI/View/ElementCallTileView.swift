@@ -13,7 +13,8 @@ import SwiftUI
 /// parameter rather than booleans because the three are fixed combinations: nothing wants a name
 /// pill without a speaker ring.
 enum ElementCallTileAppearance {
-    /// In the grid: rounded, named, ringed when talking.
+    /// In the grid: rounded, named, ringed when talking. The landscape spotlight is a card too, but
+    /// the speaking ring is the grid's alone (see `ElementCallTileView.outline`).
     case card
     /// The portrait spotlight, which runs edge to edge as the design draws it: the card's chrome
     /// with square corners. The landscape spotlight is inset from the sensor housing and the rail,
@@ -135,10 +136,7 @@ struct ElementCallTileView: View, Equatable {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-        .overlay {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .strokeBorder(outlineColor, lineWidth: 3)
-        }
+        .overlay { outline }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .accessibilityElement(children: .contain)
         // The name is still spoken when it is not drawn.
@@ -336,21 +334,27 @@ struct ElementCallTileView: View, Equatable {
         .accessibilityLabel("Switch camera")
     }
     
-    private var outlineColor: Color {
-        switch appearance {
-        case .card, .spotlight:
-            // The ring and the hand belong to the person, and a person is their camera tile. Ringing
-            // a sharer's screen as well puts two rings round one speaker, which reads as two people
-            // talking at once.
-            if tile.isScreenShare {
-                return .clear
+    /// Inside the tile's bounds and over the picture, so a tile that starts or stops talking does not
+    /// change size or move.
+    @ViewBuilder
+    private var outline: some View {
+        // The ring and the hand belong to the person, and a person is their camera tile. Ringing a
+        // sharer's screen as well puts two rings round one speaker, which reads as two people
+        // talking at once.
+        if tile.isScreenShare || isFullscreen {
+            EmptyView()
+        } else if tile.isSpeaking, appearance == .card, !isSpotlight {
+            // Grid only: the design leaves the spotlight bare, its position already says who is
+            // talking. Speaking wins over a raised hand, which still has its badge.
+            ZStack {
+                ForEach(Array(style.theme.activeSpeakerBorder(in: size).enumerated()), id: \.offset) { _, layer in
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .strokeBorder(layer, lineWidth: 4)
+                }
             }
-            if tile.hasHandRaised {
-                return style.theme.iconAccentPrimary
-            }
-            return tile.isSpeaking ? style.theme.borderSuccessSubtle : .clear
-        case .fullscreen:
-            return .clear
+        } else if tile.hasHandRaised {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(style.theme.iconAccentPrimary, lineWidth: 3)
         }
     }
     
@@ -491,6 +495,8 @@ struct ElementCallTileView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Muted")
         tileView(Fixtures.tile("Erin", hasHandRaised: true))
             .previewDisplayName("Hand raised")
+        tileView(Fixtures.tile("Erin", isSpeaking: true, hasHandRaised: true))
+            .previewDisplayName("Speaking with hand raised")
         tileView(Fixtures.share("Frank"), isSpotlight: true)
             .previewDisplayName("Screen share spotlight")
         // A share in an ordinary strip cell, which it could never be while a share was a flag on its
