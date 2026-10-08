@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.10 - 2026-10-08
+
 **`MatrixRTCCall` is renamed `MatrixRTCMediaSession`, and `MatrixRTCElementCallCompat` is renamed
 `MatrixRTCMembershipFormat`.** The cases are `current`, `sticky2025` and `roomState` (were `off`,
 `stickyEvents` and `stateEvents`), and `ElementCallOptions.elementCallCompatibility` is
@@ -29,6 +33,25 @@ is optional, nil when the client does not say. `ElementCallController.session` i
 
 **`ElementCallThemeProtocol` gains `activeSpeakerBorder(in:)`, the fill of the speaking ring.** It
 defaults to the design's gradient; implement it to brand the ring, returning one colour for a plain one.
+
+
+
+### What's Changed
+
+✨ Features
+* Show/Hide control bar behavior. by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/50
+* Show the matrix-rust-rtc version in the overflow menu by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/53
+* New optimized layout for small calls, 1:1 and less than 5 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/55
+* Make the audio button a menu when a headset is connected by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/56
+
+🐛 Bugfixes
+* Fix: Draw the speaking ring as per design's gradient by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/54
+
+Others
+* Release 0.1.0-rc.9 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/49
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.9...0.1.0-rc.10
 
 ## 0.1.0-rc.9 - 2026-09-29
 
