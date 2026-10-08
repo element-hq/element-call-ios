@@ -98,6 +98,10 @@ struct ElementCallExampleRootView: View {
         }
     }
     
+    /// How far the control bar reaches above the bottom safe area: `ElementCallView.controlsClearance`,
+    /// which is the package's own and not public.
+    private static let controlBarClearance: CGFloat = 84
+    
     @ViewBuilder
     private func callScreen(_ session: ElementCallExampleHost.Session) -> some View {
         switch session.presentation {
@@ -116,9 +120,11 @@ struct ElementCallExampleRootView: View {
             // pattern, because the scripted session has no pictures of its own.
             ElementCallScreen(viewModel: viewModel)
                 .environment(\.elementCallPreviewVideo, video.source)
-                .overlay(alignment: .top) {
+                // Floating just above the control bar, so it covers neither bar and the call is laid
+                // out exactly as it is without it.
+                .overlay(alignment: .bottom) {
                     ElementCallExampleScenarioScrubber(playback: playback)
-                        .padding(.top, 60)
+                        .padding(.bottom, Self.controlBarClearance + 8)
                 }
         }
     }
