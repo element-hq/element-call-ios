@@ -180,6 +180,26 @@ final class SmallCallUITests: XCTestCase {
         XCTAssertTrue(eventually { abs(self.ours.frame.maxY - raised) < 1 }, "and back up with it")
     }
     
+    /// R30 as amended: in a one-to-one call the top bar goes with the control bar in portrait too,
+    /// for the whole picture; with more people it stays, as 017 R30 has it.
+    func testTheTopBarHidesWithTheControlBarOnlyOneToOne() {
+        launch("one_to_one")
+        let minimize = app.buttons["elementCall.minimize"]
+        let isUp = { minimize.exists && self.window.frame.contains(minimize.frame) }
+        XCTAssertTrue(isUp())
+        
+        tile("bob").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+        XCTAssertTrue(eventually { !isUp() }, "the top bar went with the control bar")
+        tile("bob").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)).tap()
+        XCTAssertTrue(eventually { isUp() }, "and came back with it")
+        
+        app.terminate()
+        launch("small_three")
+        tile("bob").coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertTrue(eventually { !self.app.buttons["elementCall.hangUp"].isHittable }, "the control bar went")
+        XCTAssertTrue(isUp(), "and the top bar stayed")
+    }
+    
     // MARK: - Arrangement through a rotation (R2, R16, R20)
     
     func testOurTileIsInlineInLandscapeAndKeepsItsCornerThroughARotation() {

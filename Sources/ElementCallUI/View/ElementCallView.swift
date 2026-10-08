@@ -95,7 +95,7 @@ struct ElementCallView: View {
             .animation(.easeInOut(duration: 0.3), value: isStageShown)
             .frame(width: geometry.size.width, height: geometry.size.height)
             // In landscape the status bar goes with the chrome; in portrait it stays (R8, R9).
-            .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isLandscape && !isStageChromeVisible)
+            .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isTopBarHideable(isLandscape: isLandscape) && !isStageChromeVisible)
             .onChange(of: isLandscape) { _, isLandscape in
                 applyStageChrome(.rotated(isLandscape: isLandscape))
             }
@@ -204,8 +204,21 @@ struct ElementCallView: View {
     /// portrait: the content already starts under the top bar, which never leaves there.
     private func floatingInsets(isLandscape: Bool) -> ElementCallSmallCallLayout.FloatingInsets {
         let isVisible = isStageChromeVisible
-        return .init(top: isLandscape && isVisible ? topBarHeight + Self.topChromeSpacing : 0,
-                     bottom: isVisible ? Self.controlsClearance : 0)
+        let topBarRoom = topBarHeight + Self.topChromeSpacing
+        // Content starts under the portrait top bar, so in a one-to-one call the tile reaches up
+        // into the room it leaves.
+        let top: CGFloat = if isLandscape {
+            isVisible ? topBarRoom : 0
+        } else {
+            isFullBleed && !isVisible ? -topBarRoom : 0
+        }
+        return .init(top: top, bottom: isVisible ? Self.controlsClearance : 0)
+    }
+    
+    /// Whether the top bar goes with the control bar: in landscape (017 R1), and in a one-to-one
+    /// call, whose picture is the whole screen (019 R30). Elsewhere in portrait it stays (017 R30).
+    private func isTopBarHideable(isLandscape: Bool) -> Bool {
+        isLandscape || isFullBleed
     }
     
     /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
@@ -282,10 +295,11 @@ struct ElementCallView: View {
     /// Portrait puts the canvas behind them, up through the status bar: the grid scrolls under the
     /// top bar, and without it a passing row would show through the room name. The top bar never
     /// leaves in portrait (R30); in landscape it goes with the control bar, over the picture, so a
-    /// scrim there instead of a band. A small call's full-bleed picture gets the scrim in portrait
-    /// too: it runs behind the top bar (019 R4), and a band would hide the top of it.
+    /// scrim there instead of a band. A one-to-one call's picture is treated like landscape in
+    /// portrait too: it runs behind the top bar (019 R4), so a scrim rather than a band, and the top
+    /// bar goes with the control bar, for the whole picture (019 R30).
     private func topChrome(isLandscape: Bool, safeArea: EdgeInsets, isOverPicture: Bool) -> some View {
-        let isVisible = !isLandscape || isStageChromeVisible
+        let isVisible = !isTopBarHideable(isLandscape: isLandscape) || isStageChromeVisible
         let isSharing = context.viewState.isScreenSharing
         return ZStack(alignment: .top) {
             if isLandscape {
@@ -301,6 +315,7 @@ struct ElementCallView: View {
                     .frame(height: safeArea.top + topBarHeight + 2 * Self.topChromeSpacing)
                     .frame(maxHeight: .infinity, alignment: .top)
                     .ignoresSafeArea(edges: .top)
+                    .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
             } else {
                 // Sized explicitly from the screen's top edge rather than stretched there by
