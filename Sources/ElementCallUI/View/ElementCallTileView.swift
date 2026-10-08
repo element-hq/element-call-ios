@@ -24,6 +24,13 @@ enum ElementCallTileAppearance {
     /// and zoomable. Its chrome is ``ElementCallFullscreenChrome``, drawn by the screen, because
     /// keeping the name pill clear of the floating controls needs to know where those are.
     case fullscreen
+    /// The other person in a one-to-one call, the whole screen behind the chrome (019 R4): square,
+    /// with no name and no speaking ring, but a raised hand still shows. Not ``fullscreen``, which
+    /// would allow a zoom and be read by the screen as a tile gone full screen, taking the top bar
+    /// and the control bar with it.
+    case fullBleed
+    /// Our own tile floating over a small call (019 R2): a smaller card.
+    case floating
 }
 
 /// One participant: video (or the avatar when the camera is off), name and mic badge, the flip
@@ -43,11 +50,31 @@ struct ElementCallTileView: View, Equatable {
     var heroStack: ElementCallStageLayout.HeroStack?
     /// The landscape spotlight: the design draws no name on it, the bar floats over its bottom
     /// edge where the name would be, and landscape is for the shared screen above all. Open
-    /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay.
+    /// question for design (hq 003 Q2); the count badge and the "1 of 3" pill stay. A small call's
+    /// full-bleed tile too (019 R4), for the same reason, and our floating tile. The name is still
+    /// spoken.
     var isNameHidden = false
     /// The avatar stands in so no decoder runs for it. The stage never sets it for a composed tile
     /// (a paused tile keeps its last picture); the harness and the previews use it.
     var isVideoSuspended = false
+    /// How the layout asks for the picture to sit in the frame; resolved here, where its shape is
+    /// known (019 R4).
+    var contentFit: ElementCallTileFit = .standard
+    /// Whether a double tap, or VoiceOver's action, may take this tile full screen. Not our own
+    /// tile in a small call (019 R14).
+    var allowsFullscreen = true
+    /// The device has a camera on each side, so the flip button does something (019 R24).
+    var canSwitchCamera = true
+    /// Which camera our own tile shows, spoken as the flip button's value.
+    var isFrontCamera = true
+    /// The corner our own tile floats in, or nil when it is not floating. Spoken in its label, and
+    /// the corners it is not in are offered as actions (019 R25, R26).
+    var floatingCorner: ElementCallOwnTileCorner?
+    /// A screen reader asked to move our floating tile: a drag does not exist for VoiceOver (R25).
+    var onMoveToCorner: (ElementCallOwnTileCorner) -> Void = { _ in }
+    /// The picture's upright width over height once a frame lands, for a layout that takes its
+    /// shape from it (019 R10, R29). Left out of `==`, like the other closures.
+    var onContentAspectChange: (CGFloat?) -> Void = { _ in }
     /// Double tap: in and out of full screen. Defaulted so the previews need not name it, and ahead
     /// of `onAction` rather than after it because that one is the trailing closure at every call
     /// site: a closure declared after it silently becomes the one a trailing closure binds to.
@@ -81,6 +108,11 @@ struct ElementCallTileView: View, Equatable {
             && lhs.heroStack == rhs.heroStack
             && lhs.isNameHidden == rhs.isNameHidden
             && lhs.isVideoSuspended == rhs.isVideoSuspended
+            && lhs.contentFit == rhs.contentFit
+            && lhs.allowsFullscreen == rhs.allowsFullscreen
+            && lhs.canSwitchCamera == rhs.canSwitchCamera
+            && lhs.isFrontCamera == rhs.isFrontCamera
+            && lhs.floatingCorner == rhs.floatingCorner
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
@@ -95,8 +127,9 @@ struct ElementCallTileView: View, Equatable {
     
     private var cornerRadius: CGFloat {
         switch appearance {
-        case .fullscreen, .spotlight: 0
+        case .fullscreen, .spotlight, .fullBleed: 0
         case .card: 16
+        case .floating: 12
         }
     }
     
@@ -113,7 +146,7 @@ struct ElementCallTileView: View, Equatable {
             picture
             
             switch appearance {
-            case .card, .spotlight:
+            case .card, .spotlight, .fullBleed, .floating:
                 cardChrome
             case .fullscreen:
                 // Drawn by the screen instead, where the controls' clearance is known.
@@ -139,12 +172,50 @@ struct ElementCallTileView: View, Equatable {
         .overlay { outline }
         .onGeometryChange(for: CGSize.self) { $0.size } action: { size = $0 }
         .accessibilityElement(children: .contain)
-        // The name is still spoken when it is not drawn.
-        .accessibilityLabel(isNameHidden ? Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName) : Text(""))
+        // The name is still spoken when it is not drawn. Our own tile says more, since it shows
+        // neither name nor microphone: whether our camera is on, and where it floats (019 R26).
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
-        .accessibilityAction(named: Text("Full screen")) { onToggleFullscreen() }
+        .accessibilityActions {
+            if allowsFullscreen {
+                Button("Full screen") { onToggleFullscreen() }
+            }
+            if let floatingCorner {
+                ForEach(Self.cornersToMoveTo(from: floatingCorner), id: \.self) { corner in
+                    Button("Move to \(Self.spokenName(of: corner))") { onMoveToCorner(corner) }
+                }
+            }
+        }
+    }
+    
+    private var accessibilityLabel: Text {
+        if tile.isLocal {
+            return Text(Self.ownLabel(name: tile.displayName, hasVideo: tile.hasVideo, corner: floatingCorner))
+        }
+        guard isNameHidden else { return Text("") }
+        return Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+    }
+    
+    /// "You, camera on, bottom right": the corner only while it floats, since inline it is simply
+    /// the first tile (019 R26, R27).
+    static func ownLabel(name: String, hasVideo: Bool, corner: ElementCallOwnTileCorner?) -> String {
+        ([name, hasVideo ? "camera on" : "camera off"] + (corner.map { [spokenName(of: $0)] } ?? [])).joined(separator: ", ")
+    }
+    
+    /// The other three corners, in reading order (019 R25).
+    static func cornersToMoveTo(from corner: ElementCallOwnTileCorner) -> [ElementCallOwnTileCorner] {
+        ElementCallOwnTileCorner.allCases.filter { $0 != corner }
+    }
+    
+    static func spokenName(of corner: ElementCallOwnTileCorner) -> String {
+        switch corner {
+        case .topLeft: "top left"
+        case .topRight: "top right"
+        case .bottomLeft: "bottom left"
+        case .bottomRight: "bottom right"
+        }
     }
     
     private var picture: some View {
@@ -158,13 +229,16 @@ struct ElementCallTileView: View, Equatable {
                 // cropping a document to a 1.2-wide cell throws away whatever somebody is pointing
                 // at. A camera still starts filled, because a centre-cropped face still reads as a
                 // face and letterboxing every cell makes a grid look like a contact sheet.
-                AnimatableFit(fit: isFullscreen || tile.isScreenShare ? 1 : isSpotlight ? Self.spotlightCameraFit : 0) { fit in
+                AnimatableFit(fit: fit) { fit in
                     ElementCallVideoView(memberID: tile.memberID,
                                          kind: tile.kind.videoStreamKind,
                                          isLocal: tile.isLocal,
                                          callProvider: callProvider,
                                          presentation: presentation(fit: fit),
-                                         onContentSizeChange: { contentAspect = $0.height > 0 ? $0.width / $0.height : nil },
+                                         onContentSizeChange: { size in
+                                             contentAspect = size.height > 0 ? size.width / size.height : nil
+                                             onContentAspectChange(contentAspect)
+                                         },
                                          // `hasVideo` is a claim about signalling, not about pixels.
                                          // When the two disagree the tile would be a black rectangle,
                                          // so the avatar holds the space until a frame actually lands.
@@ -180,7 +254,13 @@ struct ElementCallTileView: View, Equatable {
         }
         // The clip shape clips hit testing with it, so without this the corners do not answer.
         .contentShape(Rectangle())
-        .gesture(TapGesture(count: 2).onEnded { onToggleFullscreen() })
+        // Attached even where full screen is not allowed, so the tap is still this tile's and does
+        // not fall through to the stage, which would toggle the chrome (019 R14, R23).
+        .gesture(TapGesture(count: 2).onEnded {
+            if allowsFullscreen {
+                onToggleFullscreen()
+            }
+        })
         // Simultaneous rather than exclusive: an exclusive single tap waits out the system's
         // double-tap window, which reads as a tap that did nothing. The screen waits a shorter
         // window of its own instead, and a second tap inside it cancels the toggle (017 R16).
@@ -317,7 +397,7 @@ struct ElementCallTileView: View, Equatable {
                         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.heroIndicator)
                 }
                 Spacer()
-                if tile.isLocal, tile.hasVideo {
+                if tile.isLocal, tile.hasVideo, canSwitchCamera {
                     switchCameraButton
                 }
             }
@@ -332,6 +412,25 @@ struct ElementCallTileView: View, Equatable {
                 .background(Color.black.opacity(0.5), in: Circle())
         }
         .accessibilityLabel("Switch camera")
+        // Which camera is in use, so a VoiceOver user hears what the button changed, and a UI test
+        // can tell a tap that reached it from one that did not (019 R22).
+        .accessibilityValue(isFrontCamera ? "Front camera" : "Back camera")
+    }
+    
+    /// Where the picture sits between filled (0) and fitted (1).
+    private var fit: CGFloat {
+        if isFullscreen || tile.isScreenShare {
+            return 1
+        }
+        switch contentFit {
+        case .fitWhenLandscape:
+            // R4's one exception: a landscape picture on a frame taller than it is wide is shown
+            // whole. Until the first frame says otherwise, it fills.
+            let isLandscapePicture = (contentAspect ?? 0) > 1
+            return isLandscapePicture && size.height > size.width ? 1 : 0
+        case .standard:
+            return isSpotlight ? Self.spotlightCameraFit : 0
+        }
     }
     
     /// Inside the tile's bounds and over the picture, so a tile that starts or stops talking does not
@@ -343,9 +442,11 @@ struct ElementCallTileView: View, Equatable {
         // talking at once.
         if tile.isScreenShare || isFullscreen {
             EmptyView()
-        } else if tile.isSpeaking, appearance == .card, !isSpotlight {
-            // Grid only: the design leaves the spotlight bare, its position already says who is
-            // talking. Speaking wins over a raised hand, which still has its badge.
+        } else if tile.isSpeaking, appearance == .card || appearance == .floating, !isSpotlight {
+            // Not the spotlight, whose position already says who is talking, nor the one other
+            // person in a one-to-one call, who can be no one else. A small call's other tiles are
+            // ringed like the grid's (019 R9). Speaking wins over a raised hand, which still has
+            // its badge.
             ZStack {
                 ForEach(Array(style.theme.activeSpeakerBorder(in: size).enumerated()), id: \.offset) { _, layer in
                     RoundedRectangle(cornerRadius: cornerRadius)
@@ -355,8 +456,14 @@ struct ElementCallTileView: View, Equatable {
         } else if tile.hasHandRaised {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(style.theme.iconAccentPrimary, lineWidth: 3)
+        } else if appearance == .floating {
+            // With the camera off our floating tile is the same fill as the tile it overlaps.
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .strokeBorder(style.theme.borderInteractiveSecondary, lineWidth: Self.floatingBorderWidth)
         }
     }
+    
+    static let floatingBorderWidth: CGFloat = 1.5
     
     private func badge(@ViewBuilder content: () -> some View) -> some View {
         HStack(spacing: 4) { content() }

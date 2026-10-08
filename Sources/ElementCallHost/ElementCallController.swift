@@ -108,12 +108,19 @@ public final class ElementCallController {
     /// Nil between calls, and nil whenever every tile is the same size; the window's candidate
     /// then falls back to the first tile with video (003 R68).
     public private(set) var spotlightTileID: MatrixRTCTileID?
+    /// The window shows ``spotlightTileID`` or its placeholder, never somebody else instead. See
+    /// `MatrixRTCMediaSession.pictureInPictureCandidate(spotlight:isExact:)`.
+    public private(set) var isSpotlightTileExact = false
     
     /// Equality-guarded on purpose: the window re-reads its source inside observation tracking, so
     /// an unguarded write on every roster would re-attach its stream once a second for nothing.
-    public func setSpotlightTile(_ tileID: MatrixRTCTileID?) {
-        guard tileID != spotlightTileID else { return }
-        spotlightTileID = tileID
+    public func setSpotlightTile(_ tileID: MatrixRTCTileID?, isExact: Bool = false) {
+        if tileID != spotlightTileID {
+            spotlightTileID = tileID
+        }
+        if isExact != isSpotlightTileExact {
+            isSpotlightTileExact = isExact
+        }
     }
     
     public var isInCall: Bool {
@@ -342,7 +349,7 @@ public final class ElementCallController {
     private func bindPictureInPictureIfEnabled(_ call: MatrixRTCMediaSession) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled
-        pictureInPicture.bind(call: call) { [weak self] in self?.spotlightTileID }
+        pictureInPicture.bind(call: call) { [weak self] in (self?.spotlightTileID, self?.isSpotlightTileExact ?? false) }
     }
     
     public func setLoudspeaker(_ enabled: Bool) {
@@ -609,6 +616,7 @@ public final class ElementCallController {
         call = nil
         rtcCall = nil
         spotlightTileID = nil
+        isSpotlightTileExact = false
         system.endCall(roomID: roomID)
         // Paired with the activation in publishMedia through the same predicate, so the two
         // cannot disagree about which platforms they apply to and leave the session up.

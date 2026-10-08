@@ -47,6 +47,36 @@ nonisolated struct PictureInPictureCandidateTests {
         #expect(MatrixRTCMediaSession.pictureInPictureCandidate(tiles: tiles, localMemberID: me, isLocalCameraAvailable: false, spotlight: nil) == nil)
     }
     
+    // MARK: - Exact (019 R15)
+    
+    /// A small call's speaker with their camera off is not swapped for whoever ranks first: the
+    /// window shows the placeholder, which names them.
+    @Test
+    func anExactTileWithoutVideoGivesThePlaceholderNotSomebodyElse() {
+        let tiles = roster(tile("bob"), tile("carol", hasVideo: true))
+        let bob = MatrixRTCTileID(memberID: "bob")
+        #expect(MatrixRTCMediaSession.pictureInPictureCandidate(tiles: tiles, localMemberID: me, isLocalCameraAvailable: true, spotlight: bob, isExact: true) == nil)
+        #expect(MatrixRTCMediaSession.pictureInPicturePlaceholderMemberID(tiles: tiles, spotlight: bob) == "bob")
+        let carol = MatrixRTCTileID(memberID: "carol")
+        #expect(MatrixRTCMediaSession.pictureInPictureCandidate(tiles: tiles, localMemberID: me, isLocalCameraAvailable: true, spotlight: carol, isExact: true) == carol)
+    }
+    
+    /// Exact only while the tile is in the call: one that has left falls back as before.
+    @Test
+    func anExactTileThatHasLeftFallsBack() {
+        let tiles = roster(tile("carol", hasVideo: true))
+        let candidate = MatrixRTCMediaSession.pictureInPictureCandidate(tiles: tiles, localMemberID: me, isLocalCameraAvailable: true, spotlight: MatrixRTCTileID(memberID: "bob"), isExact: true)
+        #expect(candidate == MatrixRTCTileID(memberID: "carol", kind: .person))
+    }
+    
+    /// Alone, the window shows our camera, or the placeholder with it off.
+    @Test
+    func ourselvesExactlyIsOurCameraOrNothing() {
+        let own = MatrixRTCTileID(memberID: me, kind: .person)
+        #expect(MatrixRTCMediaSession.pictureInPictureCandidate(tiles: .empty, localMemberID: me, isLocalCameraAvailable: true, spotlight: own, isExact: true) == own)
+        #expect(MatrixRTCMediaSession.pictureInPictureCandidate(tiles: .empty, localMemberID: me, isLocalCameraAvailable: false, spotlight: own, isExact: true) == nil)
+    }
+    
     @Test
     func placeholderNamesTheSpotlightWhenItIsSomebodyElse() {
         let tiles = roster(tile("bob"), tile("carol"))

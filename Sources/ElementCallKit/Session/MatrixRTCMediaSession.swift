@@ -143,6 +143,7 @@ public final class MatrixRTCMediaSession {
     private var videoSources = [MatrixRTCStreamRef: RemoteVideoSource]()
     private var appliedConstraints = [MatrixRTCStreamRef: MatrixRTCVideoConstraints]()
     private var appliedDetailWindow: MatrixRTCDetailWindow?
+    private var appliedRankingThreshold: UInt32?
     /// Streams that are released rather than merely paused. Held per stream rather than per member
     /// because a member can be two tiles: scrolling a sharer's camera away must not take the screen
     /// share filling the spotlight with it, which is exactly what walking both kinds per member did.
@@ -328,6 +329,12 @@ public final class MatrixRTCMediaSession {
         MatrixRTCLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
     }
     
+    /// Whether the device has both a front and a back camera. Without them ``switchCamera()`` falls
+    /// back to the one camera there is, so a flip button would do nothing visible (019 R24).
+    public static var canSwitchCamera: Bool {
+        CameraCapturer.hasFrontAndBack
+    }
+    
     public func switchCamera() throws {
         guard capturesCamera else {
             isFrontCamera.toggle()
@@ -346,17 +353,33 @@ public final class MatrixRTCMediaSession {
     ///
     /// Reads the tile roster: it is the one surface kept live for the whole call, and its order puts
     /// a shared screen first, which is what a window with room for one thing should show.
-    public func pictureInPictureCandidate(spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
+    ///
+    /// `isExact` is for a screen that has named the one person the window must show, as a small
+    /// call names its speaker (019 R15): while that tile is in the call, it is shown if it has a
+    /// picture and nobody else is shown if it has not, so the window falls to its placeholder
+    /// rather than to whoever ranks first. A tile that has left falls back as ever.
+    public func pictureInPictureCandidate(spotlight: MatrixRTCTileID?, isExact: Bool = false) -> MatrixRTCTileID? {
         Self.pictureInPictureCandidate(tiles: tiles,
                                        localMemberID: localMemberID,
                                        isLocalCameraAvailable: isCameraEnabled && !isCameraInterrupted,
-                                       spotlight: spotlight)
+                                       spotlight: spotlight,
+                                       isExact: isExact)
     }
     
     public nonisolated static func pictureInPictureCandidate(tiles: MatrixRTCTileRoster,
                                                              localMemberID: String,
                                                              isLocalCameraAvailable: Bool,
-                                                             spotlight: MatrixRTCTileID?) -> MatrixRTCTileID? {
+                                                             spotlight: MatrixRTCTileID?,
+                                                             isExact: Bool = false) -> MatrixRTCTileID? {
+        if let spotlight, isExact {
+            // Ourselves, named because we are alone: our camera, or the placeholder.
+            if spotlight.memberID == localMemberID {
+                return isLocalCameraAvailable ? MatrixRTCTileID(memberID: localMemberID, kind: .person) : nil
+            }
+            if tiles.order.contains(where: { $0.id == spotlight }) {
+                return tiles.detail[spotlight]?.hasVideo == true ? spotlight : nil
+            }
+        }
         // The spotlight names its own stream, so this only has to check the one it names still has
         // a picture -- a share can stop while the window is continuing it.
         if let spotlight, spotlight.memberID != localMemberID, tiles.detail[spotlight]?.hasVideo == true {
@@ -695,6 +718,18 @@ public final class MatrixRTCMediaSession {
             mediaSession.setDetailWindow(offset: UInt32(clamping: window.ranks.lowerBound),
                                          len: UInt32(clamping: window.ranks.count),
                                          also: also)
+        }
+    }
+    
+    /// At or below this many remote tiles the core orders them by join time, heroes first, rather
+    /// than by what people are doing, so a small call does not shuffle.
+    public func setRankingThreshold(_ tiles: Int) {
+        let threshold = UInt32(clamping: tiles)
+        guard threshold != appliedRankingThreshold else { return }
+        appliedRankingThreshold = threshold
+        let mediaSession = mediaSession
+        mediaRequests.async {
+            mediaSession.setRankingThreshold(tiles: threshold)
         }
     }
     

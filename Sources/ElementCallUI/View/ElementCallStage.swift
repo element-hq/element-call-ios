@@ -26,11 +26,26 @@ import SwiftUI
 struct ElementCallStage: View {
     @Environment(\.elementCallStyle) private var style
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.layoutDirection) private var layoutDirection
     let tiles: [ElementCallTile]
     let spotlightID: MatrixRTCTileID?
     /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
     /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
     var fullscreenID: MatrixRTCTileID?
+    /// Who the Picture in Picture source view is anchored on in a small call (019 R15). Kept by the
+    /// view model, not here: the stage unmounts while minimized, and it has to outlive that.
+    var speakerID: MatrixRTCTileID?
+    /// Room the chrome takes at the top and the bottom, which only our floating tile keeps clear of
+    /// (019 R19). Not part of ``Arrangement``: it changes inside the chrome's own animation, so the
+    /// tile moves with the bar rather than on the stage's slower spring behind it.
+    var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
+    /// The screen has extended the stage under the side safe areas, for a picture that runs edge to
+    /// edge (019 R4). Only then are the side insets the stage's to keep clear of.
+    var extendsUnderSideSafeAreas = false
+    /// Where our floating tile sits; the context's, so it outlives this view (019 R20).
+    var ownCorner: ElementCallOwnTileCorner = .bottomRight
+    var canSwitchCamera = true
+    var isFrontCamera = true
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
@@ -52,6 +67,9 @@ struct ElementCallStage: View {
     var onScrollIdle: () -> Void = { }
     /// A swipe or a VoiceOver adjustment on the spotlight asks for another hero (R22, R25).
     var onShowHero: (MatrixRTCTileID) -> Void = { _ in }
+    /// Our floating tile was dropped nearest this corner (019 R21). Called inside the animation
+    /// that takes the tile there, so the screen's write lands in the same transaction.
+    var onMoveOwnTile: (ElementCallOwnTileCorner) -> Void = { _ in }
     let onAction: (ElementCallScreenViewAction) -> Void
     
     /// The visible top, in content coordinates. Fed back into the layout, which is what makes the
@@ -98,6 +116,14 @@ struct ElementCallStage: View {
     @State private var isUserScrolling = false
     /// The content height the origin was measured against.
     @State private var scrollDirectionContentHeight: CGFloat?
+    /// How far our floating tile is under the finger from its corner. Plain state rather than
+    /// `@GestureState`, which resets outside the release's animation and would put the tile back in
+    /// its old corner for a frame before it springs to the new one.
+    @State private var ownTileDrag: CGSize = .zero
+    /// Our own picture's upright shape, which the floating tile takes (019 R10, R29). From the
+    /// renderer, which knows within a frame, rather than the call's video info, which is polled
+    /// about once a second and would leave the tile the wrong shape after every rotation.
+    @State private var ownVideoAspect: CGFloat?
     
     /// How a tile that has just joined appears, and how any tile goes. Never how a row scrolling
     /// into the band appears: a fling reaches it while it would still be transparent (R38, R49).
@@ -124,13 +150,24 @@ struct ElementCallStage: View {
             // viewport is what is not covered by the chrome kept clear above it.
             let metrics = ElementCallStageLayout.Metrics(area: CGSize(width: geometry.size.width, height: geometry.size.height + insets.bottom - topClearance),
                                                          bottomInset: insets.bottom,
-                                                         controlsClearance: controlsClearance)
+                                                         leadingInset: extendsUnderSideSafeAreas ? insets.leading : 0,
+                                                         trailingInset: extendsUnderSideSafeAreas ? insets.trailing : 0,
+                                                         controlsClearance: controlsClearance,
+                                                         // From the reader rather than the scroller's
+                                                         // report, which a snapshot never waits for.
+                                                         topBleed: topClearance + insets.top)
             let stage = ElementCallStageLayout.compute(.init(tiles: tiles,
                                                              spotlightID: spotlightID,
                                                              fullscreenID: fullscreenID,
                                                              scrollOffset: scrollOffset,
                                                              liveTileIDs: liveTileIDs,
-                                                             metrics: metrics))
+                                                             metrics: metrics,
+                                                             speakerID: speakerID,
+                                                             ownCorner: ownCorner,
+                                                             ownVideoAspect: ownVideoAspect,
+                                                             floatingInsets: floatingInsets))
+            let floating = stage.placements.first { $0.appearance == .floating }
+            let floatingBounds = ElementCallSmallCallLayout.floatingBounds(metrics: metrics, insets: floatingInsets)
             ScrollView(.vertical) {
                 ZStack(alignment: .topLeading) {
                     fullscreenScrim(in: stage)
@@ -174,17 +211,25 @@ struct ElementCallStage: View {
                 // The gaps between tiles and below the last row (017 R14). A tile's own tap wins
                 // over this one, so a tap on a tile toggles once.
                 .onTapGesture { onToggleChrome() }
+                .gesture(ownTileDragGesture(floating: floating, bounds: floatingBounds, width: metrics.area.width))
                 .transaction(value: fullscreenID) { transaction in
                     // Inside the stack's spring, so this is the move the completion waits for. With
                     // no animation at all it runs straight after the pass, as it must.
                     guard fullscreenID == nil, raisedTileID != nil else { return }
                     transaction.addAnimationCompletion { raisedTileID = nil }
                 }
-                .animation(animation, value: Arrangement(tiles: tiles, spotlightID: spotlightID, fullscreenID: fullscreenID, metrics: metrics))
+                .animation(animation, value: Arrangement(tiles: tiles,
+                                                         spotlightID: spotlightID,
+                                                         fullscreenID: fullscreenID,
+                                                         ownCorner: ownCorner,
+                                                         ownVideoAspect: ownVideoAspect,
+                                                         metrics: metrics))
             }
-            // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen.
+            // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen, or
+            // in a small call, where a scroller whose content is one screen would still bounce
+            // (019 R30).
             .scrollIndicators(.hidden)
-            .scrollDisabled(fullscreenID != nil)
+            .scrollDisabled(fullscreenID != nil || stage.isStatic)
             .scrollPosition($scrollPosition)
             // The top bar's room as a margin and not a shorter frame. UIKit leaves the offset alone
             // when an inset changes, so the chrome going mid-drag moves nothing under the finger
@@ -464,6 +509,10 @@ struct ElementCallStage: View {
         let tiles: [ElementCallTile]
         let spotlightID: MatrixRTCTileID?
         let fullscreenID: MatrixRTCTileID?
+        /// Our floating tile's corner and shape, so a move from VoiceOver and a change of shape
+        /// spring as a drag's release does (019 R25, R29).
+        let ownCorner: ElementCallOwnTileCorner
+        let ownVideoAspect: CGFloat?
         let metrics: ElementCallStageLayout.Metrics
     }
     
@@ -487,19 +536,41 @@ struct ElementCallStage: View {
         // for that reason: with one `position`, an arrangement change during a scroll carried the
         // sticky part on the spring, and it lagged the finger and sprang back to the top.
         let pin = placement.isSpotlight || placement.appearance == .fullscreen ? stage.viewport.minY : 0
+        // Our own tile in a small call answers neither tap: it does not go full screen (019 R14),
+        // and a tap on it does not toggle the chrome (R23). Its gestures stay attached, so the tap is
+        // still the tile's rather than falling through to the stage behind it.
+        let isOwnSmallCallTile = placement.tile.isLocal && stage.isStatic
         return ElementCallTileView(tile: placement.tile,
                                    callProvider: callProvider,
                                    isSpotlight: placement.isSpotlight,
                                    appearance: placement.appearance,
                                    memberCount: memberCount,
                                    heroStack: placement.isSpotlight ? stage.heroStack : nil,
-                                   isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height,
+                                   // A small call's full-bleed tile has no name either: its corner is
+                                   // under the control bar and the home indicator (019 R4). Nor has
+                                   // our floating tile, which is too small to carry it and is
+                                   // obviously us; our mute state is on the control bar.
+                                   isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height
+                                       || placement.appearance == .fullBleed
+                                       || placement.appearance == .floating,
                                    // Never for a composed tile: a paused one keeps its video view, and
                                    // with it the last frame, so scrolling it in shows a picture rather
                                    // than an avatar (R49). The call is what stops its stream meanwhile.
                                    isVideoSuspended: false,
+                                   contentFit: placement.contentFit,
+                                   allowsFullscreen: !isOwnSmallCallTile,
+                                   canSwitchCamera: canSwitchCamera,
+                                   isFrontCamera: isFrontCamera,
+                                   floatingCorner: placement.appearance == .floating ? ownCorner : nil,
+                                   // The same animation as a drag's release, so a move asked for by
+                                   // VoiceOver is the same move (019 R25).
+                                   onMoveToCorner: { corner in withAnimation(animation) { onMoveOwnTile(corner) } },
+                                   onContentAspectChange: { aspect in
+                                       guard placement.tile.isLocal, aspect != ownVideoAspect else { return }
+                                       ownVideoAspect = aspect
+                                   },
                                    onToggleFullscreen: { onToggleFullscreen(placement.id) },
-                                   onToggleChrome: onToggleChrome,
+                                   onToggleChrome: isOwnSmallCallTile ? { } : onToggleChrome,
                                    onAction: onAction)
             .equatable()
             .background {
@@ -510,18 +581,72 @@ struct ElementCallStage: View {
             .frame(width: placement.frame.width, height: placement.frame.height)
             // Screen readers traverse the spotlight first, then the grid in rank order (R69), and
             // step through the stack with an adjustable action rather than a swipe (R25).
-            .accessibilitySortPriority(placement.isSpotlight ? 1 : 0)
+            .accessibilitySortPriority(sortPriority(of: placement, in: stage))
             .accessibilityAdjustableAction { direction in
                 guard placement.isSpotlight else { return }
                 showHero(direction == .increment ? 1 : -1, in: stage)
             }
-            .position(x: placement.frame.midX, y: placement.frame.midY - pin)
+            .position(x: drawnFrame(placement, width: stage.viewport.width).midX, y: placement.frame.midY - pin)
             .modifier(Pinned(pin: pin, scroll: scrollParts, insetBase: scrollInsetBase, topClearance: topClearance, animation: chromeAnimation))
             // After the pin's unanimated part, so the slide back is not caught by it. Pinned views
             // slide with the inset already.
             .offset(y: pin == 0 ? gridSlide : 0)
+            .offset(placement.appearance == .floating ? leadingRelative(ownTileDrag) : .zero)
             .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
             .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
+    }
+    
+    /// Our floating tile follows the finger, held inside the stage (019 R21), and on release springs
+    /// to the corner it was heading for: a flick carries it, a slow release does not. A cancelled
+    /// drag springs back.
+    ///
+    /// The arithmetic is physical throughout, as the corners are; only what is drawn, and the rect a
+    /// touch is accepted in, are converted to the stage's leading-relative positions.
+    private func ownTileDragGesture(floating placement: ElementCallTilePlacement?, bounds: CGRect, width: CGFloat) -> ElementCallOwnTileDragGesture {
+        let floating = placement?.frame
+        let drag = leadingRelative(ownTileDrag)
+        return ElementCallOwnTileDragGesture(tileFrame: placement.map { drawnFrame($0, width: width).offsetBy(dx: drag.width, dy: drag.height) },
+                                             onChange: { travel in
+                                                 guard let floating else { return }
+                                                 ownTileDrag = ElementCallSmallCallLayout.clampedDrag(travel, from: floating, in: bounds)
+                                             },
+                                             onEnd: { velocity in
+                                                 guard let floating else { return }
+                                                 let dropped = floating.offsetBy(dx: ownTileDrag.width, dy: ownTileDrag.height)
+                                                 let corner = ElementCallSmallCallLayout.releaseCorner(center: CGPoint(x: dropped.midX, y: dropped.midY),
+                                                                                                       velocity: velocity,
+                                                                                                       in: bounds)
+                                                 withAnimation(animation) {
+                                                     ownTileDrag = .zero
+                                                     onMoveOwnTile(corner)
+                                                 }
+                                             },
+                                             onCancel: {
+                                                 withAnimation(animation) { ownTileDrag = .zero }
+                                             })
+    }
+    
+    /// Where a placement is drawn. Positions on the stage run from the leading edge, so a
+    /// right-to-left locale mirrors them. That is right for the grid, which reads from the leading
+    /// edge, and wrong for our floating tile, whose corners are physical (019 R18): its frame is
+    /// mirrored back so it lands where the arithmetic put it.
+    private func drawnFrame(_ placement: ElementCallTilePlacement, width: CGFloat) -> CGRect {
+        guard placement.appearance == .floating, layoutDirection == .rightToLeft else { return placement.frame }
+        return CGRect(x: width - placement.frame.maxX, y: placement.frame.minY, width: placement.frame.width, height: placement.frame.height)
+    }
+    
+    /// A physical travel, such as a finger's, in the stage's leading-relative positions.
+    private func leadingRelative(_ travel: CGSize) -> CGSize {
+        layoutDirection == .rightToLeft ? CGSize(width: -travel.width, height: travel.height) : travel
+    }
+    
+    /// Higher reads first. A small call states its order outright (019 R27): the overlap and our
+    /// floating tile put tiles in no geometric order a screen reader could follow.
+    private func sortPriority(of placement: ElementCallTilePlacement, in stage: ElementCallStageLayout) -> Double {
+        if let index = stage.readingOrder.firstIndex(of: placement.id) {
+            return Double(stage.readingOrder.count - index)
+        }
+        return placement.isSpotlight ? 1 : 0
     }
     
     /// The next or previous hero in the stack, clamped: the stack does not wrap (R23).
@@ -611,14 +736,18 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
     /// Derived rather than passed, so a preview cannot show a spotlight the app would not choose.
     /// This is the view state's own rule, and it reads the array as the ranking it now is.
     static func stage(tiles: [ElementCallTile],
-                      fullscreen: MatrixRTCTileID? = nil) -> some View {
-        ElementCallStage(tiles: tiles,
-                         spotlightID: Fixtures.connected(tiles: tiles).spotlightID,
-                         fullscreenID: fullscreen,
-                         memberCount: tiles.count,
-                         pictureInPictureSourceView: UIView(),
-                         callProvider: Fixtures.noCall,
-                         controlsClearance: ElementCallView.controlsClearance) { _ in }
+                      fullscreen: MatrixRTCTileID? = nil,
+                      ownCorner: ElementCallOwnTileCorner = .bottomRight) -> some View {
+        let state = Fixtures.connected(tiles: tiles)
+        return ElementCallStage(tiles: tiles,
+                                spotlightID: state.spotlightID,
+                                fullscreenID: fullscreen,
+                                speakerID: state.smallCallSpeakerID,
+                                ownCorner: ownCorner,
+                                memberCount: tiles.count,
+                                pictureInPictureSourceView: UIView(),
+                                callProvider: Fixtures.noCall,
+                                controlsClearance: ElementCallView.controlsClearance) { _ in }
             .background(ElementCallStyle.stock.theme.bgCanvasDefault)
             .environment(\.colorScheme, .dark)
     }
@@ -634,6 +763,24 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Two people")
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol])
             .previewDisplayName("Three people")
+        // Carol is speaking: she is ringed, and nobody moves (019 R9).
+        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan")])
+            .previewDisplayName("Four people")
+        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan"), Fixtures.tile("Erin")])
+            .previewDisplayName("Five people")
+        // Our camera on: the floating tile takes the picture's shape, portrait before the first
+        // frame (019 R10, R17), and carries the flip button (R22).
+        stage(tiles: [ElementCallPreviewFixtures.tile("Alice", isLocal: true, hasVideo: true), Fixtures.bob])
+            .previewDisplayName("Two people, our camera on")
+        // The one other person talking is not ringed: there is no one else it could be (019 R9).
+        stage(tiles: [Fixtures.alice, Fixtures.tile("Bob", isSpeaking: true)])
+            .previewDisplayName("Two people, the other speaking")
+        stage(tiles: [Fixtures.alice, Fixtures.bob], ownCorner: .topLeft)
+            .previewDisplayName("Two people, our tile top left")
+        // Corners are physical: a right-to-left locale leaves our tile bottom right (019 R18).
+        stage(tiles: [Fixtures.alice, Fixtures.bob])
+            .environment(\.layoutDirection, .rightToLeft)
+            .previewDisplayName("Two people, right to left")
         stage(tiles: Fixtures.group, fullscreen: Fixtures.bob.id)
             .previewDisplayName("Full screen")
         // A member on two tiles: the one case in which every member-keyed assumption that survived

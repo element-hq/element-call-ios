@@ -52,7 +52,11 @@ struct ElementCallExampleRootView: View {
             // losing its scroll position costs nothing, and in exchange the accessibility tree a UI
             // test walks during a call is the one it walked before any of this existed.
             if host.session == nil || host.isMinimized {
-                ElementCallExampleCatalogue(target: target, notice: host.notice, onPick: { host.open($0) }, onPickScenario: { host.open($0) })
+                ElementCallExampleCatalogue(target: target,
+                                            notice: host.notice,
+                                            returningTo: host.lastOpenedRow,
+                                            onPick: { host.open($0) },
+                                            onPickScenario: { host.open($0) })
                     .transition(.opacity)
                     // An inset rather than an overlay: it pushes the list down instead of covering
                     // its first row, which is what a host does and what makes the point of the
@@ -73,6 +77,8 @@ struct ElementCallExampleRootView: View {
                     .transition(.opacity)
             }
         }
+        // The shape of the space, as the stage decides it, so our own pattern turns when the stage does.
+        .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { video.setLandscape($0) }
         // Presenting the call is the host's to animate, so the harness does what a host would: a
         // cross-fade between the catalogue and the call, both ways.
         .animation(.easeInOut(duration: 0.3), value: host.session == nil || host.isMinimized)
@@ -92,6 +98,10 @@ struct ElementCallExampleRootView: View {
         }
     }
     
+    /// How far the control bar reaches above the bottom safe area: `ElementCallView.controlsClearance`,
+    /// which is the package's own and not public.
+    private static let controlBarClearance: CGFloat = 84
+    
     @ViewBuilder
     private func callScreen(_ session: ElementCallExampleHost.Session) -> some View {
         switch session.presentation {
@@ -110,9 +120,11 @@ struct ElementCallExampleRootView: View {
             // pattern, because the scripted session has no pictures of its own.
             ElementCallScreen(viewModel: viewModel)
                 .environment(\.elementCallPreviewVideo, video.source)
-                .overlay(alignment: .top) {
+                // Floating just above the control bar, so it covers neither bar and the call is laid
+                // out exactly as it is without it.
+                .overlay(alignment: .bottom) {
                     ElementCallExampleScenarioScrubber(playback: playback)
-                        .padding(.top, 60)
+                        .padding(.bottom, Self.controlBarClearance + 8)
                 }
         }
     }

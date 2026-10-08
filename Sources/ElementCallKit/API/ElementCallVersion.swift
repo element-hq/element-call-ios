@@ -30,5 +30,5 @@ public nonisolated enum ElementCallVersion {
     /// Written by hand, in the same change that moves the pin, rather than stamped by the release:
     /// the pin moves in ordinary pull requests. The bindings expose no version to read instead.
     /// The `Tests` workflow fails when the two disagree.
-    public static let core = "0.5.0-rc.1"
+    public static let core = "0.5.0-rc.2"
 }

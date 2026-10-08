@@ -20,6 +20,17 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
     static let captureWidth: UInt32 = 640
     static let captureHeight: UInt32 = 480
     
+    /// The cameras the capturer chooses between. One query for both it and ``hasFrontAndBack``, so
+    /// the flip button is offered on exactly the devices where flipping changes something.
+    private static func discoverCameras() -> [AVCaptureDevice] {
+        AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified).devices
+    }
+    
+    static var hasFrontAndBack: Bool {
+        let positions = Set(discoverCameras().map(\.position))
+        return positions.contains(.front) && positions.contains(.back)
+    }
+    
     private let queue = DispatchQueue(label: "io.element.matrixrtc.camera", qos: .userInitiated)
     private let state = Mutex<State>(.init())
     private let onLocalFrame: @Sendable (MatrixRTCVideoFrame) -> Void
@@ -132,8 +143,8 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
     private func configureSession(front: Bool) throws {
         let position: AVCaptureDevice.Position = front ? .front : .back
         // Prefer the requested camera, fall back to whatever exists rather than refusing.
-        let discovery = AVCaptureDevice.DiscoverySession(deviceTypes: [.builtInWideAngleCamera], mediaType: .video, position: .unspecified)
-        guard let device = discovery.devices.first(where: { $0.position == position }) ?? discovery.devices.first else {
+        let devices = Self.discoverCameras()
+        guard let device = devices.first(where: { $0.position == position }) ?? devices.first else {
             throw MatrixRTCError.media("No camera available")
         }
         let input = try AVCaptureDeviceInput(device: device)

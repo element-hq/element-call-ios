@@ -101,6 +101,9 @@ public enum ElementCallPreviewFixtures {
         state.tiles = tiles
         // The screen's own rule, so a preview cannot show a spotlight the app would not choose.
         state.spotlightID = ElementCallSpotlight.choose(tiles: tiles, shownHeroID: nil, lastSpeakerID: nil).tileID
+        state.smallCallSpeakerID = ElementCallSmallCallLayout.speaker(tiles: tiles, held: nil)
+        // The simulator has no camera, so the flip button would never be drawn or tested otherwise.
+        state.canSwitchCamera = true
         state.isMicrophoneMuted = isMicrophoneMuted
         state.isScreenSharing = isScreenSharing
         state.isTileStatsVisible = isTileStatsVisible

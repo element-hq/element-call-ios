@@ -45,6 +45,9 @@ final class ElementCallExampleHost {
     /// printed: the package's lint forbids `print`, and a notice on screen is what a person and a
     /// failure screenshot can both read.
     private(set) var notice: String?
+    /// The catalogue row last opened, so the list can come back to it: it is unmounted while a call
+    /// is up, and a new list starts at the top.
+    private(set) var lastOpenedRow: String?
     private var cancellables = Set<AnyCancellable>()
     /// Only for a harness session. A live one is asked, below.
     private var isHarnessMinimized = false
@@ -64,6 +67,7 @@ final class ElementCallExampleHost {
     }
     
     func open(_ scenario: ElementCallExampleScenario) {
+        lastOpenedRow = ElementCallExampleCatalogue.rowID(scenario)
         cancellables.removeAll()
         isHarnessMinimized = false
         notice = nil
@@ -91,6 +95,7 @@ final class ElementCallExampleHost {
     }
     
     func open(_ fixture: ElementCallExampleFixture) {
+        lastOpenedRow = ElementCallExampleCatalogue.rowID(fixture)
         cancellables.removeAll()
         isHarnessMinimized = false
         

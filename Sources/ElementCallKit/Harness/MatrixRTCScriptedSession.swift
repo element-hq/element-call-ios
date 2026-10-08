@@ -176,6 +176,9 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         state.withLock { $0.localState }
     }
     
+    /// A scenario states the order itself, so there is nothing to rank.
+    public func setRankingThreshold(tiles: UInt32) { }
+    
     public func setDetailWindow(offset: UInt32, len: UInt32, also: [FfiTileId]) {
         let record = DetailWindowRecord(time: clock.elapsed, offset: Int(offset), length: Int(len), also: also.map(MatrixRTCTileID.init))
         state.withLock { $0.detailWindows.append(record) }

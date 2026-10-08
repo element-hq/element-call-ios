@@ -42,6 +42,11 @@ public final class ElementCallScreenContext {
         }
     }
     
+    /// The corner our own floating tile is in (019 R18, R20). A way of looking, like the tile full
+    /// screen, so it lives here rather than in `viewState`: it outlives rotation, the grid and
+    /// minimizing, and only the end of the call puts it back.
+    public var ownTileCorner: ElementCallOwnTileCorner = .bottomRight
+    
     /// Whether the full-screen chrome is up. Down to begin with, so entering full screen is the
     /// picture and nothing else, and a single tap brings the controls back.
     public var isFullscreenChromeVisible = false
@@ -198,6 +203,7 @@ public final class ElementCallScreenViewModel {
         // would be missing from that first frame.
         context.viewState.isDeveloperModeEnabled = controller.options.isDeveloperModeEnabled
         context.viewState.isScreenSharingEnabled = controller.options.isScreenSharingEnabled
+        context.viewState.canSwitchCamera = MatrixRTCMediaSession.canSwitchCamera
         
         if let room {
             room.displayNamePublisher
@@ -287,6 +293,13 @@ public final class ElementCallScreenViewModel {
         guard let call = controller.call else {
             state.tiles = []
             state.spotlightID = nil
+            // So the next call on a reused view model starts its speaker afresh.
+            state.smallCallSpeakerID = nil
+            // Only on a change: Observation notifies on every set, and this runs on every wake
+            // while there is no call.
+            if context.ownTileCorner != .bottomRight {
+                context.ownTileCorner = .bottomRight
+            }
             lastSpeakerID = nil
             controller.setSpotlightTile(nil)
             publish(state)
@@ -299,6 +312,8 @@ public final class ElementCallScreenViewModel {
             return
         }
         
+        // A small call is laid out in join order, which the core gives below this (019 R7).
+        call.setRankingThreshold(ElementCallSmallCallLayout.rankingThreshold)
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
@@ -324,6 +339,8 @@ public final class ElementCallScreenViewModel {
         } else {
             nil
         }
+        // The speaker carried over from the last refresh is the one the rule holds.
+        state.smallCallSpeakerID = ElementCallSmallCallLayout.speaker(tiles: state.tiles, held: state.smallCallSpeakerID)
         // The user's pick is followed by identity for as long as it is a hero; the moment the
         // choice lands elsewhere it is stale, and keeping it would bring that hero straight back
         // to the front if it ever returned.
@@ -332,7 +349,8 @@ public final class ElementCallScreenViewModel {
         }
         // The window continues what the stage shows, so the controller learns it from here rather
         // than deriving its own answer from the ranking; the setter declines an equal value.
-        controller.setSpotlightTile(spotlight.tileID)
+        let pictureInPicture = state.pictureInPictureTile
+        controller.setSpotlightTile(pictureInPicture.id, isExact: pictureInPicture.isExact)
         
         publish(state)
     }

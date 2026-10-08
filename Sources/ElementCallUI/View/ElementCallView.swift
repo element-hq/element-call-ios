@@ -55,14 +55,16 @@ struct ElementCallView: View {
                     content(isLandscape: isLandscape)
                         // A fitted picture is centred on what it is given, so full screen gives
                         // it the screen: centred on the notch-shaped remainder instead, the
-                        // letterbox above and below would not match.
-                        .ignoresSafeArea(.container, edges: fullscreenTile == nil ? [] : .all)
+                        // letterbox above and below would not match. A small call's full-bleed
+                        // picture likewise (019 R4); its top and bottom the stage reaches
+                        // already, so only the sides are given up here.
+                        .ignoresSafeArea(.container, edges: fullscreenTile != nil ? .all : isFullBleed ? .horizontal : [])
                     
                     // Every overlay gets an explicit z position. A view leaving a `ZStack` without
                     // one is drawn behind its siblings for the length of its removal, so the
                     // chrome went in with a slide and out with none.
                     if fullscreenTile == nil {
-                        topChrome(isLandscape: isLandscape, safeArea: geometry.safeAreaInsets)
+                        topChrome(isLandscape: isLandscape, safeArea: geometry.safeAreaInsets, isOverPicture: isFullBleed)
                             .zIndex(1)
                     }
                     
@@ -93,7 +95,7 @@ struct ElementCallView: View {
             .animation(.easeInOut(duration: 0.3), value: isStageShown)
             .frame(width: geometry.size.width, height: geometry.size.height)
             // In landscape the status bar goes with the chrome; in portrait it stays (R8, R9).
-            .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isLandscape && !isStageChromeVisible)
+            .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isTopBarHideable(isLandscape: isLandscape) && !isStageChromeVisible)
             .onChange(of: isLandscape) { _, isLandscape in
                 applyStageChrome(.rotated(isLandscape: isLandscape))
             }
@@ -158,8 +160,8 @@ struct ElementCallView: View {
     /// remote video" flag); the stage declares its own again the moment it is back.
     private func declareMinimizedDetailWindow() {
         guard let call = callProvider() else { return }
-        let spotlightID = context.viewState.spotlightID
-        let also = [spotlightID, call.pictureInPictureCandidate(spotlight: spotlightID)].compactMap { $0 }
+        let pictureInPicture = context.viewState.pictureInPictureTile
+        let also = [pictureInPicture.id, call.pictureInPictureCandidate(spotlight: pictureInPicture.id, isExact: pictureInPicture.isExact)].compactMap { $0 }
         call.setDetailWindow(.init(ranks: 0..<Self.minimizedDetailWindowLength, also: Set(also)))
     }
     
@@ -191,6 +193,32 @@ struct ElementCallView: View {
     /// there is nothing to look at, and hang up has to stay in reach (R13).
     private var isStageChromeVisible: Bool {
         !isStageShown || context.stageChrome.isVisible
+    }
+    
+    /// One picture behind all the chrome: a one-to-one small call (019 R4).
+    private var isFullBleed: Bool {
+        fullscreenTile == nil && ElementCallSmallCallLayout.isFullBleed(context.viewState.tiles)
+    }
+    
+    /// What our floating tile keeps clear of while the chrome is up (019 R19). Nothing at the top in
+    /// portrait: the content already starts under the top bar, which never leaves there.
+    private func floatingInsets(isLandscape: Bool) -> ElementCallSmallCallLayout.FloatingInsets {
+        let isVisible = isStageChromeVisible
+        let topBarRoom = topBarHeight + Self.topChromeSpacing
+        // Content starts under the portrait top bar, so in a one-to-one call the tile reaches up
+        // into the room it leaves.
+        let top: CGFloat = if isLandscape {
+            isVisible ? topBarRoom : 0
+        } else {
+            isFullBleed && !isVisible ? -topBarRoom : 0
+        }
+        return .init(top: top, bottom: isVisible ? Self.controlsClearance : 0)
+    }
+    
+    /// Whether the top bar goes with the control bar: in landscape (017 R1), and in a one-to-one
+    /// call, whose picture is the whole screen (019 R30). Elsewhere in portrait it stays (017 R30).
+    private func isTopBarHideable(isLandscape: Bool) -> Bool {
+        isLandscape || isFullBleed
     }
     
     /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
@@ -267,14 +295,25 @@ struct ElementCallView: View {
     /// Portrait puts the canvas behind them, up through the status bar: the grid scrolls under the
     /// top bar, and without it a passing row would show through the room name. The top bar never
     /// leaves in portrait (R30); in landscape it goes with the control bar, over the picture, so a
-    /// scrim there instead of a band.
-    private func topChrome(isLandscape: Bool, safeArea: EdgeInsets) -> some View {
-        let isVisible = !isLandscape || isStageChromeVisible
+    /// scrim there instead of a band. A one-to-one call's picture is treated like landscape in
+    /// portrait too: it runs behind the top bar (019 R4), so a scrim rather than a band, and the top
+    /// bar goes with the control bar, for the whole picture (019 R30).
+    private func topChrome(isLandscape: Bool, safeArea: EdgeInsets, isOverPicture: Bool) -> some View {
+        let isVisible = !isTopBarHideable(isLandscape: isLandscape) || isStageChromeVisible
         let isSharing = context.viewState.isScreenSharing
         return ZStack(alignment: .top) {
             if isLandscape {
                 LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
                     .frame(height: topBarHeight + 2 * Self.topChromeSpacing)
+                    .ignoresSafeArea(edges: .top)
+                    .opacity(isVisible ? 1 : 0)
+                    .allowsHitTesting(false)
+            } else if isOverPicture {
+                // The same scrim, from the screen's top edge as the band below is: in portrait the
+                // status bar is over the picture too.
+                LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
+                    .frame(height: safeArea.top + topBarHeight + 2 * Self.topChromeSpacing)
+                    .frame(maxHeight: .infinity, alignment: .top)
                     .ignoresSafeArea(edges: .top)
                     .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
@@ -452,6 +491,12 @@ struct ElementCallView: View {
             ElementCallStage(tiles: state.tiles,
                              spotlightID: state.spotlightID,
                              fullscreenID: fullscreenTile?.id,
+                             speakerID: state.smallCallSpeakerID,
+                             floatingInsets: floatingInsets(isLandscape: isLandscape),
+                             extendsUnderSideSafeAreas: isFullBleed,
+                             ownCorner: context.ownTileCorner,
+                             canSwitchCamera: state.canSwitchCamera,
+                             isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,
                              memberCount: state.memberCount,
                              pictureInPictureSourceView: pictureInPictureSourceView,
@@ -476,7 +521,8 @@ struct ElementCallView: View {
                              onScrollIdle: stageScrollDidStop,
                              // A way of looking, so it lives on the context beside the fullscreen
                              // tile; the view model resolves it by identity on the next refresh.
-                             onShowHero: { context.shownHeroID = $0 }) { action in
+                             onShowHero: { context.shownHeroID = $0 },
+                             onMoveOwnTile: { context.ownTileCorner = $0 }) { action in
                 context.send(viewAction: action)
             }
             .onAppear { applyStageChrome(.stageAppeared(isLandscape: isLandscape)) }
@@ -512,8 +558,8 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
     
     /// Pinned, so the portrait and landscape renders of one preview show one state rather than
     /// each orientation's start.
-    static func chrome(isVisible: Bool) -> some View {
-        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
+    static func chrome(isVisible: Bool, tiles: [ElementCallTile] = ElementCallPreviewFixtures.group) -> some View {
+        let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: tiles))
         context.stageChrome = .pinned(isVisible: isVisible)
         return ElementCallView(context: context,
                                pictureInPictureSourceView: UIView(),
@@ -527,7 +573,7 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Failed")
         screen(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group))
             .previewDisplayName("Connected group")
-        // Alone in the call: the model's ranked list is empty and our own tile is the whole stage.
+        // Alone in the call: the model's ranked list is empty and our own tile is all there is.
         // This used to render as a spinner you could not get out of.
         screen(ElementCallPreviewFixtures.connected(tiles: [ElementCallPreviewFixtures.alice]))
             .previewDisplayName("Alone in the call")
@@ -551,6 +597,15 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Chrome shown")
         chrome(isVisible: false)
             .previewDisplayName("Chrome hidden")
+        // A small call (019): the picture behind both bars and our tile following the bar (R4, R19).
+        chrome(isVisible: true, tiles: [ElementCallPreviewFixtures.alice, ElementCallPreviewFixtures.bob])
+            .previewDisplayName("Two people, chrome shown")
+        chrome(isVisible: false, tiles: [ElementCallPreviewFixtures.alice, ElementCallPreviewFixtures.bob])
+            .previewDisplayName("Two people, chrome hidden")
+        chrome(isVisible: true, tiles: Array(ElementCallPreviewFixtures.group.prefix(4)))
+            .previewDisplayName("Four people, chrome shown")
+        chrome(isVisible: false, tiles: Array(ElementCallPreviewFixtures.group.prefix(4)))
+            .previewDisplayName("Four people, chrome hidden")
     }
 }
 

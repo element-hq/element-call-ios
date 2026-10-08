@@ -147,8 +147,8 @@ final class ScenarioStage {
             slots.removeAll()
             await player.settle()
             // What `ElementCallView` declares while the stage is unmounted.
-            let spotlightID = context.viewState.spotlightID
-            let also = [spotlightID, player.call.pictureInPictureCandidate(spotlight: spotlightID)].compactMap { $0 }
+            let pictureInPicture = context.viewState.pictureInPictureTile
+            let also = [pictureInPicture.id, player.call.pictureInPictureCandidate(spotlight: pictureInPicture.id, isExact: pictureInPicture.isExact)].compactMap { $0 }
             player.call.setDetailWindow(.init(ranks: 0..<ElementCallView.minimizedDetailWindowLength, also: Set(also)))
         case .restore:
             isMaximized = true
@@ -186,7 +186,12 @@ final class ScenarioStage {
               fullscreenID: context.fullscreenTileID,
               scrollOffset: scrollOffset,
               liveTileIDs: liveTileIDs,
-              metrics: metrics)
+              metrics: metrics,
+              speakerID: context.viewState.smallCallSpeakerID,
+              // The chrome is always up in a scenario: what `ElementCallView` passes then, with the
+              // top bar at the height it measures at the default text size.
+              floatingInsets: .init(top: metrics.isLandscape ? 44 + ElementCallView.topChromeSpacing : 0,
+                                    bottom: ElementCallView.controlsClearance))
     }
     
     /// The side effects the stage runs on a change of arrangement.
