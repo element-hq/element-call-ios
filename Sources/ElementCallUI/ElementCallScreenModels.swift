@@ -91,9 +91,6 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// and this is the one copy the stage, the Picture in Picture window and the tests all read.
     /// Never ourselves, and never the head of the ranking just for being the head of it.
     public var spotlightID: MatrixRTCTileID?
-    /// The remote people in the order they arrived, which the small-call layout places them by
-    /// instead of the ranking (019 R7). Kept in the grid too, so entering the small layout finds it.
-    var arrivalOrder = ElementCallArrivalOrder()
     /// Who the small-call layout raises and Picture in Picture follows (019 R9, R15). Stored for the
     /// reason `spotlightID` is: it holds the last speaker through silence.
     public var smallCallSpeakerID: MatrixRTCTileID?
@@ -105,7 +102,7 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// tile (019 R15); otherwise the spotlight, with the window's own fallbacks (003 R68).
     public var pictureInPictureTile: (id: MatrixRTCTileID?, isExact: Bool) {
         guard ElementCallSmallCallLayout.applies(to: tiles) else { return (spotlightID, false) }
-        return (ElementCallSmallCallLayout.pictureInPictureTile(tiles: tiles, arrivalOrder: arrivalOrder, speakerID: smallCallSpeakerID), true)
+        return (ElementCallSmallCallLayout.pictureInPictureTile(tiles: tiles, speakerID: smallCallSpeakerID), true)
     }
     
     public var isVideoCall: Bool {

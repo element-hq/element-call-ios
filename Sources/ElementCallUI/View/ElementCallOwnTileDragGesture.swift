@@ -62,8 +62,7 @@ struct ElementCallOwnTileDragGesture: UIGestureRecognizerRepresentable {
             gesture.onChange(travel)
         case .ended:
             // The recognizer's velocity is that of the last movement, and a finger held still sends
-            // none, so a drag that paused before letting go was still thrown at the speed it had
-            // before the pause. Held for longer than this, the release is a drop.
+            // none, so after a pause it is stale: a release that long after moving is a drop.
             let isHeld = coordinator.lastMove.map { Date.now.timeIntervalSince($0) > Self.heldRelease } ?? true
             let velocity = isHeld ? .zero : recognizer.velocity(in: view)
             gesture.onEnd(CGSize(width: velocity.x, height: velocity.y))

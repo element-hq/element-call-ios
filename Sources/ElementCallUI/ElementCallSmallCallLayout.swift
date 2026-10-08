@@ -44,14 +44,17 @@ enum ElementCallSmallCallLayout {
     
     /// Tiles, ourselves included, up to which this layout applies (R1).
     nonisolated static let maximumTiles = 5
+    /// The core's ranking threshold: at or below this many remote tiles it orders them by join time,
+    /// heroes first, rather than by what people are doing. Every remote tile of this layout, so the
+    /// order it receives is arrival (R7) and nobody moves when someone talks (R13).
+    nonisolated static let rankingThreshold = maximumTiles - 1
     
     /// R6's values, being tuned on a device: the most of the stage width each of the three tiles
     /// takes, and the narrowest any of them may get.
     static let staggerWidthFraction: CGFloat = 0.8
     static let staggerMinimumWidth: CGFloat = 200
     
-    /// R17, R28. Smaller than the spec's 140 × 210, which read as too big on a phone; being tuned
-    /// on the device (hq 019 ios.md, appendix).
+    /// R17, R28. Being tuned on a device (hq 019 ios.md, appendix).
     static let floatingPortraitSize = CGSize(width: 100, height: 150)
     static let floatingLandscapeSize = CGSize(width: 150, height: 100)
     static let floatingAvatarSize = CGSize(width: 100, height: 100)
@@ -83,17 +86,16 @@ enum ElementCallSmallCallLayout {
     
     // MARK: - Arrangement
     
-    /// Remote tiles by arrival, never by rank (R7), so nobody moves when someone else talks (R13).
+    /// Remote tiles in the core's order, which below ``rankingThreshold`` is join order (R7).
     /// Our own tile floats (R2) and is placed apart from them, alone included (R3), unless it is
     /// inline: in landscape with three tiles or more (R16).
     ///
     /// Everything is on screen, so everything is live and nothing is hidden or released, and the
-    /// detail window covers every remote tile (R12). Each placement still carries its *rank* rather
-    /// than its arrival index, because the detail window is a rank range.
+    /// detail window covers every remote tile (R12).
     static func arrange(_ input: ElementCallStageLayout.Input, viewport: CGRect) -> ElementCallStageLayout {
         let metrics = input.metrics
         let own = input.tiles.first(where: \.isLocal)
-        let remote = remoteInArrivalOrder(input.tiles, arrivalOrder: input.arrivalOrder)
+        let remote = remote(input.tiles)
         let ranks = Dictionary(uniqueKeysWithValues: input.tiles.filter { !$0.isLocal }.enumerated().map { ($1.id, $0) })
         let isFloating = own != nil && (!metrics.isLandscape || remote.count <= 1)
         
@@ -110,8 +112,7 @@ enum ElementCallSmallCallLayout {
         }
         
         if remote.isEmpty {
-            // R3: only us, in our corner like any other small call. A whole-screen tile of our own
-            // put the flip button under the control bar, and moved our tile on the first arrival.
+            // R3: only us, floating in our corner, so the tile stays put when someone arrives.
         } else if remote.count == 1 {
             // R4: filled, except a landscape picture on a portrait stage, which is shown whole.
             place(remote[0], fullBleedFrame(metrics), .fullBleed, fit: metrics.isLandscape ? .standard : .fitWhenLandscape)
@@ -124,9 +125,8 @@ enum ElementCallSmallCallLayout {
                 place(tile, frame, .card)
             }
         } else if remote.count == 3 {
-            // The speaker is ringed and nothing else (R9): with the rows not overlapping there is
-            // nothing to be on top of, and growing the speaker ate the gap beside it, unevenly, since
-            // a top or bottom row could only grow inwards.
+            // The speaker is ringed and nothing else (R9): the rows do not overlap, so there is
+            // nothing to be on top of, and growing one would close the gap beside it.
             for (tile, frame) in zip(remote, staggerFrames(metrics: metrics)) {
                 place(tile, frame, .card)
             }
@@ -149,20 +149,14 @@ enum ElementCallSmallCallLayout {
                                       viewport: viewport,
                                       detailWindow: .init(ranks: 0..<ranks.count, also: []),
                                       heroStack: nil,
-                                      pictureInPictureTileID: pictureInPictureTile(tiles: input.tiles, arrivalOrder: input.arrivalOrder, speakerID: input.speakerID),
+                                      pictureInPictureTileID: pictureInPictureTile(tiles: input.tiles, speakerID: input.speakerID),
                                       isStatic: true,
                                       readingOrder: isFloating ? remoteIDs + ownID : ownID + remoteIDs)
     }
     
-    /// The remote person tiles in arrival order. A tile the order has not seen yet goes after it in
-    /// the order given, so a caller with no arrival record (a grid test, the first pass of a
-    /// preview) gets the tiles as listed rather than none.
-    nonisolated static func remoteInArrivalOrder(_ tiles: [ElementCallTile], arrivalOrder: ElementCallArrivalOrder) -> [ElementCallTile] {
-        let remote = tiles.filter { !$0.isLocal && !$0.isScreenShare }
-        let byID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
-        let arrived = arrivalOrder.ids.compactMap { byID[$0] }
-        let known = Set(arrivalOrder.ids)
-        return arrived + remote.filter { !known.contains($0.id) }
+    /// The remote person tiles, in the order given.
+    private nonisolated static func remote(_ tiles: [ElementCallTile]) -> [ElementCallTile] {
+        tiles.filter { !$0.isLocal && !$0.isScreenShare }
     }
     
     /// The whole screen, behind both bars (R4). In content coordinates, which start under the
@@ -186,9 +180,7 @@ enum ElementCallSmallCallLayout {
     /// R6: three 4:3 rows, left, right, left, the first at the top and the third at the bottom of the
     /// band, with at least the ordinary gap between them. At ``staggerWidthFraction`` three rows do
     /// not fit a phone's band, so they shrink until they do, but never below ``staggerMinimumWidth``,
-    /// which only a split screen or a very short stage reaches and where they then overlap. They
-    /// used to overlap instead of shrinking, as R6 first said, which hid the middle tile's name
-    /// under the third.
+    /// which only a split screen or a very short stage reaches and where they then overlap.
     static func staggerFrames(metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
         let band = metrics.cardsBottom
         var width = min(max(staggerWidthFraction * metrics.cardsWidth, staggerMinimumWidth), metrics.cardsWidth)
@@ -306,14 +298,11 @@ enum ElementCallSmallCallLayout {
     ///
     /// - Parameters:
     ///   - tiles: the composed tiles, ourselves included; we are never the speaker (R15).
-    ///   - arrivalOrder: breaks a tie between two people starting to speak at once.
     ///   - held: the previous answer. Kept while it is still speaking, so two people talking over
     ///     each other do not swap on every word, and kept through silence, so the last speaker
     ///     stays rather than the window emptying (R15). Dropped once they leave.
-    nonisolated static func speaker(tiles: [ElementCallTile],
-                                    arrivalOrder: ElementCallArrivalOrder,
-                                    held: MatrixRTCTileID?) -> MatrixRTCTileID? {
-        let remote = remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder)
+    nonisolated static func speaker(tiles: [ElementCallTile], held: MatrixRTCTileID?) -> MatrixRTCTileID? {
+        let remote = remote(tiles)
         if let held, remote.contains(where: { $0.id == held && $0.isSpeaking }) {
             return held
         }
@@ -328,9 +317,7 @@ enum ElementCallSmallCallLayout {
     
     /// The tile the Picture in Picture window continues while the small layout is up (R15): the
     /// speaker, else whoever arrived first, else ourselves when we are alone.
-    nonisolated static func pictureInPictureTile(tiles: [ElementCallTile],
-                                                 arrivalOrder: ElementCallArrivalOrder,
-                                                 speakerID: MatrixRTCTileID?) -> MatrixRTCTileID? {
-        speakerID ?? remoteInArrivalOrder(tiles, arrivalOrder: arrivalOrder).first?.id ?? tiles.first(where: \.isLocal)?.id
+    nonisolated static func pictureInPictureTile(tiles: [ElementCallTile], speakerID: MatrixRTCTileID?) -> MatrixRTCTileID? {
+        speakerID ?? remote(tiles).first?.id ?? tiles.first(where: \.isLocal)?.id
     }
 }

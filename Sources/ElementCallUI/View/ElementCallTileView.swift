@@ -457,8 +457,7 @@ struct ElementCallTileView: View, Equatable {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(style.theme.iconAccentPrimary, lineWidth: 3)
         } else if appearance == .floating {
-            // Our floating tile overlaps the tiles it floats over, and with the camera off it is the
-            // same fill as they are: without an edge it blended into the one beneath.
+            // With the camera off our floating tile is the same fill as the tile it overlaps.
             RoundedRectangle(cornerRadius: cornerRadius)
                 .strokeBorder(style.theme.borderInteractiveSecondary, lineWidth: Self.floatingBorderWidth)
         }

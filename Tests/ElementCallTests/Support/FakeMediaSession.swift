@@ -89,6 +89,8 @@ final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
         nil
     }
     
+    func setRankingThreshold(tiles: UInt32) { }
+    
     func setDetailWindow(offset: UInt32, len: UInt32, also: [FfiTileId]) {
         state.withLock { $0.detailWindows.append((offset, len, also)) }
     }

@@ -42,16 +42,9 @@ struct ElementCallSmallCallLayoutTests {
         names.map { Fixtures.tile($0, hasVideo: video.contains($0), isSpeaking: $0 == speaking) }
     }
     
-    private func arrival(_ tiles: [ElementCallTile]) -> ElementCallArrivalOrder {
-        var order = ElementCallArrivalOrder()
-        order.observe(tiles)
-        return order
-    }
-    
-    /// Arrival is the order given unless stated, as it is for a fixture.
+    /// Remote tiles in the core's order, which below the ranking threshold is join order.
     private func arrange(_ remote: [ElementCallTile],
                          own: Bool = true,
-                         arrivedAs arrived: [ElementCallTile]? = nil,
                          speaker: MatrixRTCTileID? = nil,
                          corner: ElementCallOwnTileCorner = .bottomRight,
                          insets: Layout.FloatingInsets = chromeShown,
@@ -60,7 +53,6 @@ struct ElementCallSmallCallLayoutTests {
         let viewport = CGRect(origin: .zero, size: metrics.area)
         return Layout.arrange(.init(tiles: tiles,
                                     metrics: metrics,
-                                    arrivalOrder: arrival(arrived ?? tiles),
                                     speakerID: speaker,
                                     ownCorner: corner,
                                     floatingInsets: insets),
@@ -272,21 +264,19 @@ struct ElementCallSmallCallLayoutTests {
     
     // MARK: - Order (R7, R13, R27)
     
-    /// Arrival decides the places, whatever the ranking: the same people in a new rank order give
-    /// the same frames.
+    /// R7: the order given is the order placed and read. Below the ranking threshold that is the
+    /// core's join order, which is what makes it arrival.
     @Test
-    func arrivalNotRankDecidesThePlaces() throws {
+    func theCoresOrderIsTheOrderPlacedAndRead() throws {
         let bob = Fixtures.tile("Bob")
         let carol = Fixtures.tile("Carol")
         let dan = Fixtures.tile("Dan")
-        let arrived = [me, bob, carol, dan]
-        let ranked = arrange([dan, carol, bob], arrivedAs: arrived)
-        let asArrived = arrange([bob, carol, dan], arrivedAs: arrived)
-        for tile in [bob, carol, dan] {
-            #expect(try frame(of: tile, in: ranked) == frame(of: tile, in: asArrived))
-        }
-        #expect(try frame(of: bob, in: ranked).minY == 0)
-        #expect(ranked.readingOrder == [bob.id, carol.id, dan.id, me.id])
+        let layout = arrange([bob, carol, dan])
+        let ys = try [bob, carol, dan].map { try frame(of: $0, in: layout).minY }
+        #expect(ys == ys.sorted())
+        #expect(layout.readingOrder == [bob.id, carol.id, dan.id, me.id])
+        // Everyone in the small layout is below the threshold the core is given.
+        #expect(Layout.rankingThreshold == Layout.maximumTiles - 1)
     }
     
     /// Each placement carries its rank, for the detail window, which covers every remote tile.
@@ -294,7 +284,7 @@ struct ElementCallSmallCallLayoutTests {
     func placementsCarryRanksAndEverythingIsLive() throws {
         let bob = Fixtures.tile("Bob")
         let carol = Fixtures.tile("Carol")
-        let layout = arrange([carol, bob], arrivedAs: [me, bob, carol])
+        let layout = arrange([carol, bob])
         #expect(try placement(of: carol, in: layout).orderIndex == 0)
         #expect(try placement(of: bob, in: layout).orderIndex == 1)
         #expect(try placement(of: me, in: layout).orderIndex == nil)
@@ -377,13 +367,12 @@ struct ElementCallSmallCallLayoutTests {
     
     // MARK: - Speaker (R9, R15)
     
-    /// Two people starting together: the first to have arrived, whatever the ranking says.
+    /// Two people starting together: the first in the order, which is the first to have arrived.
     @Test
-    func theFirstSpeakerByArrivalIsChosen() {
+    func theFirstSpeakerInTheOrderIsChosen() {
         let bob = Fixtures.tile("Bob", isSpeaking: true)
         let carol = Fixtures.tile("Carol", isSpeaking: true)
-        let order = arrival([me, bob, carol])
-        #expect(Layout.speaker(tiles: [me, carol, bob], arrivalOrder: order, held: nil) == bob.id)
+        #expect(Layout.speaker(tiles: [me, bob, carol], held: nil) == bob.id)
     }
     
     /// Talking over each other does not swap the tile on top on every word.
@@ -392,7 +381,7 @@ struct ElementCallSmallCallLayoutTests {
         let bob = Fixtures.tile("Bob", isSpeaking: true)
         let carol = Fixtures.tile("Carol", isSpeaking: true)
         let tiles = [me, bob, carol]
-        #expect(Layout.speaker(tiles: tiles, arrivalOrder: arrival(tiles), held: carol.id) == carol.id)
+        #expect(Layout.speaker(tiles: tiles, held: carol.id) == carol.id)
     }
     
     /// R9: when nobody is speaking the last speaker stays, until they leave.
@@ -401,9 +390,9 @@ struct ElementCallSmallCallLayoutTests {
         let bob = Fixtures.tile("Bob")
         let carol = Fixtures.tile("Carol")
         let tiles = [me, bob, carol]
-        #expect(Layout.speaker(tiles: tiles, arrivalOrder: arrival(tiles), held: carol.id) == carol.id)
+        #expect(Layout.speaker(tiles: tiles, held: carol.id) == carol.id)
         let gone = [me, bob]
-        #expect(Layout.speaker(tiles: gone, arrivalOrder: arrival(gone), held: carol.id) == nil)
+        #expect(Layout.speaker(tiles: gone, held: carol.id) == nil)
     }
     
     /// R15: we never count as the speaker, however loud.
@@ -411,7 +400,7 @@ struct ElementCallSmallCallLayoutTests {
     func weAreNeverTheSpeaker() {
         let loudMe = Fixtures.tile("Me", isLocal: true, isSpeaking: true)
         let tiles = [loudMe, Fixtures.tile("Bob")]
-        #expect(Layout.speaker(tiles: tiles, arrivalOrder: arrival(tiles), held: nil) == nil)
+        #expect(Layout.speaker(tiles: tiles, held: nil) == nil)
     }
     
     // MARK: - Picture in Picture (R15)
@@ -420,11 +409,10 @@ struct ElementCallSmallCallLayoutTests {
     func pictureInPictureFollowsTheSpeakerThenTheFirstArrivalThenUs() {
         let bob = Fixtures.tile("Bob")
         let carol = Fixtures.tile("Carol")
-        let tiles = [me, carol, bob]
-        let order = arrival([me, bob, carol])
-        #expect(Layout.pictureInPictureTile(tiles: tiles, arrivalOrder: order, speakerID: carol.id) == carol.id)
-        #expect(Layout.pictureInPictureTile(tiles: tiles, arrivalOrder: order, speakerID: nil) == bob.id)
-        #expect(Layout.pictureInPictureTile(tiles: [me], arrivalOrder: arrival([me]), speakerID: nil) == me.id)
+        let tiles = [me, bob, carol]
+        #expect(Layout.pictureInPictureTile(tiles: tiles, speakerID: carol.id) == carol.id)
+        #expect(Layout.pictureInPictureTile(tiles: tiles, speakerID: nil) == bob.id)
+        #expect(Layout.pictureInPictureTile(tiles: [me], speakerID: nil) == me.id)
     }
     
     /// The window follows the small call's choice exactly, and the grid's spotlight with fallbacks.

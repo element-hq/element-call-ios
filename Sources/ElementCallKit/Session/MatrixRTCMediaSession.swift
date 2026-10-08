@@ -143,6 +143,7 @@ public final class MatrixRTCMediaSession {
     private var videoSources = [MatrixRTCStreamRef: RemoteVideoSource]()
     private var appliedConstraints = [MatrixRTCStreamRef: MatrixRTCVideoConstraints]()
     private var appliedDetailWindow: MatrixRTCDetailWindow?
+    private var appliedRankingThreshold: UInt32?
     /// Streams that are released rather than merely paused. Held per stream rather than per member
     /// because a member can be two tiles: scrolling a sharer's camera away must not take the screen
     /// share filling the spotlight with it, which is exactly what walking both kinds per member did.
@@ -717,6 +718,18 @@ public final class MatrixRTCMediaSession {
             mediaSession.setDetailWindow(offset: UInt32(clamping: window.ranks.lowerBound),
                                          len: UInt32(clamping: window.ranks.count),
                                          also: also)
+        }
+    }
+    
+    /// At or below this many remote tiles the core orders them by join time, heroes first, rather
+    /// than by what people are doing, so a small call does not shuffle.
+    public func setRankingThreshold(_ tiles: Int) {
+        let threshold = UInt32(clamping: tiles)
+        guard threshold != appliedRankingThreshold else { return }
+        appliedRankingThreshold = threshold
+        let mediaSession = mediaSession
+        mediaRequests.async {
+            mediaSession.setRankingThreshold(tiles: threshold)
         }
     }
     

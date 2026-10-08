@@ -32,10 +32,8 @@ struct ElementCallStage: View {
     /// The tile filling the screen, if any. Not a mode of the stage so much as one more arrangement
     /// of it: the tile keeps its identity, so it grows out of its cell rather than being replaced.
     var fullscreenID: MatrixRTCTileID?
-    /// What the small-call layout places by, and who the Picture in Picture source view is anchored
-    /// on (019 R7, R15). Kept by the view model, not here: the stage unmounts while minimized, and
-    /// both have to outlive that.
-    var arrivalOrder = ElementCallArrivalOrder()
+    /// Who the Picture in Picture source view is anchored on in a small call (019 R15). Kept by the
+    /// view model, not here: the stage unmounts while minimized, and it has to outlive that.
     var speakerID: MatrixRTCTileID?
     /// Room the chrome takes at the top and the bottom, which only our floating tile keeps clear of
     /// (019 R19). Not part of ``Arrangement``: it changes inside the chrome's own animation, so the
@@ -119,8 +117,8 @@ struct ElementCallStage: View {
     /// The content height the origin was measured against.
     @State private var scrollDirectionContentHeight: CGFloat?
     /// How far our floating tile is under the finger from its corner. Plain state rather than
-    /// `@GestureState`, which resets outside the release's animation: the tile jumped back to its
-    /// old corner for a frame before springing to the new one.
+    /// `@GestureState`, which resets outside the release's animation and would put the tile back in
+    /// its old corner for a frame before it springs to the new one.
     @State private var ownTileDrag: CGSize = .zero
     /// Our own picture's upright shape, which the floating tile takes (019 R10, R29). From the
     /// renderer, which knows within a frame, rather than the call's video info, which is polled
@@ -164,7 +162,6 @@ struct ElementCallStage: View {
                                                              scrollOffset: scrollOffset,
                                                              liveTileIDs: liveTileIDs,
                                                              metrics: metrics,
-                                                             arrivalOrder: arrivalOrder,
                                                              speakerID: speakerID,
                                                              ownCorner: ownCorner,
                                                              ownVideoAspect: ownVideoAspect,
@@ -745,7 +742,6 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
         return ElementCallStage(tiles: tiles,
                                 spotlightID: state.spotlightID,
                                 fullscreenID: fullscreen,
-                                arrivalOrder: state.arrivalOrder,
                                 speakerID: state.smallCallSpeakerID,
                                 ownCorner: ownCorner,
                                 memberCount: tiles.count,

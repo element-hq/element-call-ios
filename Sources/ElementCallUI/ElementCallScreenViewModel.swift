@@ -293,8 +293,7 @@ public final class ElementCallScreenViewModel {
         guard let call = controller.call else {
             state.tiles = []
             state.spotlightID = nil
-            // So the next call on a reused view model starts its order and its speaker afresh.
-            state.arrivalOrder = ElementCallArrivalOrder()
+            // So the next call on a reused view model starts its speaker afresh.
             state.smallCallSpeakerID = nil
             // Only on a change: Observation notifies on every set, and this runs on every wake
             // while there is no call.
@@ -313,6 +312,8 @@ public final class ElementCallScreenViewModel {
             return
         }
         
+        // A small call is laid out in join order, which the core gives below this (019 R7).
+        call.setRankingThreshold(ElementCallSmallCallLayout.rankingThreshold)
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
         state.isMediaDegraded = call.isMediaDegraded
@@ -338,12 +339,8 @@ public final class ElementCallScreenViewModel {
         } else {
             nil
         }
-        // Observed whichever layout is up, so the small layout always finds the order kept (019 R32).
         // The speaker carried over from the last refresh is the one the rule holds.
-        state.arrivalOrder.observe(state.tiles)
-        state.smallCallSpeakerID = ElementCallSmallCallLayout.speaker(tiles: state.tiles,
-                                                                      arrivalOrder: state.arrivalOrder,
-                                                                      held: state.smallCallSpeakerID)
+        state.smallCallSpeakerID = ElementCallSmallCallLayout.speaker(tiles: state.tiles, held: state.smallCallSpeakerID)
         // The user's pick is followed by identity for as long as it is a hero; the moment the
         // choice lands elsewhere it is stale, and keeping it would bring that hero straight back
         // to the front if it ever returned.

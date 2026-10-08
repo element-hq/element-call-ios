@@ -476,7 +476,6 @@ struct ElementCallView: View {
             ElementCallStage(tiles: state.tiles,
                              spotlightID: state.spotlightID,
                              fullscreenID: fullscreenTile?.id,
-                             arrivalOrder: state.arrivalOrder,
                              speakerID: state.smallCallSpeakerID,
                              floatingInsets: floatingInsets(isLandscape: isLandscape),
                              extendsUnderSideSafeAreas: isFullBleed,

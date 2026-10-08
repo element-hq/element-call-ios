@@ -187,7 +187,6 @@ final class ScenarioStage {
               scrollOffset: scrollOffset,
               liveTileIDs: liveTileIDs,
               metrics: metrics,
-              arrivalOrder: context.viewState.arrivalOrder,
               speakerID: context.viewState.smallCallSpeakerID,
               // The chrome is always up in a scenario: what `ElementCallView` passes then, with the
               // top bar at the height it measures at the default text size.

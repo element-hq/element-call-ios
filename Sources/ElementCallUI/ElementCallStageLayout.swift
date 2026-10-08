@@ -187,7 +187,6 @@ struct ElementCallStageLayout: Equatable {
         var metrics: Metrics
         // What only the small-call layout reads (019). Last and defaulted, so a grid test states
         // none of them.
-        var arrivalOrder = ElementCallArrivalOrder()
         /// `ElementCallSmallCallLayout.speaker(...)`'s choice, held through silence.
         var speakerID: MatrixRTCTileID?
         var ownCorner: ElementCallOwnTileCorner = .bottomRight
