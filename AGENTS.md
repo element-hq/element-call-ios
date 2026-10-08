@@ -95,7 +95,10 @@ them**, despite the comment in `tests.yml` saying so: `XCODE_APP`, `SIMULATOR_NA
 `SIMULATOR_RUNTIME` are duplicated literals in both workflow files, so changing the pinned device is
 three edits, not one. `release.yml` is deliberately not a fourth: it runs on Linux and gates on the
 `Tests` run for the commit rather than testing anything itself, and the example harness below is not
-a fourth either: it is a step in the same `Tests` job and reuses the simulator that job creates.
+a fourth either: its `ui-tests` job, sharded by test class so the wall clock is the longest shard
+rather than all 18 minutes, reads the same workflow-level `env` as the package job. **A new UI test
+class must be added to a shard** in that job's matrix and to its `SHARDED` list; the job fails if one
+is in none.
 
 ### The example harness and the UI tests
 
