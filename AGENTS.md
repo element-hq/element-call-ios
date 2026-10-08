@@ -125,8 +125,8 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   bar is drawn from one, which needs only a room name, a style and a duration. Two things a fake
   cannot know: the mic glyph reads through `call`, which is nil, so the bar always shows unmuted;
   and `connectedAt` has to be passed in, which is why `fake(...)` takes it.
-- **The app opens on a catalogue of fixtures, and minimizes back to it.** `-fixture <key>`
-  skips the catalogue and opens that fixture directly, and `-scenario <name>` plays a scenario
+- **The app opens on a catalogue of fixtures, and minimizes back to it**, at the row last opened.
+  `-fixture <key>` skips the catalogue and opens that fixture directly, and `-scenario <name>` plays a scenario
   file, so a test starts where it means to rather than tapping its way there — with the argument
   present the view hierarchy is what it was before the catalogue existed, which is what keeps the older UI tests looking at the tree they were
   written against. The argument used to fall back to the group arrangement on anything it did not
@@ -150,7 +150,8 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
 - **Put a test here only if it needs a real touch.** Arrangement belongs in
   `ElementCallStageLayoutTests`, appearance in the snapshots, and geometry in a unit test: a UI test
   is twenty seconds against their twenty milliseconds. What earns its place is gesture arbitration —
-  the scroller's pan against the spotlight's swipe and a tile's pan, and the `Button` inside a tile — and the minimize
+  the scroller's pan against the spotlight's swipe and a tile's pan, the `Button` inside a tile, and
+  our floating tile's drag against the flip button on it — and the minimize
   round trip, which is three real-touch questions at once: whether the identifier reaches a view at
   all, whether the button in the top bar wins the touch, and whether the bar is hittable where a
   host puts it. Which branch the controller takes when asked to minimize is *not* one of them; that
@@ -165,8 +166,9 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   heavy border, because the questions are geometric. A border running off the edges is a crop, a
   border with black beside it is a letterbox, and a border that changes thickness partway through a
   move is the picture being stretched rather than redrawn. Some members are portrait sources and
-  some landscape, so both answers are on the stage at once. It reaches the tiles through
-  `ElementCallPreviewVideo`, an environment value consulted only where there is no call — nil in
+  some landscape, so both answers are on the stage at once, and ours follows the stage's
+  orientation, as a camera does, so our floating tile shows both of its shapes. It reaches the
+  tiles through `ElementCallPreviewVideo`, an environment value consulted only where there is no call — nil in
   every shipping build.
   
   Keep it honest, or it is worse than nothing. The pattern is generated a row at a time, one frame
@@ -185,6 +187,12 @@ xcodebuild test -project Example/ElementCallExample.xcodeproj \
   to stay put moved it by a screen. `ElementCallSpotlightPanGesture` is a
   `UIGestureRecognizerRepresentable` whose delegate makes the scroll view's pan wait for it to
   fail, which is the only thing that keeps a drag starting on the spotlight off the grid.
+- **Our floating tile's drag is a UIKit pan too**, `ElementCallOwnTileDragGesture`, on the content
+  root rather than the tile, for the spotlight's reason: a recognizer on the tile hit-tests above
+  its flip button. A pan begins only on movement and then cancels the button's touch, so a tap is
+  the button's and a drag from it is the tile's. Two traps, both in the code: the action fires on
+  the representable it was made with, so it reads the coordinator's copy; and the pan's velocity is
+  that of the last movement, so a release after a pause is a drop, not a throw.
 
 - **A glass button is interactive glass, always.** Plain `glassEffect` is not wired for touch: a
   plain-glass button drawn over the stage's content took no taps, on the simulator and on a phone,
@@ -264,7 +272,7 @@ touch Tests/ElementCallTests/.record-snapshots
 ```
 
 **Prefer that to deleting the directory.** Deleting also works — the harness records whatever is
-missing — but it re-records all 93 images rather than the few that changed, and PNG re-encoding is
+missing — but it re-records every image rather than the few that changed, and PNG re-encoding is
 not byte-identical across Xcode versions. The references are ordinary blobs rather than Git LFS
 pointers (see CONTRIBUTING.md for why they must stay that way), so a wholesale re-record puts 6 MB
 of new blobs in the repository permanently and buries the images a reviewer has to look at.
@@ -287,6 +295,24 @@ means `iPad10_2(.landscape)` while its bare `iPhoneX` means portrait. There is n
 coverage.
 
 ---
+
+## The stage's two layouts
+
+`ElementCallStageLayout.compute` picks one of two arrangements: spec 019's small-call layout
+(`ElementCallSmallCallLayout`) for up to five tiles with no remote screen share, and spec 003's grid
+otherwise. Both are pure arithmetic producing the same `ElementCallStageLayout`, drawn by the one
+`ElementCallStage`.
+
+- **Never make the small layout a view of its own.** A tile that changes view hierarchy remounts its
+  video view, falls back to its avatar and resubscribes; crossing five and six people is meant to
+  be every tile moving.
+- **The small layout places people in the core's order, which is their join order** because the
+  view model sets the core's ranking threshold (`ElementCallSmallCallLayout.rankingThreshold`) to
+  every remote tile the layout can hold. Above it the core ranks by activity, so a threshold that
+  fell below the layout's size would move people whenever someone talks. Never re-sort `tiles`.
+- **Our floating tile's corner is the context's** (`ownTileCorner`), since the stage unmounts while
+  minimized. Corners are physical: a right-to-left locale mirrors the stage's positions, and
+  `ElementCallStage.drawnFrame` mirrors our tile back.
 
 ## Releasing
 
