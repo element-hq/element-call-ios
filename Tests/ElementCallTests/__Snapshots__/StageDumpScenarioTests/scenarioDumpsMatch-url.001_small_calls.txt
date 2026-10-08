@@ -29,6 +29,15 @@ rank slot      rect                 vis      detail constraints
 2    small 3   203,143,175,131      live     detail enabled visible 352x256
 -    small 0   16,0,175,131         live     -      -
 
+== 6s 6s     B C D E
+window ranks 0..<4 also -  composed 5  subscribed 4  spotlight -  fullscreen -
+rank slot      rect                 vis      detail constraints
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+3    small 4   109,286,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -
+
 == 7s 7s     B C D E F
 window ranks 0..<5 also -  composed 6  subscribed 5  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
