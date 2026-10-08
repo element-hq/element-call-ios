@@ -182,8 +182,9 @@ enum ElementCallSmallCallLayout {
         }
     }
     
-    /// R16: 4:3, rows of at most four, every tile the same size, each row and the whole block
-    /// centred. As wide as the stage allows, shrinking only when two rows do not fit its height.
+    /// R16: 4:3, rows of at most four, every tile the same size, each row centred across the stage
+    /// and the whole block centred on the screen's height. As wide as the stage allows, shrinking
+    /// only when two rows do not fit above the bottom safe area.
     static func inlineFrames(count: Int, metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
         let perRow = min(count, 4)
         let rows = (count + 3) / 4
@@ -192,7 +193,7 @@ enum ElementCallSmallCallLayout {
         let width = min(widthThatFitsTheRow, widthThatFitsTheRows)
         let height = width / Metrics.tileAspect
         let blockHeight = CGFloat(rows) * height + CGFloat(rows - 1) * Metrics.spacing
-        let top = (metrics.cardsBottom - blockHeight) / 2
+        let top = (metrics.area.height - blockHeight) / 2
         return (0..<count).map { index in
             let row = index / 4
             let inRow = min(count - row * 4, 4)

@@ -84,10 +84,10 @@ rank slot      rect                 vis      detail constraints
 == 10s 10s    rotate landscape
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    inline 0,1 195,111,167,125      live     detail enabled visible 336x256
-1    inline 0,2 373,111,167,125      live     detail enabled visible 336x256
-2    inline 0,3 552,111,167,125      live     detail enabled visible 336x256
--    inline 0,0 16,111,167,125       live     -      -
+0    inline 0,1 195,134,167,125      live     detail enabled visible 336x256
+1    inline 0,2 373,134,167,125      live     detail enabled visible 336x256
+2    inline 0,3 552,134,167,125      live     detail enabled visible 336x256
+-    inline 0,0 16,134,167,125       live     -      -
 
 == 11s 11s    rotate portrait
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -

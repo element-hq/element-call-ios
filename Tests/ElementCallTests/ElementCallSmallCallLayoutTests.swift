@@ -211,13 +211,13 @@ struct ElementCallSmallCallLayoutTests {
         #expect(Set(frames.map(\.size)).count == 1)
         #expect(close(frames[0].width / frames[0].height, 4.0 / 3.0, within: 0.001))
         #expect(frames[0].minX < frames[1].minX)
-        // Each row centred on the cards, and the block on the band.
+        // Each row centred across the cards, and the block on the screen.
         for row in Dictionary(grouping: frames, by: \.minY).values {
             let span = row.reduce(CGRect.null) { $0.union($1) }
             #expect(close(span.minX - metrics.cardsLeading, metrics.cardsTrailing - span.maxX))
         }
         let block = frames.reduce(CGRect.null) { $0.union($1) }
-        #expect(close(block.minY, metrics.cardsBottom - block.maxY))
+        #expect(close(block.midY, metrics.area.height / 2), "centred on the screen's height")
         #expect(layout.readingOrder == ([me] + remote).map(\.id))
     }
     
