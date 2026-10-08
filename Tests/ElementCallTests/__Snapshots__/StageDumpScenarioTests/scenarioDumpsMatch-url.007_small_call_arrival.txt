@@ -17,33 +17,33 @@ rank slot      rect                 vis      detail constraints
 == 2s 2s     Bv Cv
 window ranks 0..<2 also -  composed 3  subscribed 2  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,361,271         live     detail enabled visible 720x544
-1    small 1   16,283,361,271       live     detail enabled visible 720x544
--    float br  277,500,100,100      live     -      -
+0    small 1   68,205,258,193       live     detail enabled visible 512x384
+1    small 2   68,411,258,193       live     detail enabled visible 512x384
+-    small 0   68,0,258,193         live     -      -
 
 == 3s 3s     Bv C!v
 window ranks 0..<2 also -  composed 3  subscribed 2  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,361,271         live     detail enabled visible 720x544
-1    small 1   16,283,361,271       live     detail enabled visible 720x544
--    float br  277,500,100,100      live     -      -
+0    small 1   68,205,258,193       live     detail enabled visible 512x384
+1    small 2   68,411,258,193       live     detail enabled visible 512x384
+-    small 0   68,0,258,193         live     -      -
 
 == 4s 4s     Bv C!v D
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,258,193         live     detail enabled visible 512x384
-1    small 1   119,205,258,193      live     detail enabled visible 512x384
-2    small 2   16,411,258,193       live     detail enabled visible 512x384
--    float br  277,500,100,100      live     -      -
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -
 
 == 5s 5s     Bv Cv D E
 window ranks 0..<4 also -  composed 5  subscribed 4  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,175,131         live     detail enabled visible 352x256
-1    small 1   203,0,175,131        live     detail enabled visible 352x256
-2    small 2   16,143,175,131       live     detail enabled visible 352x256
-3    small 3   203,143,175,131      live     detail enabled visible 352x256
--    float br  277,500,100,100      live     -      -
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+3    small 4   109,286,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -
 
 == 6s 6s     Bv Cv D E F
 window ranks 0..<5 also -  composed 6  subscribed 5  spotlight -  fullscreen -
@@ -58,11 +58,11 @@ rank slot      rect                 vis      detail constraints
 == 7s 7s     Bv Cv D E
 window ranks 0..<4 also -  composed 5  subscribed 4  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,175,131         live     detail enabled visible 352x256
-1    small 1   203,0,175,131        live     detail enabled visible 352x256
-2    small 2   16,143,175,131       live     detail enabled visible 352x256
-3    small 3   203,143,175,131      live     detail enabled visible 352x256
--    float br  277,500,100,100      live     -      -
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+3    small 4   109,286,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -
 
 == 8s 8s     F#*v Bv Cv D
 window ranks 1..<4 also F#  composed 5  subscribed 4  spotlight F#*v  fullscreen -
@@ -76,10 +76,10 @@ rank slot      rect                 vis      detail constraints
 == 9s 9s     Bv Cv D
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,258,193         live     detail enabled visible 512x384
-1    small 1   119,205,258,193      live     detail enabled visible 512x384
-2    small 2   16,411,258,193       live     detail enabled visible 512x384
--    float br  277,500,100,100      live     -      -
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -
 
 == 10s 10s    rotate landscape
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
@@ -92,7 +92,7 @@ rank slot      rect                 vis      detail constraints
 == 11s 11s    rotate portrait
 window ranks 0..<3 also -  composed 4  subscribed 3  spotlight -  fullscreen -
 rank slot      rect                 vis      detail constraints
-0    small 0   16,0,258,193         live     detail enabled visible 512x384
-1    small 1   119,205,258,193      live     detail enabled visible 512x384
-2    small 2   16,411,258,193       live     detail enabled visible 512x384
--    float br  277,500,100,100      live     -      -
+0    small 1   203,0,175,131        live     detail enabled visible 352x256
+1    small 2   16,143,175,131       live     detail enabled visible 352x256
+2    small 3   203,143,175,131      live     detail enabled visible 352x256
+-    small 0   16,0,175,131         live     -      -

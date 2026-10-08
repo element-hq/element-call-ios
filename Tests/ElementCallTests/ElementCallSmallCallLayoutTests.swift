@@ -132,96 +132,69 @@ struct ElementCallSmallCallLayoutTests {
         #expect(try placement(of: me, in: landscape).appearance == .floating)
     }
     
-    // MARK: - Portrait (R5, R6, R11)
+    // MARK: - Portrait (R2, R5, R6, R11)
     
-    /// R5: one above the other, 4:3, as wide as the stage allows, from the top.
+    /// R2, R5: with three tiles or more our tile is inline and first, the same size as the others.
+    @Test(arguments: [2, 3, 4])
+    func fromThreeTilesOurTileIsInlineAndFirst(remoteCount: Int) throws {
+        let remote = Self.people(Array(["Bob", "Carol", "Dan", "Erin"].prefix(remoteCount)))
+        let layout = arrange(remote)
+        let own = try placement(of: me, in: layout)
+        #expect(own.appearance == .card)
+        #expect(try own.frame.size == frame(of: remote[0], in: layout).size)
+        #expect(try own.frame.minY == 0 && own.frame.minX <= frame(of: remote[0], in: layout).minX)
+        #expect(layout.readingOrder == [me.id] + remote.map(\.id))
+    }
+    
+    /// R5: three tiles, one per row, 4:3, as wide as fits above the controls and centred: the full
+    /// width only on a stage tall enough for three full-width rows.
     @Test(arguments: Phone.allCases)
-    func threeTilesThePairIsStackedFullWidthFromTheTop(phone: Phone) throws {
+    func threeTilesAreStackedRows(phone: Phone) throws {
         let metrics = phone.metrics
         let remote = Self.people(["Bob", "Carol"])
         let layout = arrange(remote, metrics: metrics)
-        let first = try frame(of: remote[0], in: layout)
-        let second = try frame(of: remote[1], in: layout)
-        #expect(first.minY == 0)
-        #expect(second.minY == first.maxY + 12)
-        #expect(first.minX == second.minX)
-        #expect(first.size == second.size)
-        #expect(close(first.width / first.height, 4.0 / 3.0, within: 0.001))
-        // As wide as they can be: the full width on an iPhone 17, and on an SE as wide as two rows
-        // fitting above the controls allow.
-        #expect(close(first.width, min(metrics.cardsWidth, (metrics.cardsBottom - 12) / 2 * 4 / 3)))
-        #expect(second.maxY <= metrics.cardsBottom)
+        let frames = try ([me] + remote).map { try frame(of: $0, in: layout) }
+        let height = min(metrics.cardsWidth * 3 / 4, (metrics.cardsBottom - 24) / 3)
+        #expect(frames.allSatisfy { close($0.height, height) && close($0.width, height * 4 / 3) })
+        #expect(frames[0].minY == 0)
+        #expect(close(frames[1].minY - frames[0].maxY, 12) && close(frames[2].minY - frames[1].maxY, 12))
+        #expect(frames[2].maxY <= metrics.cardsBottom + 0.5)
+        #expect(frames.allSatisfy { close($0.midX, (metrics.cardsLeading + metrics.cardsTrailing) / 2) })
     }
     
-    /// R5 on a stage too short for two full-width rows: they shrink, still 4:3, and stay centred.
-    @Test
-    func thePairShrinksOnAShortStage() {
-        let short = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 560), bottomInset: 0, controlsClearance: 84)
-        let frames = Layout.pairFrames(metrics: short)
-        #expect(close(frames[1].maxY, short.cardsBottom))
-        #expect(frames[0].width < short.cardsWidth)
-        #expect(close(frames[0].width / frames[0].height, 4.0 / 3.0, within: 0.001))
-        #expect(close(frames[0].midX, (short.cardsLeading + short.cardsTrailing) / 2))
-    }
-    
-    /// R6: left, right, left, from the top of the band to its bottom, with the ordinary gap between
-    /// rows rather than an overlap. Neither phone fits three rows at 80%, so both shrink: 268 pt on
-    /// an iPhone 17, 209 pt on an SE.
+    /// R6: four tiles, a 2×2 from the top.
     @Test(arguments: Phone.allCases)
-    func fourTilesStaggerLeftRightLeftWithoutOverlapping(phone: Phone) throws {
+    func fourTilesAreATwoByTwo(phone: Phone) throws {
         let metrics = phone.metrics
         let remote = Self.people(["Bob", "Carol", "Dan"])
-        let frames = try remote.map { try frame(of: $0, in: arrange(remote, metrics: metrics)) }
-        let height = (metrics.cardsBottom - 24) / 3
-        #expect(frames.allSatisfy { close($0.height, height) && close($0.width, height * 4 / 3) })
-        #expect(frames[0].width < 0.8 * metrics.cardsWidth)
-        #expect(frames[0].minY == 0)
-        #expect(close(frames[1].minY - frames[0].maxY, 12))
-        #expect(close(frames[2].minY - frames[1].maxY, 12))
-        #expect(close(frames[2].maxY, metrics.cardsBottom))
-        #expect(frames[0].minX == metrics.cardsLeading && frames[2].minX == metrics.cardsLeading)
-        #expect(frames[1].maxX == metrics.cardsTrailing)
+        let layout = arrange(remote, metrics: metrics)
+        let frames = try ([me] + remote).map { try frame(of: $0, in: layout) }
+        #expect(frames[0].origin == CGPoint(x: metrics.cardsLeading, y: 0))
+        #expect(frames[1].minY == 0 && frames[1].maxX == metrics.cardsTrailing)
+        #expect(frames[2].minX == metrics.cardsLeading && frames[2].minY == frames[0].maxY + 12)
+        #expect(frames[3].minY == frames[2].minY && frames[3].maxX == metrics.cardsTrailing)
+        #expect(frames.allSatisfy { close($0.width / $0.height, 4.0 / 3.0, within: 0.001) })
     }
     
-    /// R6: a stage tall enough keeps them at 80%, spread with a wider gap.
-    @Test
-    func theStaggerStaysAtItsWidthWhenItFits() {
-        let tall = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 900), bottomInset: 0, controlsClearance: 84)
-        let frames = Layout.staggerFrames(metrics: tall)
-        #expect(close(frames[0].width, 0.8 * tall.cardsWidth))
-        #expect(frames[1].minY - frames[0].maxY >= 12)
-    }
-    
-    /// R6: never below the minimum width, where a very short stage then overlaps them.
-    @Test
-    func theStaggerShrinksButNotBelowItsMinimum() {
-        let short = ElementCallStageLayout.Metrics(area: CGSize(width: 402, height: 420), bottomInset: 0, controlsClearance: 84)
-        let frames = Layout.staggerFrames(metrics: short)
-        #expect(frames[0].width == Layout.staggerMinimumWidth)
-        #expect(frames[0].maxY > frames[1].minY)
-    }
-    
-    /// R9: a speaker is shown by the ring alone. No arrangement moves, grows or raises a tile for
-    /// whoever talks, the stack of three included.
-    @Test(arguments: [1, 2, 3, 4])
-    func outsideTheStaggerTheSpeakerMovesNothing(remoteCount: Int) {
-        let remote = Self.people(Array(["Bob", "Carol", "Dan", "Erin"].prefix(remoteCount)))
-        #expect(arrange(remote).placements == arrange(remote, speaker: remote[0].id).placements)
-    }
-    
-    /// R11: two columns at the top, not centred, clear of the floating tile's bottom corners.
+    /// R11: five tiles, 2+2+1, the fifth the same size and centred under the others.
     @Test(arguments: Phone.allCases)
-    func fiveTilesAreATwoByTwoAtTheTop(phone: Phone) throws {
+    func fiveTilesAreTwoRowsOfTwoAndOneCentred(phone: Phone) throws {
         let metrics = phone.metrics
         let remote = Self.people(["Bob", "Carol", "Dan", "Erin"])
         let layout = arrange(remote, metrics: metrics)
-        let frames = try remote.map { try frame(of: $0, in: layout) }
-        #expect(frames[0].minY == 0 && frames[0].minX == metrics.cardsLeading)
-        #expect(frames[1].minY == 0 && frames[1].maxX == metrics.cardsTrailing)
-        #expect(frames[2].minY == frames[0].maxY + 12)
-        #expect(frames.allSatisfy { close($0.width / $0.height, 4.0 / 3.0, within: 0.001) })
-        let floating = try frame(of: me, in: layout)
-        #expect(frames.allSatisfy { !$0.intersects(floating) })
+        let frames = try ([me] + remote).map { try frame(of: $0, in: layout) }
+        #expect(Set(frames.map(\.size)).count == 1)
+        #expect(frames[4].minY == frames[2].maxY + 12)
+        #expect(close(frames[4].midX, (metrics.cardsLeading + metrics.cardsTrailing) / 2))
+        #expect(frames[4].maxY <= metrics.cardsBottom)
+    }
+    
+    /// R9: a speaker is shown by the ring alone. No arrangement moves, grows or raises a tile for
+    /// whoever talks.
+    @Test(arguments: [1, 2, 3, 4])
+    func theSpeakerMovesNothing(remoteCount: Int) {
+        let remote = Self.people(Array(["Bob", "Carol", "Dan", "Erin"].prefix(remoteCount)))
+        #expect(arrange(remote).placements == arrange(remote, speaker: remote[0].id).placements)
     }
     
     // MARK: - Landscape (R2, R16)
@@ -272,9 +245,9 @@ struct ElementCallSmallCallLayoutTests {
         let carol = Fixtures.tile("Carol")
         let dan = Fixtures.tile("Dan")
         let layout = arrange([bob, carol, dan])
-        let ys = try [bob, carol, dan].map { try frame(of: $0, in: layout).minY }
-        #expect(ys == ys.sorted())
-        #expect(layout.readingOrder == [bob.id, carol.id, dan.id, me.id])
+        let frames = try [me, bob, carol, dan].map { try frame(of: $0, in: layout) }
+        #expect(frames == frames.sorted { ($0.minY, $0.minX) < ($1.minY, $1.minX) })
+        #expect(layout.readingOrder == [me.id, bob.id, carol.id, dan.id])
         // Everyone in the small layout is below the threshold the core is given.
         #expect(Layout.rankingThreshold == Layout.maximumTiles - 1)
     }
@@ -357,8 +330,7 @@ struct ElementCallSmallCallLayoutTests {
     /// R18: corners are physical, so the arithmetic has no notion of reading direction to follow.
     @Test
     func theCornerIsKeptAcrossLayouts() throws {
-        let remote = Self.people(["Bob", "Carol"])
-        let topLeft = try frame(of: me, in: arrange(remote, corner: .topLeft))
+        let topLeft = try frame(of: me, in: arrange([Fixtures.tile("Bob")], corner: .topLeft))
         #expect(topLeft.minX == Self.iPhone17.cardsLeading)
         #expect(topLeft.minY == 16)
         let alone = try frame(of: me, in: arrange([Fixtures.tile("Bob")], corner: .topLeft, metrics: Self.landscape))
@@ -449,11 +421,13 @@ struct ElementCallSmallCallLayoutTests {
         #expect(ElementCallTileView.spokenName(of: .bottomLeft) == "bottom left")
     }
     
-    /// R27: alone, our tile is all there is to read; with others, it comes after them.
+    /// R27: floating, our tile is read after the other person; inline, first, as drawn.
     @Test
-    func aloneOrFloatingOurTileIsReadLast() {
+    func floatingOurTileIsReadLastAndInlineFirst() {
         #expect(arrange([]).readingOrder == [me.id])
+        let bob = Fixtures.tile("Bob")
+        #expect(arrange([bob]).readingOrder == [bob.id, me.id])
         let remote = Self.people(["Bob", "Carol"])
-        #expect(arrange(remote).readingOrder == remote.map(\.id) + [me.id])
+        #expect(arrange(remote).readingOrder == [me.id] + remote.map(\.id))
     }
 }

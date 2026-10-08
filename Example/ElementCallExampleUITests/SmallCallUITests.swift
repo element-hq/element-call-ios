@@ -7,7 +7,7 @@
 
 import XCTest
 
-/// Our own floating tile in a small call (spec 019), driven by real touches.
+/// Our own floating tile, alone or one to one (spec 019), driven by real touches.
 ///
 /// Where it sits, how big, and which corner a release picks are `ElementCallSmallCallLayoutTests`,
 /// in process. What is here is what only a touch can answer: whether the drag reaches the tile past
@@ -84,7 +84,7 @@ final class SmallCallUITests: XCTestCase {
     // MARK: - Dragging (R2, R21)
     
     func testDroppingOurTileInAQuadrantMovesItToThatCorner() {
-        launch("small_four")
+        launch("one_to_one")
         XCTAssertEqual(corner(), "bottom right", "it starts bottom right (R18)")
         
         drag(from: ourCentre, toScreen: 0.3, 0.3)
@@ -96,7 +96,7 @@ final class SmallCallUITests: XCTestCase {
     
     /// R21: however far the finger goes, the tile stays on the stage.
     func testOurTileCannotBeDraggedOffTheStage() {
-        launch("small_four")
+        launch("one_to_one")
         let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0)).withOffset(CGVector(dx: -200, dy: -200))
         ourCentre.press(forDuration: 0.2, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.3)
         XCTAssertTrue(eventually { self.corner() == "top left" })
@@ -106,7 +106,7 @@ final class SmallCallUITests: XCTestCase {
     /// R21 with inertia: a short flick upwards carries it to the top corner, where the same distance
     /// held still would have dropped it back at the bottom.
     func testAFlickCarriesOurTileToTheCornerItWasThrownTowards() {
-        launch("small_four")
+        launch("one_to_one")
         let up = ourCentre.withOffset(CGVector(dx: 0, dy: -120))
         ourCentre.press(forDuration: 0.1, thenDragTo: up, withVelocity: .slow, thenHoldForDuration: 0.3)
         XCTAssertTrue(eventually { self.corner() == "bottom right" }, "a slow, short drag stays put")
@@ -202,19 +202,32 @@ final class SmallCallUITests: XCTestCase {
     
     // MARK: - Arrangement through a rotation (R2, R16, R20)
     
-    func testOurTileIsInlineInLandscapeAndKeepsItsCornerThroughARotation() {
-        launch("small_three")
+    /// R20: the corner survives a rotation, our tile floating in both orientations one to one.
+    func testOurTileKeepsItsCornerThroughARotation() {
+        launch("one_to_one")
         drag(from: ourCentre, toScreen: 0.3, 0.3)
         XCTAssertTrue(eventually { self.corner() == "top left" })
         
         XCUIDevice.shared.orientation = .landscapeLeft
         XCTAssertTrue(eventually { self.window.frame.width > self.window.frame.height })
-        XCTAssertTrue(eventually { abs(self.ours.frame.width - self.tile("bob").frame.width) < 1 },
-                      "inline, the same size as the others (R16): \(ours.frame.size) and \(tile("bob").frame.size)")
+        XCTAssertTrue(eventually { self.corner() == "top left" }, "still top left in landscape: \(corner())")
         
         XCUIDevice.shared.orientation = .portrait
         XCTAssertTrue(eventually { self.window.frame.width < self.window.frame.height })
-        XCTAssertTrue(eventually { self.corner() == "top left" }, "floating again, in the same corner (R20): \(corner())")
+        XCTAssertTrue(eventually { self.corner() == "top left" }, "and back in portrait: \(corner())")
+    }
+    
+    /// R2, R5: from three tiles our tile is inline, the same size as the others, in both
+    /// orientations, and first.
+    func testFromThreeTilesOurTileIsInline() {
+        launch("small_three")
+        XCTAssertTrue(eventually { abs(self.ours.frame.width - self.tile("bob").frame.width) < 1 },
+                      "inline in portrait: \(ours.frame.size) and \(tile("bob").frame.size)")
+        XCTAssertLessThan(ours.frame.minY, tile("bob").frame.minY, "and first")
+        
+        XCUIDevice.shared.orientation = .landscapeLeft
+        XCTAssertTrue(eventually { self.window.frame.width > self.window.frame.height })
+        XCTAssertTrue(eventually { abs(self.ours.frame.width - self.tile("bob").frame.width) < 1 }, "and in landscape")
     }
     
     // MARK: - Nothing scrolls (R30)

@@ -763,12 +763,9 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Two people")
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol])
             .previewDisplayName("Three people")
-        // Carol is speaking, so she is on top of the overlap and larger (019 R9).
+        // Carol is speaking: she is ringed, and nobody moves (019 R9).
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan")])
             .previewDisplayName("Four people")
-        // Nobody has spoken: the 2nd tile is on top at its own size (019 R6).
-        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.tile("Carol"), Fixtures.tile("Dan")])
-            .previewDisplayName("Four people, nobody speaking")
         stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan"), Fixtures.tile("Erin")])
             .previewDisplayName("Five people")
         // Our camera on: the floating tile takes the picture's shape, portrait before the first
@@ -778,12 +775,12 @@ struct ElementCallStage_Previews: PreviewProvider, TestablePreview {
         // The one other person talking is not ringed: there is no one else it could be (019 R9).
         stage(tiles: [Fixtures.alice, Fixtures.tile("Bob", isSpeaking: true)])
             .previewDisplayName("Two people, the other speaking")
-        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol], ownCorner: .topLeft)
-            .previewDisplayName("Three people, our tile top left")
+        stage(tiles: [Fixtures.alice, Fixtures.bob], ownCorner: .topLeft)
+            .previewDisplayName("Two people, our tile top left")
         // Corners are physical: a right-to-left locale leaves our tile bottom right (019 R18).
-        stage(tiles: [Fixtures.alice, Fixtures.bob, Fixtures.carol, Fixtures.tile("Dan")])
+        stage(tiles: [Fixtures.alice, Fixtures.bob])
             .environment(\.layoutDirection, .rightToLeft)
-            .previewDisplayName("Four people, right to left")
+            .previewDisplayName("Two people, right to left")
         stage(tiles: Fixtures.group, fullscreen: Fixtures.bob.id)
             .previewDisplayName("Full screen")
         // A member on two tiles: the one case in which every member-keyed assumption that survived

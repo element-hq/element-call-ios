@@ -49,11 +49,6 @@ enum ElementCallSmallCallLayout {
     /// order it receives is arrival (R7) and nobody moves when someone talks (R13).
     nonisolated static let rankingThreshold = maximumTiles - 1
     
-    /// R6's values, being tuned on a device: the most of the stage width each of the three tiles
-    /// takes, and the narrowest any of them may get.
-    static let staggerWidthFraction: CGFloat = 0.8
-    static let staggerMinimumWidth: CGFloat = 200
-    
     /// R17, R28. Being tuned on a device (hq 019 ios.md, appendix).
     static let floatingPortraitSize = CGSize(width: 100, height: 150)
     static let floatingLandscapeSize = CGSize(width: 150, height: 100)
@@ -86,9 +81,9 @@ enum ElementCallSmallCallLayout {
     
     // MARK: - Arrangement
     
-    /// Remote tiles in the core's order, which below ``rankingThreshold`` is join order (R7).
-    /// Our own tile floats (R2) and is placed apart from them, alone included (R3), unless it is
-    /// inline: in landscape with three tiles or more (R16).
+    /// Remote tiles in the core's order, which below ``rankingThreshold`` is join order (R7). Our own
+    /// tile floats over the stage alone and in a one-to-one call (R2, R3); with three tiles or more
+    /// it is inline and first, the same size as the others (R5, R16).
     ///
     /// Everything is on screen, so everything is live and nothing is hidden or released, and the
     /// detail window covers every remote tile (R12).
@@ -97,7 +92,7 @@ enum ElementCallSmallCallLayout {
         let own = input.tiles.first(where: \.isLocal)
         let remote = remote(input.tiles)
         let ranks = Dictionary(uniqueKeysWithValues: input.tiles.filter { !$0.isLocal }.enumerated().map { ($1.id, $0) })
-        let isFloating = own != nil && (!metrics.isLandscape || remote.count <= 1)
+        let isFloating = own != nil && remote.count <= 1
         
         var placements = [ElementCallTilePlacement]()
         func place(_ tile: ElementCallTile, _ frame: CGRect, _ appearance: ElementCallTileAppearance, zIndex: Double = 0, fit: ElementCallTileFit = .standard) {
@@ -116,22 +111,12 @@ enum ElementCallSmallCallLayout {
         } else if remote.count == 1 {
             // R4: filled, except a landscape picture on a portrait stage, which is shown whole.
             place(remote[0], fullBleedFrame(metrics), .fullBleed, fit: metrics.isLandscape ? .standard : .fitWhenLandscape)
-        } else if metrics.isLandscape {
-            for (tile, frame) in zip((own.map { [$0] } ?? []) + remote, inlineFrames(count: remote.count + (own == nil ? 0 : 1), metrics: metrics)) {
-                place(tile, frame, .card)
-            }
-        } else if remote.count == 2 {
-            for (tile, frame) in zip(remote, pairFrames(metrics: metrics)) {
-                place(tile, frame, .card)
-            }
-        } else if remote.count == 3 {
-            // The speaker is ringed and nothing else (R9): the rows do not overlap, so there is
-            // nothing to be on top of, and growing one would close the gap beside it.
-            for (tile, frame) in zip(remote, staggerFrames(metrics: metrics)) {
-                place(tile, frame, .card)
-            }
         } else {
-            for (tile, frame) in zip(remote, twoColumnFrames(count: remote.count, metrics: metrics)) {
+            let inline = (own.map { [$0] } ?? []) + remote
+            let frames = metrics.isLandscape
+                ? inlineFrames(count: inline.count, metrics: metrics)
+                : portraitFrames(count: inline.count, metrics: metrics)
+            for (tile, frame) in zip(inline, frames) {
                 place(tile, frame, .card)
             }
         }
@@ -167,45 +152,33 @@ enum ElementCallSmallCallLayout {
         CGRect(x: 0, y: -metrics.topBleed, width: metrics.area.width, height: metrics.area.height + metrics.topBleed)
     }
     
-    /// R5: two 4:3 tiles one above the other, from the top, as wide as the stage allows: the full
-    /// width, unless two rows that wide do not fit above the controls (an SE), when they are as wide
-    /// as fits and centred. Our floating tile overlaps the lower one (R2).
-    static func pairFrames(metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
-        let height = min(metrics.cardsWidth / Metrics.tileAspect, (metrics.cardsBottom - Metrics.spacing) / 2)
+    /// R5, R6, R11: three tiles stacked in rows, four as a 2×2, five as 2+2+1 with the fifth centred.
+    /// All 4:3 and from the top of the stage.
+    static func portraitFrames(count: Int, metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
+        count <= 3 ? rowFrames(count: count, metrics: metrics) : twoColumnFrames(count: count, metrics: metrics)
+    }
+    
+    /// R5: one tile per row, as wide as the stage allows while every row fits above the controls,
+    /// and centred when that is narrower than the stage.
+    private static func rowFrames(count: Int, metrics: Metrics) -> [CGRect] {
+        let rows = CGFloat(count)
+        let height = min(metrics.cardsWidth / Metrics.tileAspect, (metrics.cardsBottom - (rows - 1) * Metrics.spacing) / rows)
         let width = height * Metrics.tileAspect
         let leading = metrics.cardsLeading + (metrics.cardsWidth - width) / 2
-        return (0..<2).map { CGRect(x: leading, y: CGFloat($0) * (height + Metrics.spacing), width: width, height: height) }
+        return (0..<count).map { CGRect(x: leading, y: CGFloat($0) * (height + Metrics.spacing), width: width, height: height) }
     }
     
-    /// R6: three 4:3 rows, left, right, left, the first at the top and the third at the bottom of the
-    /// band, with at least the ordinary gap between them. At ``staggerWidthFraction`` three rows do
-    /// not fit a phone's band, so they shrink until they do, but never below ``staggerMinimumWidth``,
-    /// which only a split screen or a very short stage reaches and where they then overlap.
-    static func staggerFrames(metrics: ElementCallStageLayout.Metrics) -> [CGRect] {
-        let band = metrics.cardsBottom
-        var width = min(max(staggerWidthFraction * metrics.cardsWidth, staggerMinimumWidth), metrics.cardsWidth)
-        var height = width / Metrics.tileAspect
-        let heightThatFits = (band - 2 * Metrics.spacing) / 3
-        if height > heightThatFits {
-            width = min(max(heightThatFits * Metrics.tileAspect, staggerMinimumWidth), metrics.cardsWidth)
-            height = width / Metrics.tileAspect
-        }
-        let lowest = band - height
-        let ys = [0, lowest / 2, lowest]
-        let xs = [metrics.cardsLeading, metrics.cardsTrailing - width, metrics.cardsLeading]
-        return zip(xs, ys).map { CGRect(x: $0, y: $1, width: width, height: height) }
-    }
-    
-    /// R11: 4:3 in two columns at the top of the stage, not centred, leaving the bottom for our
-    /// floating tile.
+    /// R6, R11: two columns from the top, a lone last tile centred under them.
     private static func twoColumnFrames(count: Int, metrics: Metrics) -> [CGRect] {
         let width = (metrics.cardsWidth - Metrics.spacing) / 2
         let height = width / Metrics.tileAspect
         return (0..<count).map { index in
-            CGRect(x: metrics.cardsLeading + CGFloat(index % 2) * (width + Metrics.spacing),
-                   y: CGFloat(index / 2) * (height + Metrics.spacing),
-                   width: width,
-                   height: height)
+            let isLoneLast = index == count - 1 && count % 2 == 1
+            let column = isLoneLast ? 0.5 : CGFloat(index % 2)
+            return CGRect(x: metrics.cardsLeading + column * (width + Metrics.spacing),
+                          y: CGFloat(index / 2) * (height + Metrics.spacing),
+                          width: width,
+                          height: height)
         }
     }
     
