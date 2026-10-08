@@ -87,7 +87,8 @@ public enum ElementCallPreviewFixtures {
                                  isDirect: Bool = false,
                                  isMicrophoneMuted: Bool = false,
                                  isScreenSharing: Bool = false,
-                                 isTileStatsVisible: Bool = false) -> ElementCallScreenViewState {
+                                 isTileStatsVisible: Bool = false,
+                                 audioOutputs: [CallAudioOutput] = phoneAudioOutputs) -> ElementCallScreenViewState {
         var state = ElementCallScreenViewState(roomName: "Product | Lobby")
         state.isDirect = isDirect
         state.connection = .connected
@@ -107,6 +108,9 @@ public enum ElementCallPreviewFixtures {
         state.isMicrophoneMuted = isMicrophoneMuted
         state.isScreenSharing = isScreenSharing
         state.isTileStatsVisible = isTileStatsVisible
+        // The first is where a real route starts: the headset when there is one, else the earpiece.
+        state.audioOutputs = audioOutputs
+        state.audioOutput = audioOutputs.first
         // The fixtures stand in for a host that has turned everything on, so the previews cover
         // the fullest chrome. A host with either flag off simply renders less, and the gates are
         // pinned by DeveloperModeTests rather than by an image.
@@ -114,6 +118,13 @@ public enum ElementCallPreviewFixtures {
         state.isScreenSharingEnabled = true
         return state
     }
+    
+    /// An iPhone with nothing plugged in or paired: the control bar's audio button is a toggle.
+    public static let phoneAudioOutputs: [CallAudioOutput] = [.receiver, .speaker]
+    /// AirPods connected: the button is a menu, and the call starts in the AirPods.
+    public static let headsetAudioOutputs: [CallAudioOutput] = [CallAudioOutput(kind: .bluetooth, id: "airpods", name: "AirPods Pro"),
+                                                                .receiver,
+                                                                .speaker]
     
     public static func noCall() -> MatrixRTCMediaSession? {
         nil

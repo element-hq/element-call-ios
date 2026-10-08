@@ -76,7 +76,9 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     public var isCameraEnabled = false
     public var isFrontCamera = true
     public var isScreenSharing = false
-    public var isLoudspeaker = false
+    /// Everywhere the call can come out of, external hardware first. See `ElementCallController`.
+    public var audioOutputs: [CallAudioOutput] = []
+    public var audioOutput: CallAudioOutput?
     public var isMediaDegraded = false
     public var isTileStatsVisible = false
     public var isDeveloperModeEnabled = false
@@ -107,6 +109,16 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     
     public var isVideoCall: Bool {
         isCameraEnabled || tiles.contains { $0.hasVideo || $0.isScreenShare }
+    }
+    
+    public var isLoudspeaker: Bool {
+        audioOutput?.kind == .speaker
+    }
+    
+    /// With only the phone's own outputs the choice is speaker or not, and the control bar toggles;
+    /// a headset, wired, Bluetooth or a car makes it a menu.
+    public var hasExternalAudioOutput: Bool {
+        audioOutputs.contains { !$0.isBuiltIn }
     }
 }
 
@@ -156,6 +168,7 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case switchCamera
     case toggleScreenShare
     case toggleLoudspeaker
+    case selectAudioOutput(CallAudioOutput)
     case toggleTileStats
     case minimize
     case hangUp

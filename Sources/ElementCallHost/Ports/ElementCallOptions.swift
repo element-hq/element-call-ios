@@ -117,11 +117,25 @@ public nonisolated struct ElementCallStrings: Sendable {
     public var error: String
     public var stop: String
     public var back: String
+    /// The audio output menu's rows for the built-in outputs and wired headphones. Other hardware
+    /// is named by its port, which is the name the user gave their headset or car.
+    public var speaker: String
+    public var phone: String
+    public var headphones: String
     
-    public init(you: String = "You", error: String = "Error", stop: String = "Stop", back: String = "Back") {
+    public init(you: String = "You",
+                error: String = "Error",
+                stop: String = "Stop",
+                back: String = "Back",
+                speaker: String = "Speaker",
+                phone: String = "Phone",
+                headphones: String = "Headphones") {
         self.you = you
         self.error = error
         self.stop = stop
         self.back = back
+        self.speaker = speaker
+        self.phone = phone
+        self.headphones = headphones
     }
 }
