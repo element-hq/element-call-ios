@@ -5,8 +5,8 @@
 // Please see LICENSE files in the repository root for full details.
 //
 
-import AVKit
 import ElementCallHost
+import ElementCallKit
 import SwiftUI
 
 /// The floating control bar from the design: mic, camera, audio route, screen share, hang up.
@@ -71,35 +71,103 @@ struct ElementCallControlsView: View {
         .elementCallGlass(in: Capsule(), fallback: style.theme.bgCanvasDefaultLevel.opacity(0.9))
     }
     
-    /// Speaker toggles the loudspeaker; a long press opens the system route picker for
-    /// Bluetooth and other outputs.
+    /// With only the phone's own outputs, a speaker toggle. With a headset, a menu of every output.
+    ///
+    /// Our own menu rather than the system's `AVRoutePickerView`, which used to sit over the toggle
+    /// at 2% opacity and never once received the tap. The menu is built from the view state, so
+    /// the harness and the snapshots can show it with no headset in reach.
+    @ViewBuilder
     private var audioRouteButton: some View {
-        ZStack {
-            controlButton(icon: context.viewState.isLoudspeaker ? .volumeOn : .volumeOff,
-                          isActive: !context.viewState.isLoudspeaker,
+        let state = context.viewState
+        if state.hasExternalAudioOutput {
+            Menu {
+                Picker("Audio output", selection: Binding(get: { state.audioOutput },
+                                                          set: { $0.map { context.send(viewAction: .selectAudioOutput($0)) } })) {
+                    ForEach(state.audioOutputs) { output in
+                        Label(label(for: output), systemImage: systemImage(for: output))
+                            .tag(Optional(output))
+                    }
+                }
+                .pickerStyle(.inline)
+            } label: {
+                controlCircle(icon: audioOutputIcon, isActive: isOnEarpiece)
+            }
+            .accessibilityLabel("Audio output")
+            .accessibilityValue(audioOutputValue)
+            // Set here because `control(for:)` reaches only `controlButton`.
+            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.audioOutput)
+        } else {
+            controlButton(icon: audioOutputIcon,
+                          isActive: isOnEarpiece,
                           label: "Audio output") {
                 context.send(viewAction: .toggleLoudspeaker)
             }
-            ElementCallAudioRoutePicker()
-                .frame(width: 56, height: 56)
-                .opacity(0.02)
+            .accessibilityValue(audioOutputValue)
+        }
+    }
+    
+    /// The earpiece is the resting state; anything else, speaker, headset or car, is highlighted,
+    /// so a glance says the sound is not at the user's ear. Unknown reads as the earpiece.
+    private var isOnEarpiece: Bool {
+        context.viewState.audioOutput.map { $0.kind == .receiver } ?? true
+    }
+    
+    /// Where the sound is going, so VoiceOver says what the icon shows.
+    private var audioOutputValue: String {
+        context.viewState.audioOutput.map(label(for:)) ?? ""
+    }
+    
+    /// What the call is coming out of, readable without opening anything: the struck-through volume
+    /// is the earpiece, as on Android.
+    private var audioOutputIcon: ElementCallIcon {
+        switch context.viewState.audioOutput?.kind {
+        case .speaker: .volumeOn
+        case .receiver, nil: .volumeOff
+        case .bluetooth: .bluetooth
+        // The car too, until there is a glyph for it.
+        case .wired, .usb, .car: .headphones
+        }
+    }
+    
+    private func label(for output: CallAudioOutput) -> String {
+        switch output.kind {
+        case .speaker: style.strings.speaker
+        case .receiver: style.strings.phone
+        case .wired: style.strings.headphones
+        case .bluetooth, .usb, .car: output.name
+        }
+    }
+    
+    /// System symbols, not the host's icons: a menu row draws only an `Image`, and the port takes
+    /// an `AnyView`. Bluetooth is plain headphones, not AirPods: the port says only that it is
+    /// Bluetooth, and the same row is a bone-conduction headset or a car kit.
+    private func systemImage(for output: CallAudioOutput) -> String {
+        switch output.kind {
+        case .speaker: "speaker.wave.2"
+        case .receiver: "iphone"
+        case .bluetooth, .wired, .usb: "headphones"
+        case .car: "car"
         }
     }
     
     /// `isActive` is the resting state, a dark circle; the inverse is the highlighted white circle
-    /// the design uses for mic off, camera off, sharing and loudspeaker.
+    /// the design uses for mic off, camera off, sharing and any audio output but the earpiece.
     private func controlButton(icon: ElementCallIcon,
                                isActive: Bool,
                                label: String,
                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            style.icons.icon(icon)
-                .foregroundStyle(isActive ? style.theme.iconPrimary : style.theme.iconOnSolidPrimary)
-                .frame(width: 56, height: 56)
-                .background(isActive ? style.theme.bgSubtleSecondary : style.theme.bgActionPrimaryRest, in: Circle())
+            controlCircle(icon: icon, isActive: isActive)
         }
         .accessibilityLabel(label)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: icon))
+    }
+    
+    private func controlCircle(icon: ElementCallIcon, isActive: Bool) -> some View {
+        style.icons.icon(icon)
+            .foregroundStyle(isActive ? style.theme.iconPrimary : style.theme.iconOnSolidPrimary)
+            .frame(width: 56, height: 56)
+            .background(isActive ? style.theme.bgSubtleSecondary : style.theme.bgActionPrimaryRest, in: Circle())
     }
 }
 
@@ -126,17 +194,6 @@ struct ElementCallRoundButtonStyle: ButtonStyle {
     }
 }
 
-/// The system output picker, drawn nearly transparent over the speaker button so a tap reaches it.
-struct ElementCallAudioRoutePicker: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.prioritizesVideoDevices = false
-        return view
-    }
-    
-    func updateUIView(_ uiView: AVRoutePickerView, context: Context) { }
-}
-
 // MARK: - Previews
 
 struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
@@ -156,5 +213,8 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Muted and sharing")
         controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group), axis: .vertical)
             .previewDisplayName("Vertical rail")
+        controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
+                                                      audioOutputs: ElementCallPreviewFixtures.headsetAudioOutputs))
+            .previewDisplayName("Headset")
     }
 }

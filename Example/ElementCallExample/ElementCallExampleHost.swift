@@ -100,7 +100,13 @@ final class ElementCallExampleHost {
         isHarnessMinimized = false
         
         switch fixture.kind {
-        case .connected(let state):
+        case .connected(var state):
+            // A headset cannot be paired with the simulator, so the menu the audio button becomes
+            // with one is reached by asking for it.
+            if ProcessInfo.processInfo.arguments.contains("-headset") {
+                state.audioOutputs = ElementCallPreviewFixtures.headsetAudioOutputs
+                state.audioOutput = state.audioOutputs.first
+            }
             // Built from the view state rather than defaulted, so the name on the bar and the name
             // in the top bar cannot drift apart. They agree today only by coincidence: the fake
             // room and `ElementCallPreviewFixtures.connected` happen to pick the same string.

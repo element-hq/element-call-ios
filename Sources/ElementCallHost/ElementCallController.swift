@@ -48,6 +48,11 @@ public final class ElementCallController {
     public private(set) var connection: ElementCallConnection = .idle
     public private(set) var connectedAt: Date?
     public private(set) var isLoudspeaker = false
+    /// Everywhere the call can come out of, external hardware first. Only the speaker and the
+    /// receiver means the control bar shows a toggle; anything more and it offers a menu.
+    public private(set) var audioOutputs: [CallAudioOutput] = []
+    /// Which of ``audioOutputs`` the call is coming out of, or nil before the session has a route.
+    public private(set) var audioOutput: CallAudioOutput?
     public private(set) var isMaximized = true
     public private(set) var isTileStatsVisible = false
     
@@ -156,8 +161,9 @@ public final class ElementCallController {
         self.logger = logger
         pictureInPicture.logger = logger
         
-        routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.isLoudspeaker = CallAudioSessionConfigurator.isLoudspeaker }
+        routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] notification in
+            let reason = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
+            MainActor.assumeIsolated { self?.refreshAudioRoute(reason: reason) }
         }
         
         pictureInPicture.actions
@@ -355,9 +361,30 @@ public final class ElementCallController {
     public func setLoudspeaker(_ enabled: Bool) {
         do {
             try CallAudioSessionConfigurator.setLoudspeaker(enabled)
-            isLoudspeaker = CallAudioSessionConfigurator.isLoudspeaker
         } catch {
             log(.warning, "could not switch the audio output: \(error)")
+        }
+        refreshAudioRoute()
+    }
+    
+    public func selectAudioOutput(_ output: CallAudioOutput) {
+        do {
+            try CallAudioSessionConfigurator.selectAudioOutput(output)
+        } catch {
+            log(.warning, "could not switch the audio output to \(output.kind): \(error)")
+        }
+        refreshAudioRoute()
+    }
+    
+    /// Re-reads the route. Logged only when the system changed it, with the ports as the session
+    /// names them: that is how a CarPlay route gets diagnosed, from a host's logs after a drive.
+    private func refreshAudioRoute(reason: AVAudioSession.RouteChangeReason? = nil) {
+        let route = CallAudioSessionConfigurator.audioOutputs(hasReceiver: UIDevice.current.userInterfaceIdiom == .phone)
+        audioOutputs = route.outputs
+        audioOutput = route.current
+        isLoudspeaker = CallAudioSessionConfigurator.isLoudspeaker
+        if let reason {
+            log(.info, "audio route changed (\(reason.rawValue)): \(CallAudioSessionConfigurator.routeDescription), offering \(route.outputs.map { "\($0.kind)" }), current \(route.current.map { "\($0.kind)" } ?? "none")")
         }
     }
     
@@ -517,7 +544,7 @@ public final class ElementCallController {
         
         connection = .connected
         connectedAt = .now
-        isLoudspeaker = CallAudioSessionConfigurator.isLoudspeaker
+        refreshAudioRoute()
         system.reportConnected(roomID: room.roomID)
     }
     

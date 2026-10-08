@@ -107,6 +107,8 @@ public nonisolated enum ElementCallIcon: Sendable, CaseIterable {
     case shareScreen
     case volumeOn
     case volumeOff
+    case headphones
+    case bluetooth
     case raisedHand
     case userProfile
     case overflow

@@ -23,6 +23,8 @@ import SwiftUI
 /// `-chromeReturnDelay <seconds>` replaces how long chrome a scroll hid takes to come back. For the
 /// UI tests that check it went: on a slow CI runner the check came after the default two seconds,
 /// and saw it already back.
+///
+/// `-headset` connects pretend AirPods to every fixture, so the audio button is a menu.
 @main
 struct ElementCallExampleApp: App {
     var body: some Scene {

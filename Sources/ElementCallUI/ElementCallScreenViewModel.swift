@@ -125,7 +125,10 @@ public final class ElementCallScreenContext {
             case .toggleScreenShare:
                 context.viewState.isScreenSharing.toggle()
             case .toggleLoudspeaker:
-                context.viewState.isLoudspeaker.toggle()
+                let state = context.viewState
+                context.viewState.audioOutput = state.isLoudspeaker ? state.audioOutputs.first { $0.kind != .speaker } ?? .receiver : .speaker
+            case let .selectAudioOutput(output):
+                context.viewState.audioOutput = output
             case .minimize, .hangUp, .dismiss:
                 onHostAction?(action)
             }
@@ -242,6 +245,8 @@ public final class ElementCallScreenViewModel {
             controller.setScreenShareEnabled(!(controller.call?.isScreenSharing ?? false))
         case .toggleLoudspeaker:
             controller.setLoudspeaker(!controller.isLoudspeaker)
+        case let .selectAudioOutput(output):
+            controller.selectAudioOutput(output)
         case .toggleTileStats:
             controller.toggleTileStats()
         case .minimize:
@@ -276,7 +281,8 @@ public final class ElementCallScreenViewModel {
         var state = context.viewState
         state.connection = controller.connection
         state.connectedAt = controller.connectedAt
-        state.isLoudspeaker = controller.isLoudspeaker
+        state.audioOutputs = controller.audioOutputs
+        state.audioOutput = controller.audioOutput
         state.isTileStatsVisible = controller.isTileStatsVisible
         state.isMaximized = controller.isMaximized
         state.memberCount = controller.rtcCall?.memberCount ?? 0
