@@ -30,9 +30,6 @@ is optional, nil when the client does not say. `ElementCallController.session` i
 **`ElementCallThemeProtocol` gains `activeSpeakerBorder(in:)`, the fill of the speaking ring.** It
 defaults to the design's gradient; implement it to brand the ring, returning one colour for a plain one.
 
-**Calls of up to five people have a layout of their own, with our tile floating in a corner the user
-can drag it to (spec 019).** Nothing changes for a host.
-
 ## 0.1.0-rc.9 - 2026-09-29
 
 **`ElementCallLayout` and `ElementCallScreenViewState.layout` are removed, and
