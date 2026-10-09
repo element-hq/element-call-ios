@@ -228,7 +228,7 @@ final class ChromeVisibilityUITests: XCTestCase {
     
     /// Toward the end hides, toward the start shows at once (R18, R19).
     func testScrollingTowardTheEndHidesAndTowardTheStartShows() {
-        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         waitForChrome(visible: true)
@@ -264,8 +264,12 @@ final class ChromeVisibilityUITests: XCTestCase {
     
     /// Scroll-hidden chrome comes back once the scrolling has stopped (R20): within the return delay
     /// of the fling ending, with slack for the fling itself.
+    ///
+    /// On `listen_mode`, which one swipe does not scroll to the end, rather than `two_hundred`: every
+    /// query walks the whole tree, and over two hundred tiles on a loaded runner the look for the
+    /// chrome going took longer than the return delay, so it saw the chrome already back.
     func testScrollHiddenChromeComesBack() {
-        launch("two_hundred", chromeReturnDelay: Self.observableReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.observableReturnDelay)
         XCTAssertTrue(tile("alice").waitForExistence(timeout: 5))
         
         app.swipeUp()
@@ -295,7 +299,7 @@ final class ChromeVisibilityUITests: XCTestCase {
     /// row travels the finger's distance less the touch slop, where a clearance that changed with
     /// the chrome would add to it.
     func testHidingWhileDraggingKeepsTheRowUnderTheFinger() {
-        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         let before = alice.frame.minY
