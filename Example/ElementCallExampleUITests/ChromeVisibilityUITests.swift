@@ -228,7 +228,7 @@ final class ChromeVisibilityUITests: XCTestCase {
     
     /// Toward the end hides, toward the start shows at once (R18, R19).
     func testScrollingTowardTheEndHidesAndTowardTheStartShows() {
-        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         waitForChrome(visible: true)
@@ -299,7 +299,7 @@ final class ChromeVisibilityUITests: XCTestCase {
     /// row travels the finger's distance less the touch slop, where a clearance that changed with
     /// the chrome would add to it.
     func testHidingWhileDraggingKeepsTheRowUnderTheFinger() {
-        launch("two_hundred", chromeReturnDelay: Self.heldReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.heldReturnDelay)
         let alice = tile("alice")
         XCTAssertTrue(alice.waitForExistence(timeout: 5))
         let before = alice.frame.minY
