@@ -264,8 +264,12 @@ final class ChromeVisibilityUITests: XCTestCase {
     
     /// Scroll-hidden chrome comes back once the scrolling has stopped (R20): within the return delay
     /// of the fling ending, with slack for the fling itself.
+    ///
+    /// On `listen_mode`, which one swipe does not scroll to the end, rather than `two_hundred`: every
+    /// query walks the whole tree, and over two hundred tiles on a loaded runner the look for the
+    /// chrome going took longer than the return delay, so it saw the chrome already back.
     func testScrollHiddenChromeComesBack() {
-        launch("two_hundred", chromeReturnDelay: Self.observableReturnDelay)
+        launch("listen_mode", chromeReturnDelay: Self.observableReturnDelay)
         XCTAssertTrue(tile("alice").waitForExistence(timeout: 5))
         
         app.swipeUp()
