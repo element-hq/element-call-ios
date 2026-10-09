@@ -22,7 +22,7 @@
 /// for a build made from this repository rather than from a tag, and every consumer pins an exact
 /// version, so what a host displays is the version it actually resolved.
 public nonisolated enum ElementCallVersion {
-    public static let current = "0.1.0-rc.9"
+    public static let current = "0.1.0-rc.10"
     
     /// The matrix-rust-rtc release this package pins in `Package.swift`, shown beside `current` as
     /// Android shows its own.
