@@ -65,6 +65,8 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: The ringing fixtures play the call's sounds through the call's own audio, which uses the microphone.
         # A lab call is a real one, on this phone's camera.
         INFOPLIST_KEY_NSCameraUsageDescription: A lab call sends this phone's camera to the other participants.
+        # The lab's servers are on the laptop's LAN address; iOS asks once before an app may reach one.
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: The lab's servers run on a laptop on this network.
         TARGETED_DEVICE_FAMILY: "1,2"
 
   # The reference backend's mappings, in process: the example has no client, so this is all of it

@@ -60,6 +60,9 @@ final nonisolated class SdkLabSession: Sendable {
             .sessionPaths(dataPath: base.appending(path: "data").path(percentEncoded: false),
                           cachePath: base.appending(path: "cache").path(percentEncoded: false))
             .slidingSyncVersionBuilder(versionBuilder: .native)
+            // A member's key is only accepted from a device its owner's identity signs (the
+            // backend's "confirmed sender"), so the first device of an account sets the identity up.
+            .autoEnableCrossSigning(autoEnableCrossSigning: true)
             .build()
         try await client.login(username: username, password: password, initialDeviceName: "Element Call lab", deviceId: nil)
         
@@ -76,9 +79,41 @@ final nonisolated class SdkLabSession: Sendable {
             try await Task.sleep(for: .milliseconds(500))
         }
         guard let room else { throw Error.roomNotJoined(roomID) }
+        try await adoptIdentity(client: client, username: username, password: password, logger: logger)
         guard let backend = SdkMatrixBackend(client: client, logger: logger) else { throw Error.noSession }
         logger?.log(.info, "lab: logged in as \(backend.ownUserId()) / \(backend.ownDeviceId()), room \(roomID) synced")
         return SdkLabSession(client: client, backend: backend, room: room, syncService: syncService)
+    }
+    
+    /// Every scan is a new device, and an account scanned before already has a cross-signing
+    /// identity this device is not part of, so the other members would refuse its media key. The
+    /// lab's answer is to reset the identity to this device: the accounts are throwaway, and the
+    /// earlier device is a dead session anyway.
+    private static func adoptIdentity(client: Client, username: String, password: String,
+                                      logger: (any ElementCallLoggingProtocol)?) async throws {
+        let encryption = client.encryption()
+        var state = encryption.verificationState()
+        for _ in 0..<20 where state == .unknown {
+            try await Task.sleep(for: .milliseconds(500))
+            state = encryption.verificationState()
+        }
+        guard state == .unverified else {
+            logger?.log(.info, "lab: this device is \(state) by its identity")
+            return
+        }
+        guard let handle = try await encryption.resetIdentity() else {
+            logger?.log(.warning, "lab: the identity could not be reset; the others may refuse our key")
+            return
+        }
+        logger?.log(.info, "lab: resetting the cross-signing identity to this device")
+        switch handle.authType() {
+        case .uiaa(let info):
+            let details = AuthDataPasswordDetails(identifier: username, password: password, session: info.session)
+            try await handle.reset(auth: .password(passwordDetails: details))
+        case .oAuth:
+            logger?.log(.warning, "lab: the homeserver wants OAuth for the reset, which the lab does not drive")
+            await handle.cancel()
+        }
     }
 }
 

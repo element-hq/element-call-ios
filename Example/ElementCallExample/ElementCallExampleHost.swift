@@ -170,11 +170,13 @@ final class ElementCallExampleHost {
             let logger = ElementCallExampleLabLogger()
             await ElementCallExampleLabTrust.install(from: join.certificateURL)
             do {
-                let lab = try await SdkLabSession.login(homeserver: join.homeserver,
-                                                        username: join.user,
-                                                        password: join.password,
-                                                        roomID: join.roomID,
-                                                        logger: logger)
+                let lab = try await Self.retrying(logger: logger) {
+                    try await SdkLabSession.login(homeserver: join.homeserver,
+                                                  username: join.user,
+                                                  password: join.password,
+                                                  roomID: join.roomID,
+                                                  logger: logger)
+                }
                 let room = SdkLabRoomContext(room: lab.room)
                 await room.load()
                 guard let self, !Task.isCancelled else { return }
@@ -194,6 +196,18 @@ final class ElementCallExampleHost {
             } catch {
                 self?.notice = "Lab: \(error.localizedDescription)"
             }
+        }
+    }
+    
+    /// The first request to the laptop's address fails while iOS asks for the local-network
+    /// permission, so one failure is given a few seconds and a second go.
+    private static func retrying<T>(logger: ElementCallExampleLabLogger, _ body: () async throws -> T) async throws -> T {
+        do {
+            return try await body()
+        } catch {
+            logger.log(.warning, "lab: first attempt failed (\(error.localizedDescription)); retrying in 4 s")
+            try await Task.sleep(for: .seconds(4))
+            return try await body()
         }
     }
     
