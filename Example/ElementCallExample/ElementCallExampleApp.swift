@@ -93,6 +93,11 @@ struct ElementCallExampleRootView: View {
         // Presenting the call is the host's to animate, so the harness does what a host would: a
         // cross-fade between the catalogue and the call, both ways.
         .animation(.easeInOut(duration: 0.3), value: host.session == nil || host.isMinimized)
+        // The lab's QR code, scanned with the camera app: `elementcall-lab://join?...`.
+        .onOpenURL { url in
+            guard let join = ElementCallExampleLabJoin(url: url) else { return }
+            host.open(join)
+        }
         .onAppear {
             guard host.session == nil else { return }
             // Opened by a launch argument: straight to the call, with no fade from a catalogue the
@@ -103,6 +108,7 @@ struct ElementCallExampleRootView: View {
                 switch target {
                 case .fixture(let fixture): host.open(fixture)
                 case .scenario(let scenario): host.open(scenario)
+                case .lab(let join): host.open(join)
                 case .catalogue, .unknown: break
                 }
             }

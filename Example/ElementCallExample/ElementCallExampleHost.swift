@@ -51,6 +51,9 @@ final class ElementCallExampleHost {
     private var cancellables = Set<AnyCancellable>()
     /// Only for a harness session. A live one is asked, below.
     private var isHarnessMinimized = false
+    /// The lab's logged-in SDK session, kept for as long as its call runs: it owns the sync.
+    private var lab: SdkLabSession?
+    private var labTask: Task<Void, Never>?
     
     /// A live session does not get a second copy of this: `isMaximized` is the controller's own bit
     /// and the same one `ElementCallView` unmounts its tiles on, so it is read rather than
@@ -154,10 +157,53 @@ final class ElementCallExampleHost {
     /// Deliberately does not tear down `cancellables`: for a live fixture this is called *from*
     /// that subscription's own delivery, and dropping the session is enough — the controller goes
     /// with it and takes its publisher along, leaving the subscription inert. `open` clears them.
+    /// A real call in the lab (`element-call-feature-hq/harness/lab.md`): the one path in this app
+    /// that logs in, over the reference `SdkMatrixBackend`, on the shipping screen. Nothing of the
+    /// harness is involved: no fixture, no test pattern, the phone's own camera and microphone.
+    func open(_ join: ElementCallExampleLabJoin) {
+        lastOpenedRow = nil
+        cancellables.removeAll()
+        isHarnessMinimized = false
+        endCall()
+        notice = "Lab: logging in as \(join.user) on \(join.homeserver)…"
+        labTask = Task { [weak self] in
+            let logger = ElementCallExampleLabLogger()
+            await ElementCallExampleLabTrust.install(from: join.certificateURL)
+            do {
+                let lab = try await SdkLabSession.login(homeserver: join.homeserver,
+                                                        username: join.user,
+                                                        password: join.password,
+                                                        roomID: join.roomID,
+                                                        logger: logger)
+                let room = SdkLabRoomContext(room: lab.room)
+                await room.load()
+                guard let self, !Task.isCancelled else { return }
+                self.lab = lab
+                let controller = ElementCallController(backend: lab.backend,
+                                                       system: ElementCallExampleLabSystem(),
+                                                       logger: logger)
+                controller.actions
+                    .sink { [weak self] action in self?.handle(action) }
+                    .store(in: &cancellables)
+                notice = nil
+                session = Session(fixture: nil,
+                                  presentation: .live(ElementCallScreenViewModel(controller: controller)),
+                                  controller: controller)
+                // Joining the call the lab already has, quietly: starting one would ring the room.
+                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
+            } catch {
+                self?.notice = "Lab: \(error.localizedDescription)"
+            }
+        }
+    }
+    
     func endCall() {
         isHarnessMinimized = false
         ringingTask?.cancel()
         ringingTask = nil
+        labTask?.cancel()
+        labTask = nil
+        lab = nil
         if case .scripted(_, let playback)? = session?.presentation {
             Task { await playback.stop() }
         }
