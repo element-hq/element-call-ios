@@ -67,7 +67,9 @@ final nonisolated class SdkLabSession: Sendable {
             .build()
         try await client.login(username: username, password: password, initialDeviceName: "Element Call lab", deviceId: nil)
         
-        let syncService = try await client.syncService().finish()
+        // Offline mode: on a network error the sync goes `.offline` and keeps retrying, instead of
+        // ending in `.error` and staying there. The call then outlives a homeserver outage.
+        let syncService = try await client.syncService().withOfflineMode().finish()
         await syncService.start()
         
         // The room arrives with the first sync; the seed script has every account in it already.
@@ -86,6 +88,15 @@ final nonisolated class SdkLabSession: Sendable {
         return SdkLabSession(client: client, backend: backend, room: room, syncService: syncService)
     }
     
+    /// The host's side of 034 R11: the Matrix client tells the call when the homeserver is gone
+    /// and when it is back, so the call shows the outage at once rather than at its own next send's
+    /// 30 s timeout. Only the transitions are reported, never the sync merely starting (034 C3).
+    /// The cancellable keeps the observer alive; drop or cancel it with the call.
+    func observeConnectivity(_ report: @escaping @Sendable (Bool) -> Void) -> AnyCancellable {
+        let handle = syncService.state(listener: SyncStateReporter(report: report))
+        return AnyCancellable { handle.cancel() }
+    }
+
     /// Every scan is a new device, and an account scanned before already has a cross-signing
     /// identity this device is not part of, so the other members would refuse its media key. With
     /// the account's recovery key (the lab seeds one per account and puts it in the code) the
@@ -125,6 +136,35 @@ final nonisolated class SdkLabSession: Sendable {
         case .oAuth:
             logger?.log(.warning, "lab: the homeserver wants OAuth for the reset, which the lab does not drive")
             await handle.cancel()
+        }
+    }
+}
+
+/// Maps the sync service's state to the two reports the call takes: offline on `.offline` or
+/// `.error`, online on the `.running` that follows one. Anything else is not a transition.
+private final class SyncStateReporter: SyncServiceStateObserver, @unchecked Sendable {
+    private let report: @Sendable (Bool) -> Void
+    private let lock = NSLock()
+    private var isOffline = false
+
+    init(report: @escaping @Sendable (Bool) -> Void) {
+        self.report = report
+    }
+
+    func onUpdate(state: SyncServiceState) {
+        lock.lock()
+        defer { lock.unlock() }
+        switch state {
+        case .offline, .error:
+            guard !isOffline else { return }
+            isOffline = true
+            report(false)
+        case .running:
+            guard isOffline else { return }
+            isOffline = false
+            report(true)
+        case .idle, .terminated:
+            break
         }
     }
 }

@@ -54,6 +54,8 @@ final class ElementCallExampleHost {
     /// The lab's logged-in SDK session, kept for as long as its call runs: it owns the sync.
     private var lab: SdkLabSession?
     private var labTask: Task<Void, Never>?
+    /// The sync-state observer behind the connectivity report; cancelled with the call.
+    private var labConnectivity: AnyCancellable?
     
     /// A live session does not get a second copy of this: `isMaximized` is the controller's own bit
     /// and the same one `ElementCallView` unmounts its tiles on, so it is read rather than
@@ -188,6 +190,13 @@ final class ElementCallExampleHost {
                 controller.actions
                     .sink { [weak self] action in self?.handle(action) }
                     .store(in: &cancellables)
+                // The host's connectivity report (034 R11), from the SDK's sync state.
+                labConnectivity = lab.observeConnectivity { [weak controller] isOnline in
+                    Task { @MainActor in
+                        logger.log(.info, "lab: the sync is \(isOnline ? "running again" : "offline"); reporting it")
+                        controller?.reportConnectivity(isOnline: isOnline)
+                    }
+                }
                 notice = nil
                 session = Session(fixture: nil,
                                   presentation: .live(ElementCallScreenViewModel(controller: controller)),
@@ -218,6 +227,8 @@ final class ElementCallExampleHost {
         ringingTask = nil
         labTask?.cancel()
         labTask = nil
+        labConnectivity?.cancel()
+        labConnectivity = nil
         lab = nil
         if case .scripted(_, let playback)? = session?.presentation {
             Task { await playback.stop() }
