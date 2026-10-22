@@ -195,7 +195,6 @@ public final class ElementCallScreenViewModel {
     /// call is not in listen mode, which is what makes a hero appearing or the call shrinking clear
     /// it (R3, R9).
     private var lastSpeakerID: MatrixRTCTileID?
-    
     public init(controller: ElementCallController) {
         self.controller = controller
         let room = controller.room
@@ -306,8 +305,11 @@ public final class ElementCallScreenViewModel {
         state.isCameraEnabled = controller.isCameraEnabled
         // The membership comes before media, so the hand is offered from the join on.
         state.isHandRaiseAvailable = controller.rtcCall != nil
-        state.isHandPending = controller.isHandPending
         state.isHandRaised = controller.isHandRaised
+        state.isSignallingReachable = controller.signalling.isReachable
+        state.isOwnMediaReconnecting = (controller.call?.interruptions.ownMedia ?? .connected) != .connected
+        // Above the guard as well: the server entry is the one that exists before media does.
+        state.interruptions = controller.interruptions
         
         if let message = controller.errorMessage {
             context.alertInfo = ElementCallAlert(title: context.style.strings.error, message: message)
@@ -340,7 +342,6 @@ public final class ElementCallScreenViewModel {
         call.setRankingThreshold(ElementCallSmallCallLayout.rankingThreshold)
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
-        state.isMediaDegraded = controller.rtcCall?.status.isDegraded ?? false
         
         state.tiles = Self.tiles(roster: call.tiles,
                                  own: call.ownTile,
@@ -348,6 +349,7 @@ public final class ElementCallScreenViewModel {
                                  youLabel: context.style.strings.you,
                                  isLocalMicrophoneMuted: call.isMicrophoneMuted,
                                  localHasVideo: call.isCameraEnabled,
+                                 missingKeys: call.membersMissingKeys,
                                  // The flag is read before any stats, so that with the overlay down
                                  // none of them enters this method's observation access list.
                                  // `receiveStats` is rewritten every second whether anyone is looking
@@ -380,6 +382,21 @@ public final class ElementCallScreenViewModel {
         controller.setSpotlightTile(pictureInPicture.id, isExact: pictureInPicture.isExact)
         
         publish(state)
+    }
+    
+    /// What a tile's media is doing, by its two causes. A lost connection wins: it is why nothing
+    /// decrypts either.
+    static func mediaState(connection: MatrixRTCConnectionState,
+                           unableToDecrypt: MatrixRTCUnableToDecrypt?,
+                           isMissingKeys: Bool = false) -> ElementCallTileMediaState {
+        switch (connection, unableToDecrypt) {
+        case (.connecting, _): .connecting
+        case (.reconnecting, _), (.unreachable, _): .reconnecting
+        case (.connected, nil): .live
+        // Nothing to wait for: the core will never play it.
+        case (.connected, .notEncrypted): .notEncrypted
+        case (.connected, .missingKey), (.connected, .badKey): isMissingKeys ? .keysMissing : .undecryptable
+        }
     }
     
     /// Publishes a projection only when it differs from the one on screen.
@@ -420,6 +437,7 @@ public final class ElementCallScreenViewModel {
                       youLabel: String,
                       isLocalMicrophoneMuted: Bool,
                       localHasVideo: Bool,
+                      missingKeys: Set<String> = [],
                       stats: (MatrixRTCTile) -> String? = { _ in nil }) -> [ElementCallTile] {
         func tile(_ ref: MatrixRTCTileRef) -> ElementCallTile {
             if let detail = roster.detail[ref.id] {
@@ -452,7 +470,10 @@ public final class ElementCallScreenViewModel {
                                    // Ours is never a hero even if something upstream said so: it is
                                    // not in the ranking, so nothing can rank it.
                                    isHero: tile.isLocal ? false : tile.isHero,
-                                   stats: stats(tile))
+                                   stats: stats(tile),
+                                   mediaState: mediaState(connection: tile.connection,
+                                                          unableToDecrypt: tile.unableToDecrypt,
+                                                          isMissingKeys: missingKeys.contains(tile.memberID)))
                 // Our own mute and camera come from the call, not the tile: see `withLocalMedia`.
                 .withLocalMedia(isMicrophoneMuted: isLocalMicrophoneMuted, hasVideo: localHasVideo)
         }

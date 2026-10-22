@@ -63,6 +63,7 @@ struct ElementCallControlsView: View {
             if context.viewState.isScreenSharingEnabled {
                 controlButton(icon: .shareScreen,
                               isActive: !context.viewState.isScreenSharing,
+                              isEnabled: context.viewState.isScreenShareControlEnabled,
                               label: context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen") {
                     context.send(viewAction: .toggleScreenShare)
                 }
@@ -121,25 +122,19 @@ struct ElementCallControlsView: View {
         }
     }
     
-    /// Shows our hand as the others see it, and progress while a change is with the homeserver
-    /// rather than the tap's result (009 R5). Disabled meanwhile, so a second tap cannot send twice.
+    /// Shows our hand as the user asked for it, which is what our tile shows (009 R5, 034 C12). No
+    /// progress state: a request can wait out an outage, and a tap meanwhile is a reversal, not a
+    /// second send, so there is nothing to block and nothing to spin for.
     private var raisedHandButton: some View {
         let state = context.viewState
         return Button {
             context.send(viewAction: .toggleRaisedHand)
         } label: {
-            if state.isHandPending {
-                ProgressView()
-                    .tint(state.isHandRaised ? style.theme.iconOnSolidPrimary : style.theme.iconPrimary)
-                    .frame(width: 56, height: 56)
-                    .background(state.isHandRaised ? style.theme.bgActionPrimaryRest : style.theme.bgSubtleSecondary, in: Circle())
-            } else {
-                controlCircle(icon: .raisedHand, isActive: !state.isHandRaised)
-            }
+            controlCircle(icon: .raisedHand, isActive: !state.isHandRaised, isEnabled: state.isHandControlEnabled)
         }
-        .disabled(state.isHandPending)
+        .disabled(!state.isHandControlEnabled)
         .accessibilityLabel(state.isHandRaised ? "Lower hand" : "Raise hand")
-        .accessibilityValue(state.isHandPending ? "Updating" : state.isHandRaised ? "Raised" : "")
+        .accessibilityValue(state.isHandControlEnabled ? state.isHandRaised ? "Raised" : "" : style.strings.unavailable)
         // The same identifier `controlButton` would derive, set here because this one is built by hand.
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: .raisedHand))
     }
@@ -190,22 +185,30 @@ struct ElementCallControlsView: View {
     
     /// `isActive` is the resting state, a dark circle; the inverse is the highlighted white circle
     /// the design uses for mic off, camera off, sharing and any audio output but the earpiece.
+    /// Disabled only by an interruption (034 R15), and said so to a screen reader rather than
+    /// left to a dimmed glyph.
     private func controlButton(icon: ElementCallIcon,
                                isActive: Bool,
+                               isEnabled: Bool = true,
                                label: String,
                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            controlCircle(icon: icon, isActive: isActive)
+            controlCircle(icon: icon, isActive: isActive, isEnabled: isEnabled)
         }
+        .disabled(!isEnabled)
         .accessibilityLabel(label)
+        .accessibilityValue(isEnabled ? "" : style.strings.unavailable)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: icon))
     }
     
-    private func controlCircle(icon: ElementCallIcon, isActive: Bool) -> some View {
-        style.icons.icon(icon)
-            .foregroundStyle(isActive ? style.theme.iconPrimary : style.theme.iconOnSolidPrimary)
+    /// A disabled control is drawn resting, with a faint glyph: never in its highlighted state,
+    /// which would read as on.
+    private func controlCircle(icon: ElementCallIcon, isActive: Bool, isEnabled: Bool = true) -> some View {
+        let isHighlighted = !isActive && isEnabled
+        return style.icons.icon(icon)
+            .foregroundStyle(!isEnabled ? style.theme.iconQuaternary : isHighlighted ? style.theme.iconOnSolidPrimary : style.theme.iconPrimary)
             .frame(width: 56, height: 56)
-            .background(isActive ? style.theme.bgSubtleSecondary : style.theme.bgActionPrimaryRest, in: Circle())
+            .background(isHighlighted ? style.theme.bgActionPrimaryRest : style.theme.bgSubtleSecondary, in: Circle())
     }
 }
 
@@ -242,10 +245,18 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
             .environment(\.colorScheme, .dark)
     }
     
-    static func handState(isRaised: Bool, isPending: Bool) -> ElementCallScreenViewState {
+    /// Our server and our media server both away: hand and share disabled, the rest untouched.
+    static var interruptedState: ElementCallScreenViewState {
+        var state = ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group)
+        state.isScreenSharingEnabled = true
+        state.isSignallingReachable = false
+        state.isOwnMediaReconnecting = true
+        return state
+    }
+    
+    static func handState(isRaised: Bool) -> ElementCallScreenViewState {
         var state = ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group)
         state.isHandRaised = isRaised
-        state.isHandPending = isPending
         return state
     }
     
@@ -261,11 +272,9 @@ struct ElementCallControlsView_Previews: PreviewProvider, TestablePreview {
         controls(ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group,
                                                       audioOutputs: ElementCallPreviewFixtures.headsetAudioOutputs))
             .previewDisplayName("Headset")
-        controls(handState(isRaised: true, isPending: false))
+        controls(handState(isRaised: true))
             .previewDisplayName("Hand raised")
-        controls(handState(isRaised: false, isPending: true))
-            .previewDisplayName("Hand going up")
-        controls(handState(isRaised: true, isPending: true))
-            .previewDisplayName("Hand coming down")
+        controls(interruptedState)
+            .previewDisplayName("Interrupted")
     }
 }

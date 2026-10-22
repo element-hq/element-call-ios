@@ -44,9 +44,13 @@ struct ElementCallView: View {
         GeometryReader { geometry in
             let isLandscape = geometry.size.width > geometry.size.height
             ZStack {
-                // Minimized (bar or Picture in Picture): nothing mounted, so the tiles' streams close
-                // and only the window's own slot keeps decoding.
-                if context.viewState.isMaximized {
+                // A failed call is over: its screen says why and offers the way out, and nothing
+                // of the call is left to draw (034 R27).
+                if case .failed(let failure) = context.viewState.connection {
+                    ElementCallFailureView(failure: failure) { context.send(viewAction: .hangUp) }
+                } else if context.viewState.isMaximized {
+                    // Minimized (bar or Picture in Picture): nothing mounted, so the tiles' streams
+                    // close and only the window's own slot keeps decoding.
                     style.theme.bgCanvasDefault.ignoresSafeArea()
                     
                     // The whole container, whatever the chrome is doing: the chrome is drawn over
@@ -76,6 +80,16 @@ struct ElementCallView: View {
                         if let position = fullscreenTile.handPosition, !fullscreenTile.isScreenShare {
                             ElementCallFullscreenHandBadge(position: position)
                                 .zIndex(2)
+                        }
+                        // With the chrome, for now, though R35 has it stay while the chrome is
+                        // hidden: over a tile it hides the picture. Provisional until design
+                        // decides; the announcement still goes either way. Level with the exit
+                        // button.
+                        if !context.viewState.interruptions.isEmpty, context.isFullscreenChromeVisible {
+                            ElementCallInterruptionsIndicator(interruptions: context.viewState.interruptions)
+                                .padding(.top, 7)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                                .zIndex(3)
                         }
                         if context.isFullscreenChromeVisible {
                             ElementCallFullscreenChrome(tile: fullscreenTile,
@@ -107,6 +121,11 @@ struct ElementCallView: View {
             .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isTopBarHideable(isLandscape: isLandscape) && !isStageChromeVisible)
             .onChange(of: isLandscape) { _, isLandscape in
                 applyStageChrome(.rotated(isLandscape: isLandscape))
+            }
+            // Announced as it comes and goes, never per entry, so an outage is one sentence rather
+            // than a burst (034 R40).
+            .onChange(of: context.viewState.interruptions.isEmpty) { _, isEmpty in
+                AccessibilityNotification.Announcement(isEmpty ? style.strings.interruptionsResolved : style.strings.interruptions).post()
             }
             .onChange(of: context.viewState.isRinging, initial: true) { wasRinging, isRinging in
                 if isRinging {
@@ -296,7 +315,8 @@ struct ElementCallView: View {
     /// Room above the stage's content for whatever is drawn over its top. Landscape draws over the
     /// picture and keeps nothing clear (R4). Portrait keeps the top bar and the banner clear, and
     /// the top bar never leaves in portrait (R30), so this changes only with the banner. Full
-    /// screen runs under everything.
+    /// screen runs under everything. The interruptions indicator is not here: it floats over the
+    /// stage, as the design draws it, so an outage moves no tile.
     static func topClearance(isLandscape: Bool, isFullscreen: Bool, topBarHeight: CGFloat, bannerHeight: CGFloat?) -> CGFloat {
         guard !isLandscape, !isFullscreen else { return 0 }
         var clearance = topBarHeight + topChromeSpacing
@@ -317,6 +337,7 @@ struct ElementCallView: View {
     private func topChrome(isLandscape: Bool, safeArea: EdgeInsets, isOverPicture: Bool) -> some View {
         let isVisible = !isTopBarHideable(isLandscape: isLandscape) || isStageChromeVisible
         let isSharing = context.viewState.isScreenSharing
+        let isInterrupted = !context.viewState.interruptions.isEmpty
         return ZStack(alignment: .top) {
             if isLandscape {
                 LinearGradient(colors: [.black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom)
@@ -357,6 +378,17 @@ struct ElementCallView: View {
                         // Up into the top bar's place while it is away.
                         .offset(y: isVisible ? 0 : -(topBarHeight + Self.topChromeSpacing))
                         .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                // Over the stage rather than above it, so it reserves no room and no tile moves when
+                // it comes. Shown with the control bar, for now, though R35 has it stay while the
+                // chrome is hidden: it floats over the tiles and hides their pictures. Provisional
+                // until design decides; the announcement still goes either way. No transition of
+                // its own, so with the chrome up it appears at once.
+                if isInterrupted, isStageChromeVisible {
+                    ElementCallInterruptionsIndicator(interruptions: context.viewState.interruptions)
+                        // Inside the stage's top edge by what the tile insets its own pills by, so
+                        // it sits level with the spotlight's people count, as the design has it.
+                        .padding(.top, 8)
                 }
             }
         }
@@ -482,17 +514,15 @@ struct ElementCallView: View {
             }
         case .ended:
             Text("Call ended").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
-        case .failed(let message):
-            Text(message).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
+        case .failed(let failure):
+            Text(style.strings.text(for: failure)).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
         }
     }
     
     /// A direct call's duration sits over the other person's picture or the scrim on it, where the
     /// secondary grey all but disappears; elsewhere the band behind the top bar is the canvas.
     private var durationColour: Color {
-        if context.viewState.isMediaDegraded {
-            style.theme.textCriticalPrimary
-        } else if context.viewState.isDirect {
+        if context.viewState.isDirect {
             style.theme.textPrimary
         } else {
             style.theme.textSecondary
@@ -585,7 +615,7 @@ struct ElementCallView: View {
 
 struct ElementCallView_Previews: PreviewProvider, TestablePreview {
     static let joiningViewModel = ElementCallScreenPreviewFactory.makeViewModel(connection: .joining)
-    static let failedViewModel = ElementCallScreenPreviewFactory.makeViewModel(connection: .failed("Homeserver offers no LiveKit transport"))
+    static let failedViewModel = ElementCallScreenPreviewFactory.makeViewModel(connection: .failed(.other("Homeserver offers no LiveKit transport")))
     
     static func screen(_ state: ElementCallScreenViewState) -> some View {
         ElementCallView(context: .preview(state: state),
@@ -609,6 +639,22 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
     static func chrome(isVisible: Bool, tiles: [ElementCallTile] = ElementCallPreviewFixtures.group) -> some View {
         let context = ElementCallScreenContext.preview(state: ElementCallPreviewFixtures.connected(tiles: tiles))
         context.stageChrome = .pinned(isVisible: isVisible)
+        return ElementCallView(context: context,
+                               pictureInPictureSourceView: UIView(),
+                               callProvider: ElementCallPreviewFixtures.noCall)
+    }
+    
+    /// Our server away and Dan's media server too: the indicator over the stage, which goes with the
+    /// chrome for now, and Dan drawn as his avatar with the name tag's spinner.
+    static func interrupted(isChromeVisible: Bool) -> some View {
+        let tiles = ElementCallPreviewFixtures.group.map { tile in
+            tile.displayName == "Dan" ? ElementCallPreviewFixtures.tile("Dan", hasVideo: true, mediaState: .reconnecting) : tile
+        }
+        var state = ElementCallPreviewFixtures.connected(tiles: tiles)
+        state.interruptions = [.ownServer(isMembershipLapsed: false), .othersMedia]
+        state.isSignallingReachable = false
+        let context = ElementCallScreenContext.preview(state: state)
+        context.stageChrome = .pinned(isVisible: isChromeVisible)
         return ElementCallView(context: context,
                                pictureInPictureSourceView: UIView(),
                                callProvider: ElementCallPreviewFixtures.noCall)
@@ -666,6 +712,10 @@ struct ElementCallView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Four people, chrome shown")
         chrome(isVisible: false, tiles: Array(ElementCallPreviewFixtures.group.prefix(4)))
             .previewDisplayName("Four people, chrome hidden")
+        interrupted(isChromeVisible: true)
+            .previewDisplayName("Interrupted")
+        interrupted(isChromeVisible: false)
+            .previewDisplayName("Interrupted, chrome hidden")
     }
 }
 

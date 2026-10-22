@@ -73,9 +73,9 @@ struct SdkMappingsTests {
     
     @Test
     func aSenderIsConfirmedUnlessItsShieldIsRed() {
-        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .none)).senderCrossSigned == true)
-        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .grey(code: .authenticityNotGuaranteed))).senderCrossSigned == true)
-        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .red(code: .unknownDevice))).senderCrossSigned == false)
+        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .none)).senderConfirmed == true)
+        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .grey(code: .authenticityNotGuaranteed))).senderConfirmed == true)
+        #expect(SdkMappings.encryption(encryptionInfo(senderID: "@bob:example.org", shield: .red(code: .unknownDevice))).senderConfirmed == false)
     }
     
     @Test
@@ -84,7 +84,7 @@ struct SdkMappingsTests {
         
         #expect(!encryption.encrypted)
         #expect(encryption.senderDeviceId == nil)
-        #expect(encryption.senderCrossSigned == nil)
+        #expect(encryption.senderConfirmed == nil)
     }
     
     @Test
@@ -160,12 +160,41 @@ struct SdkMappingsTests {
     func aHomeserverRefusalKeepsItsErrcode() {
         let error = ClientError.MatrixApi(kind: .forbidden, code: "M_FORBIDDEN", msg: "no", details: nil)
         
-        guard case .Failed(let errcode, let status, _) = SdkMappings.backendError(error) else {
+        guard case .Failed(let errcode, let status, let retryAfterMs, let permanent, _) = SdkMappings.backendError(error) else {
             Issue.record("Expected a failure")
             return
         }
         #expect(errcode == "M_FORBIDDEN")
         #expect(status == nil)
+        #expect(retryAfterMs == nil)
+        // The core classifies on the code; the mark is only for a final failure with none.
+        #expect(!permanent)
+    }
+    
+    @Test
+    func aRateLimitCarriesTheServersDelay() {
+        let error = ClientError.MatrixApi(kind: .limitExceeded(retryAfterMs: 7000), code: "M_LIMIT_EXCEEDED", msg: "slow down", details: nil)
+        
+        guard case .Failed(let errcode, _, let retryAfterMs, let permanent, _) = SdkMappings.backendError(error) else {
+            Issue.record("Expected a failure")
+            return
+        }
+        #expect(errcode == "M_LIMIT_EXCEEDED")
+        #expect(retryAfterMs == 7000)
+        #expect(!permanent)
+    }
+    
+    @Test
+    func aFailureWithNoCodeIsLeftForTheCoreToRetry() {
+        struct Offline: Error { }
+        
+        guard case .Failed(let errcode, _, let retryAfterMs, let permanent, _) = SdkMappings.backendError(Offline()) else {
+            Issue.record("Expected a failure")
+            return
+        }
+        #expect(errcode == nil)
+        #expect(retryAfterMs == nil)
+        #expect(!permanent)
     }
     
     // MARK: Sticky events

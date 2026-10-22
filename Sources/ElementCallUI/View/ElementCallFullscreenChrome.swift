@@ -46,7 +46,12 @@ struct ElementCallFullscreenChrome: View {
             // The room name and the call timer are on the top bar, which full screen has hidden, so
             // the one thing still worth saying is whose picture this is and whether they can be heard.
             HStack(spacing: 4) {
-                style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
+                // The name tag's spinner in the microphone's place, as on the tile (034 R29).
+                if tile.isMediaInterrupted {
+                    ElementCallMediaIndicator(state: tile.mediaState)
+                } else {
+                    style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
+                }
                 // Named as well as labelled, and for the same reason the tile's own pill is: a
                 // share is a tile of its own now, beside its owner's camera, so "(Screen share)"
                 // alone no longer says whose screen you are looking at.
@@ -57,7 +62,7 @@ struct ElementCallFullscreenChrome: View {
             .foregroundStyle(style.theme.textPrimary)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.black.opacity(0.5), in: Capsule())
+            .background(style.theme.bgCanvasDefault, in: Capsule())
             .accessibilityElement(children: .combine)
             
             Spacer()

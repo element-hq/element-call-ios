@@ -60,19 +60,28 @@ public nonisolated struct ElementCallOptions: Sendable {
     /// Join and leave sounds have no off switch, as on web; this is the only thing that quiets them.
     /// Any switch for other sound effects, such as reactions, is a separate option.
     public var participantCapForJoinLeaveSounds: Int
+    /// Whether our media may move to another member's media server once ours has been down for
+    /// ten seconds while the homeserver answers and a peer's server is up (034 R25). Off by
+    /// default, because it only works where that server accepts users from other homeservers, and
+    /// which deployments do is something only the host can know: the homeserver's transport list
+    /// cannot say, since the SDK drops every field of a LiveKit entry but its URL. Read when media
+    /// connects.
+    public var isSFUFallbackEnabled: Bool
     
     public init(isPictureInPictureEnabled: Bool = true,
                 membershipFormat: MatrixRTCMembershipFormat = .roomState,
                 isDeveloperModeEnabled: Bool = false,
                 isScreenSharingEnabled: Bool = false,
                 isAutomaticPictureInPictureForAudioCallsEnabled: Bool = false,
-                participantCapForJoinLeaveSounds: Int = MatrixRTCMediaSession.defaultParticipantCapForJoinLeaveSounds) {
+                participantCapForJoinLeaveSounds: Int = MatrixRTCMediaSession.defaultParticipantCapForJoinLeaveSounds,
+                isSFUFallbackEnabled: Bool = false) {
         self.isPictureInPictureEnabled = isPictureInPictureEnabled
         self.membershipFormat = membershipFormat
         self.isDeveloperModeEnabled = isDeveloperModeEnabled
         self.isScreenSharingEnabled = isScreenSharingEnabled
         self.isAutomaticPictureInPictureForAudioCallsEnabled = isAutomaticPictureInPictureForAudioCallsEnabled
         self.participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds
+        self.isSFUFallbackEnabled = isSFUFallbackEnabled
     }
 }
 
@@ -135,6 +144,40 @@ public nonisolated struct ElementCallStrings: Sendable {
     public var calling: String
     /// What a screen reader says for the ringing avatar, given the callee's name.
     public var callingPerson: @Sendable (String) -> String
+    /// Why a call failed, shown on the failure screen until the user closes it (034 R27): a title
+    /// per kind of failure, and a sentence per cause beneath it.
+    public var connectionLostTitle: String
+    public var connectionFailedTitle: String
+    public var joinFailedTitle: String
+    public var callFailedTitle: String
+    public var connectionLost: String
+    public var connectionRefused: String
+    public var connectionNeverEstablished: String
+    public var joinTimedOut: String
+    public var joinRefused: String
+    /// The failure screen's one button.
+    public var close: String
+    /// What a screen reader says for a control an interruption has disabled (034 R15).
+    public var unavailable: String
+    /// What a screen reader says for a tile's loading indicator: our own media server is not up
+    /// yet, the connection carrying the member's media is being re-established, or their media
+    /// cannot be decrypted (034 R40); and for the icon that replaces it once their keys have stayed
+    /// away (034 Q8), or when they sent their media unencrypted.
+    public var mediaConnecting: String
+    public var mediaReconnecting: String
+    public var mediaUndecryptable: String
+    public var mediaKeysMissing: String
+    public var mediaNotEncrypted: String
+    /// The service interruptions indicator, and what a screen reader says when it goes (034 R35,
+    /// R40). Short: it sits over the stage.
+    public var interruptions: String
+    public var interruptionsResolved: String
+    /// The list's entries (034 R13, R17, R23, R29). The server entry reads `ownServerLapsed` once
+    /// the others have dropped us.
+    public var ownServerUnreachable: String
+    public var ownServerLapsed: String
+    public var ownMediaReconnecting: String
+    public var othersMediaInterrupted: String
     
     public init(you: String = "You",
                 error: String = "Error",
@@ -144,7 +187,30 @@ public nonisolated struct ElementCallStrings: Sendable {
                 phone: String = "Phone",
                 headphones: String = "Headphones",
                 calling: String = "Calling\u{2026}",
-                callingPerson: @escaping @Sendable (String) -> String = { "Calling \($0)" }) {
+                callingPerson: @escaping @Sendable (String) -> String = { "Calling \($0)" },
+                connectionLostTitle: String = "Connection lost",
+                connectionFailedTitle: String = "Couldn\u{2019}t connect",
+                joinFailedTitle: String = "Couldn\u{2019}t join the call",
+                callFailedTitle: String = "Call failed",
+                connectionLost: String = "Your connection to the call couldn\u{2019}t be restored.",
+                connectionRefused: String = "The call\u{2019}s media server refused the connection.",
+                connectionNeverEstablished: String = "The call\u{2019}s media server couldn\u{2019}t be reached.",
+                joinTimedOut: String = "Your server didn\u{2019}t respond in time.",
+                joinRefused: String = "Your server refused to let you join.",
+                close: String = "Close",
+                unavailable: String = "Unavailable",
+                mediaConnecting: String = "Connecting",
+                mediaReconnecting: String = "Reconnecting",
+                mediaUndecryptable: String = "Waiting for encryption keys",
+                mediaKeysMissing: String = "Encryption keys missing",
+                mediaNotEncrypted: String = "Not encrypted",
+                interruptions: String = "Service interruptions",
+                interruptionsResolved: String = "Connection restored",
+                ownServerUnreachable: String = "Your server is unreachable. Some services are temporarily unavailable.",
+                // The same as above until 034's Q5 settles whether a lapse stops our media at all.
+                ownServerLapsed: String = "Your server is unreachable. Some services are temporarily unavailable.",
+                ownMediaReconnecting: String = "Reconnecting your audio and video",
+                othersMediaInterrupted: String = "Some participants\u{2019} audio or video isn\u{2019}t reaching you") {
         self.you = you
         self.error = error
         self.stop = stop
@@ -154,5 +220,49 @@ public nonisolated struct ElementCallStrings: Sendable {
         self.headphones = headphones
         self.calling = calling
         self.callingPerson = callingPerson
+        self.connectionLostTitle = connectionLostTitle
+        self.connectionFailedTitle = connectionFailedTitle
+        self.joinFailedTitle = joinFailedTitle
+        self.callFailedTitle = callFailedTitle
+        self.connectionLost = connectionLost
+        self.connectionRefused = connectionRefused
+        self.connectionNeverEstablished = connectionNeverEstablished
+        self.joinTimedOut = joinTimedOut
+        self.joinRefused = joinRefused
+        self.close = close
+        self.unavailable = unavailable
+        self.mediaConnecting = mediaConnecting
+        self.mediaReconnecting = mediaReconnecting
+        self.mediaUndecryptable = mediaUndecryptable
+        self.mediaKeysMissing = mediaKeysMissing
+        self.mediaNotEncrypted = mediaNotEncrypted
+        self.interruptions = interruptions
+        self.interruptionsResolved = interruptionsResolved
+        self.ownServerUnreachable = ownServerUnreachable
+        self.ownServerLapsed = ownServerLapsed
+        self.ownMediaReconnecting = ownMediaReconnecting
+        self.othersMediaInterrupted = othersMediaInterrupted
+    }
+    
+    /// The failure screen's title for a failure.
+    public func title(for failure: ElementCallFailure) -> String {
+        switch failure {
+        case .connectionLost(.budget): connectionLostTitle
+        case .connectionLost(.refused), .connectionLost(.neverConnected): connectionFailedTitle
+        case .joinTimedOut, .joinRefused: joinFailedTitle
+        case .other: callFailedTitle
+        }
+    }
+    
+    /// The sentence beneath the title.
+    public func text(for failure: ElementCallFailure) -> String {
+        switch failure {
+        case .connectionLost(.budget): connectionLost
+        case .connectionLost(.refused): connectionRefused
+        case .connectionLost(.neverConnected): connectionNeverEstablished
+        case .joinTimedOut: joinTimedOut
+        case .joinRefused: joinRefused
+        case .other(let message): message
+        }
     }
 }

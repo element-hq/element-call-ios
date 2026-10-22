@@ -94,9 +94,11 @@ public final class MatrixRTCCall {
         statusContinuation.finish()
     }
     
-    /// Attaches media. The core takes the transport from the join and the account from the backend,
-    /// so there is nothing to pass.
-    public func connectMedia() async throws -> MatrixRTCMediaSession {
+    /// Attaches media. The core takes the transport from the join and the account from the backend.
+    /// Returns once the engine is up, without waiting for our own media server, which the core
+    /// connects as it would reconnect a lost one (034 C10). `isSFUFallbackEnabled`: see
+    /// `ElementCallOptions.isSFUFallbackEnabled`.
+    public func connectMedia(isSFUFallbackEnabled: Bool = false) async throws -> MatrixRTCMediaSession {
         if let mediaSession {
             return mediaSession
         }
@@ -105,7 +107,7 @@ public final class MatrixRTCCall {
         }
         let ffiSession: MediaSession
         do {
-            ffiSession = try await connectMediaSession(call: rtcCall, config: MediaSessionConfig())
+            ffiSession = try await connectMediaSession(call: rtcCall, config: MediaSessionConfig(sfuFallback: isSFUFallbackEnabled))
         } catch {
             MatrixRTCLog.warning("Failed to connect media for \(roomID)/\(slotID): \(error)")
             throw MatrixRTCError.media("\(error)")

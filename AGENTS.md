@@ -237,8 +237,8 @@ suite fails on identical bytes until the runner has recorded them once. `git dif
 after that recording run tells the two apart: empty means provenance, anything else is a finding.
 
 The call's timers — the share intent timeout, the release linger, the audio level flush, the stats
-poll, and the video source's idle linger in `VideoFrameSlot.swift` — all sleep on the injected
-clock. A new `Task.sleep` in the Kit is a timer the scenarios cannot step past.
+poll, the wait before a tile says a key is missing, and the video source's idle linger in
+`VideoFrameSlot.swift` — all sleep on the injected clock. A new `Task.sleep` in the Kit is a timer the scenarios cannot step past.
 
 #### Running it by hand, and watching a move frame by frame
 
@@ -382,7 +382,11 @@ reference, and three things about any backend are easy to break:
   joined members are the exception that proves it: they always include us, so an empty read is the
   store not having loaded and is rightly held back.
 - **Failures are passed on, never classified.** `FfiBackendError.Failed` carries the homeserver's
-  `errcode` and status; the core decides which refusals retire a feature for the session.
+  `errcode` and its retry-after; the core decides what is retried and which refusals retire a
+  feature for the session. The one judgement a backend makes is `permanent`, and only for a final
+  failure no Matrix code describes, such as a room the client is not in: set on a failure that was
+  transient, it loses that send for good. A read the backend cannot serve answers empty
+  (`relations` is `[]`) rather than failing.
 - **No delayed events yet.** The SDK's bindings lack them (matrix-rust-sdk#6973), so the reference
   backend refuses with `M_UNRECOGNIZED`, which the core reads as a homeserver without MSC4140: it
   joins without a dead man's switch and shortens the membership's lifetime. The call keeps to the

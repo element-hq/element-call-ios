@@ -9,9 +9,9 @@ import Foundation
 import MatrixRtc
 import Synchronization
 
-/// A membership that holds each hand request until the test answers it, so the time between a tap
-/// and the homeserver's reply is something a test can stand in, and reports whatever status the
-/// test pushes.
+/// A membership that holds each hand request until the test answers it, oldest first, so the time
+/// between a tap and the homeserver's reply is something a test can stand in, and reports whatever
+/// status the test pushes.
 ///
 /// Everything else is inert: there is no roster.
 final class FakeRtcCall: RtcCallProtocol, Sendable {
@@ -24,7 +24,7 @@ final class FakeRtcCall: RtcCallProtocol, Sendable {
     
     private struct State {
         var requests: [HandRequest] = []
-        var pending: CheckedContinuation<Void, Error>?
+        var pending: [CheckedContinuation<Void, Error>] = []
         var leaveCount = 0
     }
     
@@ -45,15 +45,14 @@ final class FakeRtcCall: RtcCallProtocol, Sendable {
         state.withLock { $0.leaveCount }
     }
     
-    var hasPendingRequest: Bool {
-        state.withLock { $0.pending != nil }
+    var pendingRequestCount: Int {
+        state.withLock { $0.pending.count }
     }
     
-    /// Answers the request in flight: the homeserver accepted it, or refused it with `error`.
+    /// Answers the oldest request in flight: it resolved, or was refused with `error`.
     func answer(failingWith error: Error? = nil) {
         let pending = state.withLock { state in
-            defer { state.pending = nil }
-            return state.pending
+            state.pending.isEmpty ? nil : state.pending.removeFirst()
         }
         if let error {
             pending?.resume(throwing: error)
@@ -66,7 +65,7 @@ final class FakeRtcCall: RtcCallProtocol, Sendable {
         try await withCheckedThrowingContinuation { continuation in
             state.withLock { state in
                 state.requests.append(request)
-                state.pending = continuation
+                state.pending.append(continuation)
             }
         }
     }

@@ -38,8 +38,11 @@ targets:
     dependencies:
       - package: ElementCall
         product: ElementCall
+      # Embedded, because the SDK ships a dynamic framework: the simulator found it in the build
+      # folder without this, and a phone does not, so the app died at launch on a missing library.
       - package: MatrixRustSDK
         product: MatrixRustSDK
+        embed: true
     settings:
       base:
         # libwebrtc's Objective-C categories live in a static archive and are dead-stripped without

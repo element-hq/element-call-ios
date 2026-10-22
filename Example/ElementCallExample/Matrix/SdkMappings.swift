@@ -11,7 +11,7 @@ import MatrixRustSDK
 
 /// What ``SdkMatrixBackend`` turns SDK values into, kept apart from the listeners so every mapping can
 /// be tested without a client.
-enum SdkMappings {
+nonisolated enum SdkMappings {
     // MARK: Events
     
     /// Under the subscribed type rather than the event's own: the SDK hands it back as ruma's enum,
@@ -76,14 +76,14 @@ enum SdkMappings {
     /// sender is confirmed unless its shield is red.
     static func encryption(_ info: EventEncryptionInfo?) -> FfiEventEncryption {
         guard let info else {
-            return FfiEventEncryption(encrypted: false, senderDeviceId: nil, senderCrossSigned: nil)
+            return FfiEventEncryption(encrypted: false, senderDeviceId: nil, senderConfirmed: nil)
         }
         let isRed = if case .red = info.shieldState {
             true
         } else {
             false
         }
-        return FfiEventEncryption(encrypted: true, senderDeviceId: info.senderDeviceId, senderCrossSigned: !isRed)
+        return FfiEventEncryption(encrypted: true, senderDeviceId: info.senderDeviceId, senderConfirmed: !isRed)
     }
     
     /// Nil while the client does not know, never a guess.
@@ -143,16 +143,20 @@ enum SdkMappings {
         return String(data: data, encoding: .utf8) ?? "[]"
     }
     
-    /// A failure as the core classifies it, which it does on the Matrix errcode and the HTTP status
-    /// alone. The bindings do not carry the status.
+    /// A failure as the core classifies it, which it does on the Matrix errcode. The bindings do not
+    /// carry the HTTP status. The server's retry-after is passed on so the core waits that long
+    /// rather than its own backoff step, though the SDK has usually spent it already, retrying a
+    /// rate limit itself before the call returns.
     static func backendError(_ error: any Error) -> FfiBackendError {
         switch error {
         case let error as FfiBackendError:
             error
+        case ClientError.MatrixApi(.limitExceeded(let retryAfterMs), let code, let message, _):
+            .Failed(errcode: code, status: nil, retryAfterMs: retryAfterMs, permanent: false, reason: message)
         case ClientError.MatrixApi(_, let code, let message, _):
-            .Failed(errcode: code, status: nil, reason: message)
+            .Failed(errcode: code, status: nil, retryAfterMs: nil, permanent: false, reason: message)
         default:
-            .Failed(errcode: nil, status: nil, reason: "\(error)")
+            .Failed(errcode: nil, status: nil, retryAfterMs: nil, permanent: false, reason: "\(error)")
         }
     }
     
@@ -163,7 +167,7 @@ enum SdkMappings {
 }
 
 /// The live sticky events, by key, in the order they arrived.
-struct SdkStickyEventSet {
+nonisolated struct SdkStickyEventSet {
     private var keys = [StickyKey]()
     private var events = [StickyKey: FfiEventIn]()
     

@@ -241,6 +241,9 @@ public extension ElementCallController {
                                    call: call,
                                    rtcCall: rtcCall)
         controller.follow(rtcCall, roomID: room.roomID)
+        // What `startCall` follows besides the call, which this never reaches: without it the
+        // screen's indicator, read from the held list, never came up in an outage fixture.
+        controller.followInterruptions()
         // What `publishMedia` does once a joined call's media is up, which this never reaches: a
         // video call starts with the camera on.
         if !isAudioCall, let call {

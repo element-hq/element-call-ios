@@ -26,6 +26,32 @@ public final class MatrixRTCClient {
         self.clock = clock
     }
     
+    /// Whether the homeserver answers: the current value, then every change, for as long as the
+    /// stream is read (034 C4). Live from the client rather than from a call, so it covers a join
+    /// made during an outage and a direct call ringing before its media is up.
+    public func signallingUpdates() -> AsyncStream<MatrixRTCSignallingHealth> {
+        let subscription = client.subscribeSignallingHealth()
+        let (updates, continuation) = AsyncStream<MatrixRTCSignallingHealth>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        // The bindings' `next()` ignores cancellation, so a cancelled reader parks until the next
+        // change and leaves then.
+        let reader = Task {
+            while let health = await subscription.next(), !Task.isCancelled {
+                continuation.yield(MatrixRTCSignallingHealth(health))
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in reader.cancel() }
+        return updates
+    }
+    
+    /// From the host: its Matrix client has gone offline (`false`), or a request has succeeded
+    /// since it was (`true`) — never merely that it started trying, which would retry every send
+    /// for nothing (034 C3). Optional; without it the core goes by its own sends.
+    public func reportConnectivity(isOnline: Bool) {
+        MatrixRTCLog.info("Host reports the homeserver \(isOnline ? "online" : "offline")")
+        client.reportConnectivity(online: isOnline)
+    }
+    
     /// Opens the room in a membership format and returns once the core has applied its current state.
     public func room(roomID: String, format: MatrixRTCMembershipFormat) async throws -> MatrixRTCRoom {
         MatrixRTCLog.info("Opening \(roomID) in format \(format)")
@@ -106,6 +132,12 @@ public final class MatrixRTCRoom {
         } catch MatrixRtcFfiError.SlotClosed(let message) {
             MatrixRTCLog.error("Join refused in \(roomID), the slot is closed: \(message)")
             throw MatrixRTCError.slotClosed(message)
+        } catch MatrixRtcFfiError.JoinTimedOut {
+            MatrixRTCLog.error("Join timed out in \(roomID)")
+            throw MatrixRTCError.joinTimedOut
+        } catch MatrixRtcFfiError.JoinRefused(let errcode, let reason) {
+            MatrixRTCLog.error("Join refused in \(roomID): \(errcode ?? "no code") \(reason)")
+            throw MatrixRTCError.joinRefused(errcode: errcode, reason: reason)
         } catch {
             MatrixRTCLog.error("Join failed in \(roomID): \(error)")
             throw MatrixRTCError.ffi("\(error)")

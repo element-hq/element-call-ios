@@ -13,7 +13,7 @@ import Synchronization
 // The SDK's listener protocols, each over a closure, so a subscription can say what it delivers where
 // it subscribes.
 
-final class SdkStateEventsListener: RoomStateEventsListener {
+final nonisolated class SdkStateEventsListener: RoomStateEventsListener {
     private let onUpdate: @Sendable ([RoomStateEvent]) -> Void
     
     init(onUpdate: @escaping @Sendable ([RoomStateEvent]) -> Void) {
@@ -25,7 +25,7 @@ final class SdkStateEventsListener: RoomStateEventsListener {
     }
 }
 
-final class SdkMessageLikeEventsListener: RoomMessageLikeEventsListener {
+final nonisolated class SdkMessageLikeEventsListener: RoomMessageLikeEventsListener {
     private let onEvent: @Sendable (RoomMessageLikeEvent) -> Void
     
     init(onEvent: @escaping @Sendable (RoomMessageLikeEvent) -> Void) {
@@ -37,7 +37,7 @@ final class SdkMessageLikeEventsListener: RoomMessageLikeEventsListener {
     }
 }
 
-final class SdkToDeviceListener: ToDeviceMessageListener {
+final nonisolated class SdkToDeviceListener: ToDeviceMessageListener {
     private let onMessage: @Sendable (ToDeviceMessage) -> Void
     
     init(onMessage: @escaping @Sendable (ToDeviceMessage) -> Void) {
@@ -51,7 +51,7 @@ final class SdkToDeviceListener: ToDeviceMessageListener {
 
 /// Folds the SDK's resets and changes into the whole set, which is what the core wants. The first
 /// update is the current set, an empty one included.
-final class SdkStickyEventsListener: StickyEventsListener {
+final nonisolated class SdkStickyEventsListener: StickyEventsListener {
     private let sink: RoomSink
     private let set = Mutex(SdkStickyEventSet())
     
@@ -66,7 +66,7 @@ final class SdkStickyEventsListener: StickyEventsListener {
 
 /// The room's encryption and joined members, both read off the room info, which is what changes when
 /// either does. One info subscription for the two, each subject following it in its own task.
-final class SdkRoomInfoFeed: Sendable {
+final nonisolated class SdkRoomInfoFeed: Sendable {
     let handle: TaskHandle
     
     private let room: Room
@@ -144,7 +144,7 @@ final class SdkRoomInfoFeed: Sendable {
     }
 }
 
-private final class SdkRoomInfoListener: RoomInfoListener {
+private final nonisolated class SdkRoomInfoListener: RoomInfoListener {
     private let onUpdate: @Sendable () -> Void
     
     init(onUpdate: @escaping @Sendable () -> Void) {

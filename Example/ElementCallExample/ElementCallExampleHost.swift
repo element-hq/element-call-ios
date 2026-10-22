@@ -124,6 +124,9 @@ final class ElementCallExampleHost {
         case .played(let scenario):
             openPlayed(scenario, fixture: fixture)
             
+        case .outage(let outage):
+            openOutage(outage, fixture: fixture)
+            
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())
             // The real host contract, and the only place in this repository it is exercised: the
@@ -189,7 +192,7 @@ final class ElementCallExampleHost {
         }
     }
     
-    /// Running only while a ringing fixture is up.
+    /// Running only while a ringing or an outage fixture is up.
     private var ringingTask: Task<Void, Never>?
     
     /// The real controller following a scripted call, beside a scripted media session for the
@@ -218,6 +221,37 @@ final class ElementCallExampleHost {
             ringingTask = Task {
                 await playback.start()
                 await ringing.play(on: scripted, tiles: playback)
+            }
+        } catch {
+            notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
+        }
+    }
+    
+    /// The real controller following a scripted call that is connected from the start, so a
+    /// connection lost at the end of the timeline fails the call as a real one does.
+    private func openOutage(_ outage: ElementCallExampleOutage, fixture: ElementCallExampleFixture) {
+        do {
+            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(ElementCallExampleOutage.scenario, name: fixture.rawValue),
+                                                                  localMemberID: ElementCallExampleOutage.localMemberID)
+            let profiles = Dictionary(uniqueKeysWithValues: ElementCallExampleOutage.people.map { name in
+                let userID = "@\(name.lowercased()):example.com"
+                return (userID, ElementCallMemberProfile(userID: userID, displayName: name, avatarURL: nil))
+            })
+            let room = ElementCallFakeRoom(displayName: fixture.title, memberProfiles: profiles)
+            let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+            let controller = ElementCallController.fake(following: scripted.call,
+                                                        room: room,
+                                                        isAudioCall: false,
+                                                        call: playback.player.call)
+            controller.actions
+                .sink { [weak self] action in self?.handle(action) }
+                .store(in: &cancellables)
+            let viewModel = ElementCallScreenViewModel(controller: controller)
+            playback.attach(context: viewModel.context, controller: controller)
+            session = Session(fixture: fixture, presentation: .scripted(viewModel, playback), controller: controller)
+            ringingTask = Task {
+                await playback.start()
+                await outage.play(on: scripted, tiles: playback)
             }
         } catch {
             notice = "Fixture \(fixture.rawValue) failed to load: \(error)"

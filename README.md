@@ -114,7 +114,14 @@ Two members of `ElementCallOptions` are worth setting before a first call. `isDe
 reveals the per-tile diagnostics overlay, so point it at whatever already reveals developer surface
 in your app rather than at the flag that enables calls. `isScreenSharingEnabled` is **off by
 default**, because sharing needs work on the host side before it behaves; turn it on when you are
-ready. Receiving someone else's share never depends on either.
+ready. Receiving someone else's share never depends on either. `isSFUFallbackEnabled`, also off,
+lets a call whose own media server is down borrow another member's; turn it on only where those
+servers accept users from other homeservers.
+
+One call is worth making if your client can tell: `controller.reportConnectivity(isOnline:)`, with
+`false` when your Matrix client goes offline and `true` once a request has succeeded again — not
+when sync merely starts. It lets a call show "your server is unreachable" at once and retry its
+sends the moment the server is back. Without it the call notices at its next send, which is fine.
 
 Every port has a fake shipped alongside it, so previews and tests need no host at all.
 

@@ -17,7 +17,10 @@ import MatrixRustSDK
 /// One per Matrix session, alive between calls. The core calls it from its own threads, and the SDK
 /// calls the listeners below from its own; the core's sinks only post to a channel, so events are
 /// delivered straight from the SDK's callbacks, with nothing buffered in between.
-final class SdkMatrixBackend: MatrixBackend {
+///
+/// Every type in these files is marked `nonisolated` although this target does not need it: a host
+/// whose default isolation is the main actor, as Element X's is, must be able to copy them unchanged.
+final nonisolated class SdkMatrixBackend: MatrixBackend {
     static let redactionEventType = "m.room.redaction"
     
     private let client: Client
@@ -148,9 +151,10 @@ final class SdkMatrixBackend: MatrixBackend {
     }
     
     /// The SDK's relations come back as typed content, with neither raw JSON nor encryption info, so
-    /// a hand raised before we joined shows only once it changes.
+    /// a hand raised before we joined shows only once it changes. None rather than a failure, which
+    /// is how the core asks a backend that cannot serve them to say so.
     func relations(roomId: String, eventId: String, relType: String, eventType: String) async throws -> [FfiEventIn] {
-        throw FfiBackendError.Failed(errcode: nil, status: nil, reason: "Relations are not exposed by the SDK bindings")
+        []
     }
     
     func openidToken() async throws -> FfiOpenIdToken {
@@ -175,13 +179,16 @@ final class SdkMatrixBackend: MatrixBackend {
     
     private static let delayedEventsNotSupported = FfiBackendError.Failed(errcode: "M_UNRECOGNIZED",
                                                                           status: nil,
+                                                                          retryAfterMs: nil,
+                                                                          permanent: false,
                                                                           reason: "Delayed events are not exposed by the SDK bindings")
     
     /// Taken per send rather than kept: a handle is cheap, and one held across calls outlives the
     /// room if we leave it.
     private func room(_ roomID: String) throws(FfiBackendError) -> Room {
         guard let room = try? client.getRoom(roomId: roomID) else {
-            throw FfiBackendError.Failed(errcode: nil, status: nil, reason: "Not a joined room: \(roomID)")
+            // Final, and no Matrix code says so: inventing one would be a lie about the homeserver.
+            throw FfiBackendError.Failed(errcode: nil, status: nil, retryAfterMs: nil, permanent: true, reason: "Not a joined room: \(roomID)")
         }
         return room
     }
@@ -200,7 +207,7 @@ final class SdkMatrixBackend: MatrixBackend {
 }
 
 /// Cancels every listener and task of one subscription. Idempotent, as the core requires.
-private final class SdkSubscription: BackendSubscription {
+private final nonisolated class SdkSubscription: BackendSubscription {
     private let handles: [TaskHandle]
     private let tasks: [Task<Void, Never>]
     

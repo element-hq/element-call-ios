@@ -136,6 +136,17 @@ final nonisolated class RemoteVideoSource: @unchecked Sendable {
         }
     }
     
+    /// The member's track was replaced: read the new one. The old reader is parked on a track that
+    /// will never send again, so it is cancelled rather than waited for, and it can no longer offer
+    /// a frame if that track does wake. Opening here does not break the rule below, which is about
+    /// two streams on one track. With no tile drawing, the next attach opens it.
+    func reopen() {
+        state.withLock { state in
+            state.reader?.cancel()
+            state.reader = state.slots.isEmpty ? nil : startReader()
+        }
+    }
+    
     func close() {
         state.withLock { state in
             state.reader?.cancel()
@@ -176,7 +187,7 @@ final nonisolated class RemoteVideoSource: @unchecked Sendable {
             }
             defer { stream.close() }
             while !Task.isCancelled, let ref = await stream.next() {
-                guard let self else { return }
+                guard let self, !Task.isCancelled else { return }
                 let frame = MatrixRTCVideoFrame(ref: ref)
                 reportAspect(of: frame)
                 let slots = state.withLock { Array($0.slots.values) }

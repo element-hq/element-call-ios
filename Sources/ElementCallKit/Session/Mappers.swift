@@ -96,7 +96,93 @@ nonisolated extension MatrixRTCEndReason {
         case .othersLeft: self = .othersLeft
         case .empty: self = .empty
         case .slotClosed: self = .slotClosed
-        case .connectionClosed(let message): self = .connectionClosed(message: message)
+        case .connectionClosed(let reason, let message): self = .connectionClosed(reason: .init(reason), message: message)
+        }
+    }
+}
+
+nonisolated extension MatrixRTCConnectionLossReason {
+    init(_ reason: FfiConnectionLossReason) {
+        switch reason {
+        case .budget: self = .budget
+        case .refused: self = .refused
+        case .neverConnected: self = .neverConnected
+        }
+    }
+    
+    var ffi: FfiConnectionLossReason {
+        switch self {
+        case .budget: .budget
+        case .refused: .refused
+        case .neverConnected: .neverConnected
+        }
+    }
+}
+
+nonisolated extension MatrixRTCSignallingHealth {
+    init(_ health: FfiSignallingHealth) {
+        switch health {
+        case .reachable: self = .reachable
+        case .unreachable(let sinceMs): self = .unreachable(since: Date(milliseconds: sinceMs))
+        }
+    }
+    
+    var ffi: FfiSignallingHealth {
+        switch self {
+        case .reachable: .reachable
+        case .unreachable(let since): .unreachable(sinceMs: UInt64(max(0, since.timeIntervalSince1970 * 1000)))
+        }
+    }
+}
+
+nonisolated extension MatrixRTCInterruptions {
+    init(_ record: FfiInterruptions) {
+        self.init(signalling: .init(record.signalling),
+                  isOwnMembershipLapsed: record.ownMembershipLapsed,
+                  ownMedia: .init(record.ownMedia),
+                  membersReconnecting: record.membersReconnecting,
+                  membersUnreachable: record.membersUnreachable,
+                  unableToDecrypt: record.unableToDecrypt,
+                  unmappable: record.unmappable)
+    }
+    
+    var ffi: FfiInterruptions {
+        FfiInterruptions(signalling: signalling.ffi,
+                         ownMembershipLapsed: isOwnMembershipLapsed,
+                         ownMedia: ownMedia.ffi,
+                         membersReconnecting: membersReconnecting,
+                         membersUnreachable: membersUnreachable,
+                         unableToDecrypt: unableToDecrypt,
+                         unmappable: unmappable)
+    }
+}
+
+nonisolated extension MatrixRTCConnectionState {
+    init(_ state: FfiConnectionState) {
+        switch state {
+        case .connecting: self = .connecting
+        case .connected: self = .connected
+        case .reconnecting: self = .reconnecting
+        case .unreachable: self = .unreachable
+        }
+    }
+    
+    var ffi: FfiConnectionState {
+        switch self {
+        case .connecting: .connecting
+        case .connected: .connected
+        case .reconnecting: .reconnecting
+        case .unreachable: .unreachable
+        }
+    }
+}
+
+nonisolated extension MatrixRTCUnableToDecrypt {
+    init(_ reason: FfiUnableToDecrypt) {
+        switch reason {
+        case .missingKey: self = .missingKey
+        case .badKey: self = .badKey
+        case .notEncrypted: self = .notEncrypted
         }
     }
 }
@@ -122,7 +208,8 @@ nonisolated extension MatrixRTCParticipant {
                   userID: participant.userId,
                   deviceID: participant.deviceId,
                   isLocal: participant.isLocal,
-                  isReachable: participant.reachable,
+                  connection: .init(participant.connection),
+                  unableToDecrypt: participant.unableToDecrypt.map(MatrixRTCUnableToDecrypt.init),
                   streams: participant.streams.map { .init(kind: .init($0.kind), isMuted: $0.muted) },
                   handRaisedAt: participant.handRaisedAtMs.map(Date.init(milliseconds:)))
     }
@@ -165,7 +252,8 @@ nonisolated extension MatrixRTCTile {
                   isSpeaking: tile.speaking,
                   handRaisedAt: tile.handRaisedAtMs.map(Date.init(milliseconds:)),
                   handRaisedPosition: tile.handRaisedPosition.map(Int.init),
-                  isReachable: tile.reachable)
+                  connection: .init(tile.connection),
+                  unableToDecrypt: tile.unableToDecrypt.map(MatrixRTCUnableToDecrypt.init))
     }
 }
 
@@ -245,7 +333,9 @@ nonisolated extension MatrixRTCCallEvent {
         case .reaction(let memberId, let emoji, let name, _):
             self = .reaction(memberID: memberId, emoji: emoji, name: name)
         case .unknownParticipant(let identity):
-            // The transport knows an identity the membership projection doesn't (yet).
+            // The transport knows an identity the membership projection doesn't (yet). What the UI
+            // shows for it comes from the interruptions record, which lists it for as long as it
+            // stays unmapped; this one-shot is diagnostics.
             MatrixRTCLog.debug("Unknown participant on the transport: \(identity)")
             return nil
         }
