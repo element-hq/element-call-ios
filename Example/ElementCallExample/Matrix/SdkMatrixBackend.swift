@@ -144,7 +144,10 @@ final nonisolated class SdkMatrixBackend: MatrixBackend {
     
     func subscribeToDevice(eventTypes: [String], sink: ToDeviceSink) throws -> BackendSubscription {
         logger?.log(.info, "subscribing to to-device \(eventTypes)")
-        let handle = client.subscribeToCustomToDeviceMessages(eventTypes: eventTypes, listener: SdkToDeviceListener { message in
+        let handle = client.subscribeToCustomToDeviceMessages(eventTypes: eventTypes, listener: SdkToDeviceListener { [logger] message in
+            if case .red(let code)? = message.encryptionInfo?.shieldState {
+                logger?.log(.warning, "to-device \(message.eventType) from \(message.senderId): sender not confirmed: \(code)")
+            }
             sink.onToDeviceMessage(message: SdkMappings.toDeviceMessage(message))
         })
         return SdkSubscription(handles: [handle], tasks: [])

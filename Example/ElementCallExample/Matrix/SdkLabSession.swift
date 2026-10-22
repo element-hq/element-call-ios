@@ -106,6 +106,10 @@ final nonisolated class SdkLabSession: Sendable {
         if let recoveryKey {
             logger?.log(.info, "lab: joining the account's identity with its recovery key")
             try await encryption.recover(recoveryKey: recoveryKey)
+            for _ in 0..<20 where encryption.verificationState() != .verified {
+                try await Task.sleep(for: .milliseconds(500))
+            }
+            logger?.log(.info, "lab: after recovery this device is \(encryption.verificationState()) by its identity")
             return
         }
         guard let handle = try await encryption.resetIdentity() else {
