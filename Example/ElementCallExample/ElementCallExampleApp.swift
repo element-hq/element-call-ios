@@ -67,7 +67,8 @@ struct ElementCallExampleRootView: View {
                                             notice: host.notice,
                                             returningTo: host.lastOpenedRow,
                                             onPick: { host.open($0) },
-                                            onPickScenario: { host.open($0) })
+                                            onPickScenario: { host.open($0) },
+                                            onPickLab: { host.open($0) })
                     .transition(.opacity)
                     // An inset rather than an overlay: it pushes the list down instead of covering
                     // its first row, which is what a host does and what makes the point of the

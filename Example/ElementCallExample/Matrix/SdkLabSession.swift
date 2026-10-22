@@ -46,6 +46,7 @@ final nonisolated class SdkLabSession: Sendable {
                       username: String,
                       password: String,
                       roomID: String,
+                      recoveryKey: String?,
                       logger: (any ElementCallLoggingProtocol)?) async throws -> SdkLabSession {
         // One directory per login, wiped on the next: a store with an old session in it would
         // refuse a second login, and nothing here outlives the call.
@@ -79,17 +80,18 @@ final nonisolated class SdkLabSession: Sendable {
             try await Task.sleep(for: .milliseconds(500))
         }
         guard let room else { throw Error.roomNotJoined(roomID) }
-        try await adoptIdentity(client: client, username: username, password: password, logger: logger)
+        try await adoptIdentity(client: client, password: password, recoveryKey: recoveryKey, logger: logger)
         guard let backend = SdkMatrixBackend(client: client, logger: logger) else { throw Error.noSession }
         logger?.log(.info, "lab: logged in as \(backend.ownUserId()) / \(backend.ownDeviceId()), room \(roomID) synced")
         return SdkLabSession(client: client, backend: backend, room: room, syncService: syncService)
     }
     
     /// Every scan is a new device, and an account scanned before already has a cross-signing
-    /// identity this device is not part of, so the other members would refuse its media key. The
-    /// lab's answer is to reset the identity to this device: the accounts are throwaway, and the
-    /// earlier device is a dead session anyway.
-    private static func adoptIdentity(client: Client, username: String, password: String,
+    /// identity this device is not part of, so the other members would refuse its media key. With
+    /// the account's recovery key (the lab seeds one per account and puts it in the code) the
+    /// device joins that identity; without one the identity is reset to this device, the accounts
+    /// being throwaway and the earlier device a dead session anyway.
+    private static func adoptIdentity(client: Client, password: String, recoveryKey: String?,
                                       logger: (any ElementCallLoggingProtocol)?) async throws {
         let encryption = client.encryption()
         var state = encryption.verificationState()
@@ -101,6 +103,11 @@ final nonisolated class SdkLabSession: Sendable {
             logger?.log(.info, "lab: this device is \(state) by its identity")
             return
         }
+        if let recoveryKey {
+            logger?.log(.info, "lab: joining the account's identity with its recovery key")
+            try await encryption.recover(recoveryKey: recoveryKey)
+            return
+        }
         guard let handle = try await encryption.resetIdentity() else {
             logger?.log(.warning, "lab: the identity could not be reset; the others may refuse our key")
             return
@@ -108,7 +115,8 @@ final nonisolated class SdkLabSession: Sendable {
         logger?.log(.info, "lab: resetting the cross-signing identity to this device")
         switch handle.authType() {
         case .uiaa(let info):
-            let details = AuthDataPasswordDetails(identifier: username, password: password, session: info.session)
+            // The full id: the identifier is parsed as one, and a bare localpart is "missing sigil".
+            let details = try AuthDataPasswordDetails(identifier: client.userId(), password: password, session: info.session)
             try await handle.reset(auth: .password(passwordDetails: details))
         case .oAuth:
             logger?.log(.warning, "lab: the homeserver wants OAuth for the reset, which the lab does not drive")

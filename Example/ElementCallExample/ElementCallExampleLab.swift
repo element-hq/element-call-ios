@@ -9,6 +9,8 @@ import AVFoundation
 import Combine
 import ElementCall
 import Foundation
+import SwiftUI
+import VisionKit
 
 /// What the lab's QR code carries (`element-call-feature-hq/harness/lab.md`, "Accounts and joining"):
 ///
@@ -24,6 +26,9 @@ struct ElementCallExampleLabJoin: Equatable {
     let user: String
     let password: String
     let roomID: String
+    /// The account's recovery key, when the lab has one: a new device joins the account's
+    /// cross-signing identity with it, so the others accept its media key.
+    let recoveryKey: String?
     
     init?(url: URL) {
         guard url.scheme == Self.scheme, url.host() == "join",
@@ -35,6 +40,7 @@ struct ElementCallExampleLabJoin: Equatable {
         self.user = user
         self.password = password
         self.roomID = roomID
+        recoveryKey = value("recovery")
     }
     
     /// Where the lab serves its CA: the same name suffix as the homeserver, under `lab.`.
@@ -100,5 +106,54 @@ final class ElementCallExampleLabSystem: ElementCallSystemProvidingProtocol {
 struct ElementCallExampleLabLogger: ElementCallLoggingProtocol {
     func log(_ record: ElementCallLogRecord) {
         FileHandle.standardError.write(Data("[ElementCall \(record.level)] \(record.message)\n".utf8))
+    }
+}
+
+/// The camera on the lab page, from inside the app: one code at a time, the one in the middle of
+/// the frame, where the system camera app tries to open whichever of the page's codes it sees first.
+struct ElementCallExampleLabScanner: UIViewControllerRepresentable {
+    let onScan: (ElementCallExampleLabJoin) -> Void
+    
+    func makeUIViewController(context: Context) -> UIViewController {
+        guard DataScannerViewController.isSupported, DataScannerViewController.isAvailable else {
+            return UIHostingController(rootView: Text("No camera to scan with on this device."))
+        }
+        let scanner = DataScannerViewController(recognizedDataTypes: [.barcode(symbologies: [.qr])],
+                                                qualityLevel: .balanced,
+                                                recognizesMultipleItems: false,
+                                                isHighFrameRateTrackingEnabled: false,
+                                                isHighlightingEnabled: true)
+        scanner.delegate = context.coordinator
+        try? scanner.startScanning()
+        return scanner
+    }
+    
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) { }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScan: onScan)
+    }
+    
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        private let onScan: (ElementCallExampleLabJoin) -> Void
+        private var done = false
+        
+        init(onScan: @escaping (ElementCallExampleLabJoin) -> Void) {
+            self.onScan = onScan
+        }
+        
+        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            guard !done else { return }
+            for item in addedItems {
+                guard case .barcode(let barcode) = item,
+                      let payload = barcode.payloadStringValue,
+                      let url = URL(string: payload),
+                      let join = ElementCallExampleLabJoin(url: url) else { continue }
+                done = true
+                dataScanner.stopScanning()
+                onScan(join)
+                return
+            }
+        }
     }
 }

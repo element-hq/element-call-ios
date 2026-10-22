@@ -175,6 +175,7 @@ final class ElementCallExampleHost {
                                                   username: join.user,
                                                   password: join.password,
                                                   roomID: join.roomID,
+                                                  recoveryKey: join.recoveryKey,
                                                   logger: logger)
                 }
                 let room = SdkLabRoomContext(room: lab.room)

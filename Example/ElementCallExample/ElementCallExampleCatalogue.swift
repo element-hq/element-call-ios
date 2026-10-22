@@ -21,6 +21,10 @@ struct ElementCallExampleCatalogue: View {
     var returningTo: String?
     let onPick: (ElementCallExampleFixture) -> Void
     let onPickScenario: (ElementCallExampleScenario) -> Void
+    /// A lab code scanned from the catalogue (`ElementCallExampleLab.swift`).
+    let onPickLab: (ElementCallExampleLabJoin) -> Void
+    
+    @State private var isScanning = false
     
     /// Each row's identifier, which is also its scroll identity.
     static func rowID(_ fixture: ElementCallExampleFixture) -> String {
@@ -51,6 +55,20 @@ struct ElementCallExampleCatalogue: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .accessibilityIdentifier("example.notice")
+            }
+            Section("Lab") {
+                Button {
+                    isScanning = true
+                } label: {
+                    Label("Scan a lab code", systemImage: "qrcode.viewfinder")
+                }
+                .accessibilityIdentifier("example.lab.scan")
+                .sheet(isPresented: $isScanning) {
+                    ElementCallExampleLabScanner { join in
+                        isScanning = false
+                        onPickLab(join)
+                    }
+                }
             }
             ForEach(ElementCallExampleFixture.Category.allCases, id: \.self) { category in
                 Section(category.rawValue) {
