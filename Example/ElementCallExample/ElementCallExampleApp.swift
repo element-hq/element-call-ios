@@ -31,7 +31,7 @@ struct ElementCallExampleApp: App {
     /// Xcode's console both show. Without a sink the core drops every line, which left a fixture
     /// that made no sound on a phone with nothing to say why.
     init() {
-        MatrixRTCLogging.install { record in
+        MatrixRTCLogging.install(filter: Self.logFilter ?? MatrixRTCLogging.defaultFilter) { record in
             FileHandle.standardError.write(Data("[\(record.target)] \(record.message)\n".utf8))
         }
     }
@@ -41,6 +41,15 @@ struct ElementCallExampleApp: App {
             ElementCallExampleRootView(target: .fromLaunchArguments())
                 .environment(\.elementCallChromeReturnDelay, Self.chromeReturnDelay ?? EnvironmentValues().elementCallChromeReturnDelay)
         }
+    }
+    
+    /// `-logFilter <env-filter>` overrides the Rust log filter for a session, e.g.
+    /// `libwebrtc=debug` to trace the frame cryptor. Omitted, the default filter applies.
+    private static var logFilter: String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-logFilter"),
+              let filter = arguments[safe: index + 1] else { return nil }
+        return filter
     }
     
     private static var chromeReturnDelay: Duration? {
