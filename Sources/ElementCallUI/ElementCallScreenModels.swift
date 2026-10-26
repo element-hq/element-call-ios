@@ -70,9 +70,11 @@ public nonisolated enum ElementCallTileMediaState: Equatable, Sendable {
     case reconnecting
     /// It arrives, and cannot be decrypted (034 R33).
     case undecryptable
-    /// It has not been decryptable for long enough that the wait is not the moment around a key
-    /// rotation: see ``MatrixRTCMediaSession/keysMissingAfter``.
+    /// Its sender's key has not reached us for long enough that the wait is not the moment around a
+    /// key rotation: see ``MatrixRTCMediaSession/keysMissingAfter``.
     case keysMissing
+    /// The key we hold has not decrypted it for as long: wrong, not late.
+    case keyInvalid
     /// Its sender declared it unencrypted in an encrypted call, and the core refused it.
     case notEncrypted
 }
