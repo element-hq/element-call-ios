@@ -547,7 +547,7 @@ public final class MatrixRTCMediaSession {
         let key = MatrixRTCStreamRef(memberID: memberID, kind: kind)
         let source = videoSources[key] ?? {
             let mediaSession = mediaSession
-            let source = RemoteVideoSource(open: {
+            let source = RemoteVideoSource(label: "\(memberID)/\(kind)", open: {
                 mediaSession.videoStream(memberId: memberID, kind: kind.ffi).map(VideoFrameStreamBox.init)
             }, onIdle: { [weak self] in
                 // Nobody draws it any more: stop asking the SFU for it.
@@ -602,6 +602,12 @@ public final class MatrixRTCMediaSession {
                 drawnSizes[key] = sizes
             }
             return
+        }
+        // A drawn slot no source holds (one closed under it) is attached again: a backstop for a
+        // returning member whose stream never announced itself, since the tile's size reports go on.
+        if size != nil, videoSources[key]?.holds(slot) != true {
+            MatrixRTCLog.info("Video \(memberID)/\(kind): a drawn slot is not attached; attaching it again")
+            attachVideo(slot, memberID: memberID, kind: kind)
         }
         var sizes = drawnSizes[key] ?? [:]
         sizes[slot.id] = size
@@ -988,8 +994,10 @@ public final class MatrixRTCMediaSession {
         playbackSinks.removeValue(forKey: memberID)?.stop()
         audioLevels[memberID] = nil
         pendingAudioLevels[memberID] = nil
-        for key in videoSources.keys where key.memberID == memberID {
-            videoSources.removeValue(forKey: key)?.close()
+        // Suspended rather than closed: see `RemoteVideoSource.suspend`. A tile that does go away
+        // detaches as usual, and the source goes idle like any other.
+        for (key, source) in videoSources where key.memberID == memberID {
+            source.suspend()
         }
     }
     

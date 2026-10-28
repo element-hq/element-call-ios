@@ -324,6 +324,8 @@ enum ElementCallExampleLaunchTarget {
     case fixture(ElementCallExampleFixture)
     /// A scenario file by name, `-scenario 002_listen_mode`.
     case scenario(ElementCallExampleScenario)
+    /// A real call in the lab, `-lab elementcall-lab://join?...` (`ElementCallExampleLabJoin`).
+    case lab(ElementCallExampleLabJoin)
     /// A flag was passed with something it does not name. Deliberately not folded into
     /// ``catalogue``: the old behaviour was to quietly substitute `.group`, so a misspelt fixture
     /// ran the strip tests against an eight-person stage and failed with "this tile is not
@@ -342,6 +344,11 @@ enum ElementCallExampleLaunchTarget {
             let name = arguments[safe: index + 1] ?? ""
             return ElementCallExampleScenario.named(name).map { .scenario($0) }
                 ?? .unknown(flag: ElementCallExampleFixture.scenarioLaunchArgument, name: name)
+        }
+        if let index = arguments.firstIndex(of: ElementCallExampleLabJoin.launchArgument) {
+            let name = arguments[safe: index + 1] ?? ""
+            return URL(string: name).flatMap(ElementCallExampleLabJoin.init(url:)).map { .lab($0) }
+                ?? .unknown(flag: ElementCallExampleLabJoin.launchArgument, name: name)
         }
         return .catalogue
     }

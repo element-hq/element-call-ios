@@ -588,13 +588,10 @@ public final class ElementCallController {
         }
         await system.startCall(roomID: room.roomID, displayName: room.displayName, isVideo: !callData.isAudioCall)
         
-        // Pinned whatever the host prefers: a join in the other formats fails in an Element Call room
-        // that has no open MSC4143 slot, which is every one of them today, and nothing here opens one.
-        // Lifting this is a decision about who opens slots, not a setting.
-        let format = MatrixRTCMembershipFormat.roomState
-        if options.membershipFormat != format {
-            log(.warning, "membership format \(options.membershipFormat) is not supported yet, joining with \(format)")
-        }
+        // Room state unless the host asks otherwise: a join in the other formats fails in a room with
+        // no open MSC4143 slot, and nothing here opens one.
+        let format = options.membershipFormat
+        log(.info, "joining with membership format \(format)")
         
         let rtcRoom: MatrixRTCRoom
         do {
