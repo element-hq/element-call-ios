@@ -28,8 +28,9 @@ public nonisolated struct ElementCallOptions: Sendable {
     /// Whether a minimized call may open a Picture in Picture window. A host without the
     /// background mode entitlement should set this false, and calls minimize to the bar instead.
     public var isPictureInPictureEnabled: Bool
-    /// How membership is published. Pinned by the host because it has to match the other clients in
-    /// the room, and it cannot change once a session has joined.
+    /// How membership is published. Chosen by the host because it has to match the other clients in
+    /// the room, and it cannot change once a session has joined. Room state by default; the sticky
+    /// formats need an open `m.rtc.slot` in the room.
     public var membershipFormat: MatrixRTCMembershipFormat
     /// Whether the call screen offers its developer affordances, currently the per-tile stats
     /// overlay. That is raw RTP counters in 9pt monospace, so this belongs on whatever a host

@@ -51,6 +51,16 @@ final class ElementCallExampleHost {
     private var cancellables = Set<AnyCancellable>()
     /// Only for a harness session. A live one is asked, below.
     private var isHarnessMinimized = false
+    /// The lab's logged-in SDK session, kept across calls until logged out: it owns the sync, and
+    /// rejoining reuses it.
+    private var lab: SDKLabSession?
+    /// The lab account kept on this phone, for the lab tab; nil once logged out.
+    private(set) var labAccount: String? = SDKLabSession.Saved.load()?.userID
+    /// The kept session's call format, shown on the Lab tab.
+    private(set) var labFormat: MatrixRTCMembershipFormat? = SDKLabSession.Saved.load()?.membershipFormat
+    private var labTask: Task<Void, Never>?
+    /// The sync-state observer behind the connectivity report; cancelled with the call.
+    private var labConnectivity: AnyCancellable?
     
     /// A live session does not get a second copy of this: `isMaximized` is the controller's own bit
     /// and the same one `ElementCallView` unmounts its tiles on, so it is read rather than
@@ -154,10 +164,125 @@ final class ElementCallExampleHost {
     /// Deliberately does not tear down `cancellables`: for a live fixture this is called *from*
     /// that subscription's own delivery, and dropping the session is enough — the controller goes
     /// with it and takes its publisher along, leaving the subscription inert. `open` clears them.
+    /// A real call in the lab (`element-call-feature-hq/harness/lab.md`): the one path in this app
+    /// that logs in, over the reference `SDKMatrixBackend`, on the shipping screen. Nothing of the
+    /// harness is involved: no fixture, no test pattern, the phone's own camera and microphone.
+    /// The session in hand is reused for the same account and room; otherwise it is stopped and
+    /// `SDKLabSession.login` decides between the kept session and a new login.
+    func open(_ join: ElementCallExampleLabJoin) {
+        startLab(notice: "Lab: logging in as \(join.user) on \(join.homeserver)…", certificateURL: join.certificateURL) { current, logger in
+            if let current, current.isFor(homeserver: join.homeserver, user: join.user, roomID: join.roomID, format: join.format) {
+                return current
+            }
+            await current?.stop()
+            return try await SDKLabSession.login(homeserver: join.homeserver,
+                                                 username: join.user,
+                                                 password: join.password,
+                                                 roomID: join.roomID,
+                                                 recoveryKey: join.recoveryKey,
+                                                 format: join.format,
+                                                 logger: logger)
+        }
+    }
+    
+    /// Back into the lab call with the kept session: no code, the same device.
+    func rejoinLab() {
+        let homeserver = SDKLabSession.Saved.load()?.homeserver
+        startLab(notice: "Lab: rejoining as \(labAccount ?? "")…",
+                 certificateURL: homeserver.flatMap { ElementCallExampleLabJoin.certificateURL(homeserver: $0) }) { current, logger in
+            if let current {
+                return current
+            }
+            return try await SDKLabSession.restoreSaved(logger: logger)
+        }
+    }
+    
+    /// Logs the lab device out on the server and forgets it.
+    func logOutLab() {
+        endCall()
+        let current = lab
+        lab = nil
+        labAccount = nil
+        labFormat = nil
+        labTask = Task {
+            let logger = ElementCallExampleLabLogger()
+            if let current {
+                await current.logOut(logger: logger)
+            } else if let saved = SDKLabSession.Saved.load() {
+                await SDKLabSession.logOut(saved, logger: logger)
+            }
+        }
+    }
+    
+    private func startLab(notice: String,
+                          certificateURL: URL?,
+                          session makeSession: @escaping (SDKLabSession?, ElementCallExampleLabLogger) async throws -> SDKLabSession) {
+        lastOpenedRow = nil
+        cancellables.removeAll()
+        isHarnessMinimized = false
+        let current = lab
+        endCall()
+        self.notice = notice
+        labTask = Task { [weak self] in
+            let logger = ElementCallExampleLabLogger()
+            await ElementCallExampleLabTrust.install(from: certificateURL)
+            do {
+                let lab = try await Self.retrying(logger: logger) { try await makeSession(current, logger) }
+                guard let self, !Task.isCancelled else { return }
+                self.lab = lab
+                labAccount = SDKLabSession.Saved.load()?.userID
+                labFormat = lab.format
+                let room = SDKLabRoomContext(room: lab.room)
+                await room.load()
+                let controller = ElementCallController(backend: lab.backend,
+                                                       system: ElementCallExampleLabSystem(),
+                                                       options: ElementCallOptions(membershipFormat: lab.format),
+                                                       logger: logger)
+                controller.actions
+                    .sink { [weak self] action in self?.handle(action) }
+                    .store(in: &cancellables)
+                // The host's connectivity report (034 R11), from the SDK's sync state.
+                labConnectivity = lab.observeConnectivity { [weak controller] isOnline in
+                    Task { @MainActor in
+                        logger.log(.info, "lab: the sync is \(isOnline ? "running again" : "offline"); reporting it")
+                        controller?.reportConnectivity(isOnline: isOnline)
+                    }
+                }
+                self.notice = nil
+                session = Session(fixture: nil,
+                                  presentation: .live(ElementCallScreenViewModel(controller: controller)),
+                                  controller: controller)
+                // Joining the call the lab already has, quietly: starting one would ring the room.
+                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
+            } catch {
+                self?.labAccount = SDKLabSession.Saved.load()?.userID
+                self?.labFormat = SDKLabSession.Saved.load()?.membershipFormat
+                self?.notice = "Lab: \(error.localizedDescription)"
+            }
+        }
+    }
+    
+    /// The first request to the laptop's address fails while iOS asks for the local-network
+    /// permission, so one failure is given a few seconds and a second go.
+    private static func retrying<T>(logger: ElementCallExampleLabLogger, _ body: () async throws -> T) async throws -> T {
+        do {
+            return try await body()
+        } catch {
+            logger.log(.warning, "lab: first attempt failed (\(error.localizedDescription)); retrying in 4 s")
+            try await Task.sleep(for: .seconds(4))
+            return try await body()
+        }
+    }
+    
     func endCall() {
         isHarnessMinimized = false
         ringingTask?.cancel()
         ringingTask = nil
+        labTask?.cancel()
+        labTask = nil
+        labConnectivity?.cancel()
+        labConnectivity = nil
+        // `lab` stays: rejoining reuses it, and only logging out drops it.
         if case .scripted(_, let playback)? = session?.presentation {
             Task { await playback.stop() }
         }
