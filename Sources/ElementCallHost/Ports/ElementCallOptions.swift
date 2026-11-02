@@ -162,11 +162,12 @@ public nonisolated struct ElementCallStrings: Sendable {
     /// What a screen reader says for a tile's loading indicator: our own media server is not up
     /// yet, the connection carrying the member's media is being re-established, or their media
     /// cannot be decrypted (034 R40); and for the icon that replaces it once their keys have stayed
-    /// away (034 Q8), or when they sent their media unencrypted.
+    /// away (034 Q8): missing, or held and not decrypting; or when they sent their media unencrypted.
     public var mediaConnecting: String
     public var mediaReconnecting: String
     public var mediaUndecryptable: String
     public var mediaKeysMissing: String
+    public var mediaKeyInvalid: String
     public var mediaNotEncrypted: String
     /// The service interruptions indicator, and what a screen reader says when it goes (034 R35,
     /// R40). Short: it sits over the stage.
@@ -203,6 +204,7 @@ public nonisolated struct ElementCallStrings: Sendable {
                 mediaReconnecting: String = "Reconnecting",
                 mediaUndecryptable: String = "Waiting for encryption keys",
                 mediaKeysMissing: String = "Encryption keys missing",
+                mediaKeyInvalid: String = "Unable to decrypt",
                 mediaNotEncrypted: String = "Not encrypted",
                 interruptions: String = "Service interruptions",
                 interruptionsResolved: String = "Connection restored",
@@ -235,6 +237,7 @@ public nonisolated struct ElementCallStrings: Sendable {
         self.mediaReconnecting = mediaReconnecting
         self.mediaUndecryptable = mediaUndecryptable
         self.mediaKeysMissing = mediaKeysMissing
+        self.mediaKeyInvalid = mediaKeyInvalid
         self.mediaNotEncrypted = mediaNotEncrypted
         self.interruptions = interruptions
         self.interruptionsResolved = interruptionsResolved

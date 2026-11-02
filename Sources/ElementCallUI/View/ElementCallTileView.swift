@@ -528,9 +528,9 @@ struct ElementCallTileView: View, Equatable {
 }
 
 /// The name tag's indicator for media that is not reaching the screen (034 R23, R29, R33): read
-/// when focused, never announced. A spinner while it may yet come, and the key in critical red once
-/// a member's keys have stayed away, which says what is missing without guessing why (034 Q8), or
-/// at once for media sent in clear, which will never come.
+/// when focused, never announced. A spinner while it may yet come. Once a member's keys have stayed
+/// away (034 Q8), the key: in the name's colour when theirs has not reached us, in critical red when
+/// the one we hold does not decrypt, and red at once for media sent in clear.
 /// Shared by the tile and the full-screen chrome.
 struct ElementCallMediaIndicator: View {
     let state: ElementCallTileMediaState
@@ -540,9 +540,11 @@ struct ElementCallMediaIndicator: View {
     var body: some View {
         switch state {
         case .keysMissing:
-            keyOff.accessibilityLabel(style.strings.mediaKeysMissing)
+            keyOff(style.theme.textPrimary).accessibilityLabel(style.strings.mediaKeysMissing)
+        case .keyInvalid:
+            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(style.strings.mediaKeyInvalid)
         case .notEncrypted:
-            keyOff.accessibilityLabel(style.strings.mediaNotEncrypted)
+            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(style.strings.mediaNotEncrypted)
         case .undecryptable:
             ElementCallSpinner()
                 .accessibilityLabel(style.strings.mediaUndecryptable)
@@ -555,9 +557,9 @@ struct ElementCallMediaIndicator: View {
         }
     }
     
-    private var keyOff: some View {
+    private func keyOff(_ tint: Color) -> some View {
         style.icons.icon(.keyOff, size: .xSmall, relativeTo: .bodySM)
-            .foregroundStyle(style.theme.iconCriticalPrimary)
+            .foregroundStyle(tint)
     }
 }
 
@@ -757,6 +759,8 @@ struct ElementCallTileView_Previews: PreviewProvider, TestablePreview {
             .previewDisplayName("Spotlight undecryptable")
         tileView(Fixtures.tile("Dan", hasVideo: true, mediaState: .keysMissing))
             .previewDisplayName("Keys missing")
+        tileView(Fixtures.tile("Dan", hasVideo: true, mediaState: .keyInvalid))
+            .previewDisplayName("Key invalid")
         tileView(Fixtures.tile("You", isLocal: true, hasVideo: true, mediaState: .reconnecting), appearance: .floating, isNameHidden: true)
             .previewDisplayName("Our own tile reconnecting")
         tileView(Fixtures.tile("Dan", hasVideo: true, mediaState: .reconnecting), appearance: .fullBleed, isNameHidden: true,

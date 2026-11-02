@@ -395,7 +395,8 @@ public final class ElementCallScreenViewModel {
         case (.connected, nil): .live
         // Nothing to wait for: the core will never play it.
         case (.connected, .notEncrypted): .notEncrypted
-        case (.connected, .missingKey), (.connected, .badKey): isMissingKeys ? .keysMissing : .undecryptable
+        case (.connected, .missingKey): isMissingKeys ? .keysMissing : .undecryptable
+        case (.connected, .badKey): isMissingKeys ? .keyInvalid : .undecryptable
         }
     }
     
