@@ -72,8 +72,10 @@ struct ElementCallFullscreenChrome: View {
             if tile.isLocal, tile.hasVideo {
                 Button { onAction(.switchCamera) } label: {
                     style.icons.icon(.switchCamera, size: .small, relativeTo: .bodySM)
+                        .foregroundStyle(style.theme.iconPrimary)
                         .padding(6)
-                        .background(Color.black.opacity(0.5), in: Circle())
+                        // Interactive, and it has to be: see `ElementCallGlass`.
+                        .elementCallGlass(in: Circle(), fallback: style.theme.bgSubtleSecondary, isInteractive: true)
                 }
                 .accessibilityLabel(L10n.a11ySwitchCamera)
             }

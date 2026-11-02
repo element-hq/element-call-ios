@@ -464,8 +464,10 @@ struct ElementCallTileView: View, Equatable {
     private var switchCameraButton: some View {
         Button { onAction(.switchCamera) } label: {
             style.icons.icon(.switchCamera, size: .small, relativeTo: .bodySM)
+                .foregroundStyle(style.theme.iconPrimary)
                 .padding(6)
-                .background(Color.black.opacity(0.5), in: Circle())
+                // Interactive, and it has to be: see `ElementCallGlass`.
+                .elementCallGlass(in: Circle(), fallback: style.theme.bgSubtleSecondary, isInteractive: true)
         }
         .accessibilityLabel(L10n.a11ySwitchCamera)
         // Which camera is in use, so a VoiceOver user hears what the button changed, and a UI test
