@@ -13,6 +13,20 @@ version will actually read it.
 
 _Nothing yet._
 
+## 0.1.0-rc.14 - 2026-11-02
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* Stop a hang-up while joining from failing the call or ending the next one, and let the fake backend leave rooms unopened by @Velin92 in https://github.com/element-hq/element-call-ios/pull/81
+
+### New Contributors
+* @Velin92 made their first contribution in https://github.com/element-hq/element-call-ios/pull/81
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.13...0.1.0-rc.14
+
 ## 0.1.0-rc.13 - 2026-10-28
 
 **The host implements `ElementCallMatrixBackendProtocol`, no longer the core's `MatrixBackend`.** The
