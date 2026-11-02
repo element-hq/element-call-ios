@@ -41,6 +41,8 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         var hasUnreadLocalState = false
         var pendingLocalState: CheckedContinuation<FfiLocalState?, Never>?
         var pendingEvent: CheckedContinuation<FfiCallEvent?, Never>?
+        /// Events pushed while nobody was waiting, delivered in order.
+        var unreadEvents: [FfiCallEvent] = []
         var interruptions = MatrixRTCInterruptions.none.ffi
         var hasUnreadInterruptions = false
         var pendingInterruptions: CheckedContinuation<FfiInterruptions?, Never>?
@@ -117,6 +119,21 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
             return state.publishLocalState(memberID: localMemberID)
         }
         pending?.resume(returning: state.withLock { $0.localState })
+    }
+    
+    /// An event the call sees as if from the core: a reaction, for the harness to send some without a
+    /// homeserver (037).
+    public func push(event: FfiCallEvent) {
+        let pending = state.withLock { state -> CheckedContinuation<FfiCallEvent?, Never>? in
+            guard !state.hasEnded else { return nil }
+            guard let pending = state.pendingEvent else {
+                state.unreadEvents.append(event)
+                return nil
+            }
+            state.pendingEvent = nil
+            return pending
+        }
+        pending?.resume(returning: event)
     }
     
     /// The next interruptions record the call sees: an outage, as the core would report it.
@@ -221,18 +238,21 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         }
     }
     
-    /// Nothing ever happens on the event stream but the end.
+    /// What ``push(event:)`` sent, then the end.
     public func nextEvent() async -> FfiCallEvent? {
         await withCheckedContinuation { continuation in
-            let ended = state.withLock { state -> Bool in
+            let ready = state.withLock { state -> FfiCallEvent?? in
+                if !state.unreadEvents.isEmpty {
+                    return .some(state.unreadEvents.removeFirst())
+                }
                 if state.hasEnded {
-                    return true
+                    return .some(nil)
                 }
                 state.pendingEvent = continuation
-                return false
+                return nil
             }
-            if ended {
-                continuation.resume(returning: nil)
+            if let ready {
+                continuation.resume(returning: ready)
             }
         }
     }
@@ -394,11 +414,17 @@ public final class MatrixRTCScenarioPlayer {
         position >= scenario.frames.count
     }
     
-    public init(scenario: MatrixRTCScenario, localMemberID: String = "@me:example.com:ME") {
+    /// `audioOf` lends the call a scripted call's audio, whose engine the harness starts, so what
+    /// this call plays is heard: the reaction sounds. Without it the call's audio never starts.
+    public init(scenario: MatrixRTCScenario, localMemberID: String = "@me:example.com:ME", audioOf rtcCall: MatrixRTCCall? = nil) {
         self.scenario = scenario
         clock = MatrixRTCManualClock()
         session = MatrixRTCScriptedSession(localMemberID: localMemberID, clock: clock)
-        call = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: session, clock: clock, capturesCamera: false)
+        call = MatrixRTCMediaSession(localMemberID: localMemberID,
+                                     mediaSession: session,
+                                     audio: rtcCall?.audio ?? CallAudio(),
+                                     clock: clock,
+                                     capturesCamera: false)
     }
     
     /// Starts the call's pumps. Nothing has been applied yet; the first `step()` applies frame 0.

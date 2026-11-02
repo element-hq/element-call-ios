@@ -100,6 +100,8 @@ public final class ElementCallController {
     public private(set) var audioOutput: CallAudioOutput?
     public private(set) var isMaximized = true
     public private(set) var isTileStatsVisible = false
+    /// The user's choice for reactions, from ``preferences``; set with ``setReactionsPreference(_:)``.
+    public private(set) var reactionsPreference: ElementCallReactionsPreference
     
     /// The room the current call is in, for as long as there is one.
     public private(set) var room: (any ElementCallRoomContextProtocol)?
@@ -217,6 +219,7 @@ public final class ElementCallController {
     public let style: ElementCallStyle
     public let options: ElementCallOptions
     
+    @ObservationIgnored private let preferences: any ElementCallPreferencesStoreProtocol
     private let rtcClient: MatrixRTCClient
     /// The room the call is in, open from before the join until after the leave.
     private var rtcRoom: MatrixRTCRoom?
@@ -235,10 +238,13 @@ public final class ElementCallController {
                 system: any ElementCallSystemProvidingProtocol,
                 options: ElementCallOptions = .init(),
                 style: ElementCallStyle = .stock,
-                logger: (any ElementCallLoggingProtocol)? = nil) {
+                logger: (any ElementCallLoggingProtocol)? = nil,
+                preferences: any ElementCallPreferencesStoreProtocol = ElementCallUserDefaultsPreferencesStore()) {
         rtcClient = MatrixRTCClient(backend: backend)
         self.system = system
         self.options = options
+        self.preferences = preferences
+        reactionsPreference = preferences.reactions
         self.style = style
         self.logger = logger
         pictureInPicture.logger = logger
@@ -367,6 +373,16 @@ public final class ElementCallController {
     
     func setMaximized(_ maximized: Bool) {
         isMaximized = maximized
+    }
+    
+    /// Kept for the next call too, and applied at once to this one: to the reactions that arrive
+    /// from now on, leaving those already showing or sounding to finish (037 R14, R15).
+    public func setReactionsPreference(_ preference: ElementCallReactionsPreference) {
+        guard preference != reactionsPreference else { return }
+        reactionsPreference = preference
+        preferences.reactions = preference
+        call?.reactionsMode = preference.mode
+        log(.info, "reactions \(preference.rawValue)")
     }
     
     public func toggleTileStats() {
@@ -599,6 +615,7 @@ public final class ElementCallController {
         }
         // Before anything else: from here on the session is handling the core's events.
         call.participantCapForJoinLeaveSounds = options.participantCapForJoinLeaveSounds
+        call.reactionsMode = reactionsPreference.mode
         guard !Task.isCancelled else {
             await abandon(rtcCall: rtcCall, call: call, roomID: room.roomID)
             return
@@ -995,6 +1012,7 @@ public final class ElementCallController {
         self.connectedAt = connectedAt
         self.call = call
         self.rtcCall = rtcCall
+        call?.reactionsMode = reactionsPreference.mode
         // The same seed `startCall` makes, so a preview of a connecting call draws the controls a
         // real one would: the camera reads as on for a video call from the moment it is joining,
         // which is what it will join with.

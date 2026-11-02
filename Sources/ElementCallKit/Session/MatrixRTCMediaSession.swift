@@ -182,6 +182,31 @@ public final class MatrixRTCMediaSession {
         set { joinLeaveSoundPolicy.participantCap = newValue }
     }
     
+    /// The reactions showing now, in order of arrival (037). Each joins once its spread is over and
+    /// leaves four seconds after it arrived; how long it is drawn for, within that, is the UI's.
+    public private(set) var reactions: [MatrixRTCReaction] = []
+    
+    /// What the call does with reactions, from the user's preference. Read as each reaction arrives,
+    /// so a change applies to the next one and leaves those already showing or sounding to finish
+    /// (037 R15). Off until whoever connected the call says otherwise.
+    public var reactionsMode: MatrixRTCReactionsMode = .off {
+        didSet {
+            if reactionsMode == .withSound {
+                audio.prepareReactionSounds()
+            }
+        }
+    }
+    
+    /// Up to half a second, at random, so reactions that one sync delivered together neither rise in
+    /// a line nor fuse into one blare (037 R2b).
+    public nonisolated static let maximumReactionSpread: Duration = .milliseconds(500)
+    
+    @ObservationIgnored private var nextReactionID: UInt64 = 0
+    /// Each reaction's spread and its end, on ``clock``, so a scenario can step through both. Read
+    /// by tests, to know a reaction has been received before they move the clock.
+    @ObservationIgnored private(set) var reactionTimers: [UInt64: [Task<Void, Never>]] = [:]
+    @ObservationIgnored private let reactionSpread: () -> Duration
+    
     /// Whether a join or leave sounds. They play through the call's ``CallAudio``.
     @ObservationIgnored private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy
     /// Time on ``clock`` since the session was made: what the sound throttle measures against.
@@ -220,12 +245,14 @@ public final class MatrixRTCMediaSession {
          mediaSession: any MediaSessionProtocol,
          audio: CallAudio = CallAudio(),
          clock: any Clock<Duration> = ContinuousClock(),
-         capturesCamera: Bool = true) {
+         capturesCamera: Bool = true,
+         reactionSpread: @escaping () -> Duration = { .milliseconds(Int.random(in: 0...500)) }) {
         self.localMemberID = localMemberID
         self.audio = audio
         self.mediaSession = mediaSession
         self.clock = clock
         self.capturesCamera = capturesCamera
+        self.reactionSpread = reactionSpread
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(participantCap: Self.defaultParticipantCapForJoinLeaveSounds)
         elapsed = stopwatch(clock)
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
@@ -793,6 +820,9 @@ public final class MatrixRTCMediaSession {
         pendingReleases.removeAll()
         tasks.forEach { $0.cancel() }
         keySpells.values.forEach { $0.cancel() }
+        reactionTimers.values.joined().forEach { $0.cancel() }
+        reactionTimers.removeAll()
+        reactions.removeAll()
         tasks.removeAll()
         audioLevelFlush?.cancel()
         audioLevelFlush = nil
@@ -922,6 +952,8 @@ public final class MatrixRTCMediaSession {
             playJoinLeaveSound(.leave, for: memberID, participantCount: participantCount)
         case .handRaised(let memberID, _):
             playRaisedHandSound(for: memberID)
+        case .reaction(let memberID, let emoji, let name, _):
+            receiveReaction(from: memberID, emoji: emoji, name: name)
         case .streamStarted(let memberID, let kind):
             reopenStream(of: memberID, kind: kind)
         default:
@@ -947,6 +979,35 @@ public final class MatrixRTCMediaSession {
         if plays {
             audio.play(.raiseHand)
         }
+    }
+    
+    // MARK: - Reactions
+    
+    /// Which reactions arrive at all is the core's: only while we are in the call, never a replay,
+    /// and never a member's second inside three seconds. What is left here is the user's preference,
+    /// the spread, and how long it lasts.
+    private func receiveReaction(from memberID: String, emoji: String, name: String) {
+        let mode = reactionsMode
+        MatrixRTCLog.info("\(memberID) reacted \(name): \(mode)")
+        guard mode != .off else { return }
+        let resolved = MatrixRTCReactionCatalogue.resolve(name: name, emoji: emoji)
+        nextReactionID += 1
+        let id = nextReactionID
+        let spread = min(max(reactionSpread(), .zero), Self.maximumReactionSpread)
+        let reaction = MatrixRTCReaction(id: id, memberID: memberID, emoji: resolved.emoji, sound: resolved.sound, spread: spread)
+        let show = clock.schedule(after: spread) { [weak self] in
+            guard let self else { return }
+            reactions.append(reaction)
+            // With its bubble, not on arrival (R2b); and by the preference it arrived under (R15).
+            if mode == .withSound {
+                audio.playReaction(reaction.sound)
+            }
+        }
+        let end = clock.schedule(after: MatrixRTCReaction.lifetime) { [weak self] in
+            self?.reactions.removeAll { $0.id == id }
+            self?.reactionTimers[id] = nil
+        }
+        reactionTimers[id] = [show, end]
     }
     
     /// Reached from the roster only; the dictionary claim keeps a member from being played twice.

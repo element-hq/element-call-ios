@@ -526,7 +526,40 @@ public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
     case frameEncryptionState(memberID: String, state: MatrixRTCFrameEncryptionState)
     case handRaised(memberID: String, raisedAt: Date)
     case handLowered(memberID: String)
-    case reaction(memberID: String, emoji: String, name: String)
+    /// `sound` is the core's hint, verbatim; what is actually played and drawn is
+    /// ``MatrixRTCReaction``'s, which corrects it to match web (037 R9).
+    case reaction(memberID: String, emoji: String, name: String, sound: String?)
+}
+
+/// What the call does with the reactions it receives (037 R13).
+public nonisolated enum MatrixRTCReactionsMode: Sendable, Hashable {
+    case off, withoutSound, withSound
+}
+
+/// A reaction being shown: published once its spread delay is over, and dropped four seconds after
+/// it arrived (037 R1a, R2b).
+public nonisolated struct MatrixRTCReaction: Identifiable, Sendable, Hashable {
+    /// In order of arrival, per session.
+    public let id: UInt64
+    public let memberID: String
+    public let emoji: String
+    /// The sound it played, or would have, by asset name.
+    public let sound: String
+    /// How long it waited before showing, out of its four seconds.
+    public let spread: Duration
+    
+    /// Visible for three seconds and gone by four, both counted from arrival rather than from
+    /// showing, so the spread shortens a reaction rather than lengthening it (037 R1a, R2b).
+    public static let visibleFor: Duration = .seconds(3)
+    public static let lifetime: Duration = .seconds(4)
+    
+    public init(id: UInt64, memberID: String, emoji: String, sound: String, spread: Duration) {
+        self.id = id
+        self.memberID = memberID
+        self.emoji = emoji
+        self.sound = sound
+        self.spread = spread
+    }
 }
 
 /// Cumulative receive counters for one stream; sample twice and diff.
