@@ -105,7 +105,7 @@ what the room needs, and cancels those subscriptions when the call ends.
 | `ElementCallAvatarRenderingProtocol` | avatar views, so they match your app | no |
 | `ElementCallThemeProtocol`, `ElementCallIconRenderingProtocol` | colours, fonts and icons | defaults to the real Compound tokens |
 | `ElementCallLoggingProtocol` | a log sink | defaults provided |
-| `ElementCallOptions`, `ElementCallStrings` | feature flags and localised text | **values, not protocols** — construct one, every member defaulted |
+| `ElementCallOptions` | feature flags | **a value, not a protocol** — construct one, every member defaulted |
 
 The ports that are not turnkey are the ones only a host can answer. CallKit is process-wide and usually
 shared with something else. Room metadata and avatars come from whatever caching layer the host

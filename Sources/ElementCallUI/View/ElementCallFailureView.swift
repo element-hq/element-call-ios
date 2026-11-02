@@ -28,11 +28,11 @@ struct ElementCallFailureView: View {
                 .background(style.theme.bgSubtleSecondary, in: RoundedRectangle(cornerRadius: 12))
                 .accessibilityHidden(true)
             VStack(spacing: 8) {
-                Text(style.strings.title(for: failure))
+                Text(failure.title)
                     .font(style.theme.headingMDBold)
                     .foregroundStyle(style.theme.textPrimary)
                     .accessibilityAddTraits(.isHeader)
-                Text(style.strings.text(for: failure))
+                Text(failure.text)
                     .font(style.theme.bodyLG)
                     .foregroundStyle(style.theme.textSecondary)
             }
@@ -40,7 +40,7 @@ struct ElementCallFailureView: View {
             .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: onClose) {
-                Text(style.strings.close)
+                Text(L10n.actionClose)
                     .font(style.theme.bodyLGSemibold)
                     .foregroundStyle(style.theme.iconOnSolidPrimary)
                     .frame(maxWidth: .infinity, minHeight: 48)

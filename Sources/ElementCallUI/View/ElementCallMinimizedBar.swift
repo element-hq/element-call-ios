@@ -29,7 +29,7 @@ public struct ElementCallMinimizedBar: View {
     public init(controller: ElementCallController, onTap: @escaping () -> Void) {
         self.controller = controller
         self.onTap = onTap
-        roomName = controller.room?.displayName ?? "Call"
+        roomName = controller.room?.displayName ?? L10n.call
     }
     
     public var body: some View {
@@ -44,7 +44,7 @@ public struct ElementCallMinimizedBar: View {
                 if isInterrupted {
                     style.icons.icon(.info, size: .small, relativeTo: .bodySMSemibold)
                         .accessibilityHidden(true)
-                    Text(style.strings.interruptions)
+                    Text(L10n.interruptions)
                         .lineLimit(1)
                 } else if let connectedAt = controller.connectedAt {
                     Text(connectedAt, style: .timer)
@@ -54,7 +54,7 @@ public struct ElementCallMinimizedBar: View {
                 style.icons.icon(controller.call?.isMicrophoneMuted == true ? .micOff : .micOn,
                                  size: .small,
                                  relativeTo: .bodySMSemibold)
-                Text("Return")
+                Text(L10n.actionReturnIos)
             }
             .font(style.theme.bodySMSemibold)
             .foregroundStyle(.white)
@@ -67,7 +67,7 @@ public struct ElementCallMinimizedBar: View {
         .buttonStyle(.plain)
         // The bar's own label replaces what is drawn in it, so the indicator is said here or not
         // at all.
-        .accessibilityLabel(isInterrupted ? "Return to call, \(style.strings.interruptions)" : "Return to call")
+        .accessibilityLabel(isInterrupted ? L10n.a11yReturnToCallInterruptedIos(L10n.interruptions) : L10n.a11yReturnToCallIos)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimizedBar)
         .environment(\.elementCallStyle, controller.style)
         .onReceive(namePublisher) { roomName = $0 }

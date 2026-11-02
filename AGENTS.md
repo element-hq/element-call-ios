@@ -28,8 +28,8 @@ knows, and what tends to go wrong.
 2. **Never `import Compound`, in any module.** Its colours live on one shared instance the host
    re-brands at runtime; a copy linked here would never see the override and a re-branded host would
    get a stock-coloured call screen. `CompoundDesignTokens` is fine, being static values.
-3. **No host logger, settings or strings.** Use `ElementCallLoggingProtocol`, `ElementCallOptions`,
-   `ElementCallStrings`.
+3. **No host logger or settings.** Use `ElementCallLoggingProtocol` and `ElementCallOptions`. Text
+   is ours and translated: `L10n`, never a literal (see [Strings](#strings)).
 4. **Theme members are computed properties**, read at draw time. Never capture a colour.
 
 SwiftLint enforces 1 and 2 at error severity. **If you need something from the host, add a port. Never
@@ -370,6 +370,22 @@ Swift packages are released. Do not add a `binaryTarget` or a build-and-attach s
 workflow. [RELEASING.md](RELEASING.md) has the reasoning and the trigger that would justify revisiting
 it.
 
+## Strings
+
+Translated in the element-call Localazy project, in `mobile.json`, which Android downloads too
+(feature-hq spec 036; the workflow is in CONTRIBUTING.md). A key must exist there before code uses
+it: `L10n` is generated from the download, never written.
+
+- **The host's language, not the device's.** `ElementCallLocalization` matches our `.lproj`s against
+  `Bundle.main.preferredLocalizations`. `String(localized:bundle: .module)` and `Text("literal")`
+  resolve against the device instead, so an English app on a French phone gets a French call.
+- **A host overrides no string.** There was an `ElementCallStrings` for it, which no host used and
+  which only ever covered half the screen; Android's hosts get overriding for free from resource
+  merging, ours would need a member per string.
+- **Whole sentences, never assembled.** "Move to" plus a corner's name is English word order;
+  `moveLabel(to:)` has a key per corner.
+- Only languages with a translation are downloaded: Localazy converts nothing for the rest.
+
 ## The call's Matrix backend
 
 The host implements **`ElementCallMatrixBackendProtocol`**, and `MatrixBackendAdapter` turns it into
@@ -442,8 +458,8 @@ stripped from an app that never makes them.
   these back**; the concrete types that implement them (`ElementCallTokenTheme`,
   `ElementCallFakeMatrixBackend`, the rest of the `ElementCallFake*` family) keep plain names, which
   is what makes the suffix carry information. So does a port that is a plain value rather than something a host
-  implements — `ElementCallOptions` and `ElementCallStrings` are structs with every member defaulted,
-  and the suffix would be a lie on them. The core's `MatrixBackend` is not ours and keeps its name;
+  implements — `ElementCallOptions` is a struct with every member defaulted,
+  and the suffix would be a lie on it. The core's `MatrixBackend` is not ours and keeps its name;
   hosts implement `ElementCallMatrixBackendProtocol` instead.
 - `MatrixRTC*` prefixed types name **protocol** concepts and keep that prefix. `ElementCall*` names our
   own API. Note the casing: the initialism is uniform, per the API design guidelines below. The

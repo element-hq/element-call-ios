@@ -692,7 +692,7 @@ struct ElementCallStage: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.35)
-        .accessibilityLabel(step < 0 ? "Previous shared screen" : "Next shared screen")
+        .accessibilityLabel(step < 0 ? L10n.a11yPreviousHero : L10n.a11yNextHero)
         .accessibilityIdentifier(step < 0 ? ElementCallAccessibilityIdentifiers.heroPrevious : ElementCallAccessibilityIdentifiers.heroNext)
     }
     

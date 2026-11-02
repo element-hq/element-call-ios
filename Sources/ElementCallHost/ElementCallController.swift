@@ -26,8 +26,7 @@ public nonisolated enum ElementCallConnection: Equatable, Sendable {
     case failed(ElementCallFailure)
 }
 
-/// Why a call failed, typed so a host words each one through ``ElementCallStrings`` and both
-/// platforms say the same thing for the same cause (034 R27).
+/// Why a call failed, typed so both platforms say the same thing for the same cause (034 R27).
 public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Our own media server was lost and not back within the core's budget, refused us, or was
     /// never reached.
@@ -39,6 +38,30 @@ public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Anything else that stopped the call from starting: the room not opening, the microphone not
     /// publishing. Developer text, shown as it is, which is what every failure was before 034.
     case other(String)
+}
+
+package nonisolated extension ElementCallFailure {
+    /// The failure screen's title.
+    var title: String {
+        switch self {
+        case .connectionLost(.budget): L10n.failureConnectionLostTitle
+        case .connectionLost(.refused), .connectionLost(.neverConnected): L10n.failureConnectionFailedTitle
+        case .joinTimedOut, .joinRefused: L10n.failureJoinFailedTitle
+        case .other: L10n.callFailed
+        }
+    }
+    
+    /// The sentence beneath the title.
+    var text: String {
+        switch self {
+        case .connectionLost(.budget): L10n.failureConnectionLost
+        case .connectionLost(.refused): L10n.failureConnectionRefused
+        case .connectionLost(.neverConnected): L10n.failureConnectionNeverEstablished
+        case .joinTimedOut: L10n.failureJoinTimedOut
+        case .joinRefused: L10n.failureJoinRefused
+        case .other(let message): message
+        }
+    }
 }
 
 /// What the host has to do about a change in the call, beyond drawing it.
@@ -454,7 +477,7 @@ public final class ElementCallController {
                 }
             } catch {
                 log(.warning, "could not \(raised ? "raise" : "lower") the hand: \(error)")
-                errorMessage = raised ? "Your hand could not be raised." : "Your hand could not be lowered."
+                errorMessage = raised ? L10n.handRaiseFailed : L10n.handLowerFailed
             }
         }
     }

@@ -312,7 +312,7 @@ public final class ElementCallScreenViewModel {
         state.interruptions = controller.interruptions
         
         if let message = controller.errorMessage {
-            context.alertInfo = ElementCallAlert(title: context.style.strings.error, message: message)
+            context.alertInfo = ElementCallAlert(title: L10n.error, message: message)
             controller.errorMessage = nil
         }
         
@@ -346,7 +346,7 @@ public final class ElementCallScreenViewModel {
         state.tiles = Self.tiles(roster: call.tiles,
                                  own: call.ownTile,
                                  profiles: profiles,
-                                 youLabel: context.style.strings.you,
+                                 youLabel: L10n.you,
                                  isLocalMicrophoneMuted: call.isMicrophoneMuted,
                                  localHasVideo: call.isCameraEnabled,
                                  missingKeys: call.membersMissingKeys,
