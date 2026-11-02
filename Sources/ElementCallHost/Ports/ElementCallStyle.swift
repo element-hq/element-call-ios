@@ -230,16 +230,13 @@ public nonisolated struct ElementCallStyle: Sendable {
     public let theme: any ElementCallThemeProtocol
     public let icons: any ElementCallIconRenderingProtocol
     public let avatars: any ElementCallAvatarRenderingProtocol
-    public let strings: ElementCallStrings
     
     public init(theme: any ElementCallThemeProtocol,
                 icons: any ElementCallIconRenderingProtocol,
-                avatars: any ElementCallAvatarRenderingProtocol,
-                strings: ElementCallStrings = .init()) {
+                avatars: any ElementCallAvatarRenderingProtocol) {
         self.theme = theme
         self.icons = icons
         self.avatars = avatars
-        self.strings = strings
     }
     
     /// The real Compound design tokens, for previews, snapshots and any host with no design system

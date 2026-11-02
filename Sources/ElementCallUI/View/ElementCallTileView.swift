@@ -184,11 +184,11 @@ struct ElementCallTileView: View, Equatable {
         // it: without this the feature does not exist for anyone using it.
         .accessibilityActions {
             if allowsFullscreen {
-                Button("Full screen") { onToggleFullscreen() }
+                Button(L10n.a11yEnterFullscreen) { onToggleFullscreen() }
             }
             if let floatingCorner {
                 ForEach(Self.cornersToMoveTo(from: floatingCorner), id: \.self) { corner in
-                    Button("Move to \(Self.spokenName(of: corner))") { onMoveToCorner(corner) }
+                    Button(Self.moveLabel(to: corner)) { onMoveToCorner(corner) }
                 }
             }
         }
@@ -199,13 +199,13 @@ struct ElementCallTileView: View, Equatable {
             return Text(Self.ownLabel(name: tile.displayName, hasVideo: tile.hasVideo, corner: floatingCorner))
         }
         guard isNameHidden else { return Text("") }
-        return Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+        return Text(tile.isScreenShare ? L10n.sharedScreenName(tile.displayName) : tile.displayName)
     }
     
-    /// "You, camera on, bottom right": the corner only while it floats, since inline it is simply
+    /// "You, Camera on, Bottom right": the corner only while it floats, since inline it is simply
     /// the first tile (019 R26, R27).
     static func ownLabel(name: String, hasVideo: Bool, corner: ElementCallOwnTileCorner?) -> String {
-        ([name, hasVideo ? "camera on" : "camera off"] + (corner.map { [spokenName(of: $0)] } ?? [])).joined(separator: ", ")
+        ([name, hasVideo ? L10n.a11yCameraOn : L10n.a11yCameraOff] + (corner.map { [spokenName(of: $0)] } ?? [])).joined(separator: ", ")
     }
     
     /// The other three corners, in reading order (019 R25).
@@ -215,10 +215,21 @@ struct ElementCallTileView: View, Equatable {
     
     static func spokenName(of corner: ElementCallOwnTileCorner) -> String {
         switch corner {
-        case .topLeft: "top left"
-        case .topRight: "top right"
-        case .bottomLeft: "bottom left"
-        case .bottomRight: "bottom right"
+        case .topLeft: L10n.a11yCornerTopLeft
+        case .topRight: L10n.a11yCornerTopRight
+        case .bottomLeft: L10n.a11yCornerBottomLeft
+        case .bottomRight: L10n.a11yCornerBottomRight
+        }
+    }
+    
+    /// A whole sentence per corner rather than "Move to" and a corner's name, which only English
+    /// can join in that order.
+    static func moveLabel(to corner: ElementCallOwnTileCorner) -> String {
+        switch corner {
+        case .topLeft: L10n.a11yMoveToTopLeft
+        case .topRight: L10n.a11yMoveToTopRight
+        case .bottomLeft: L10n.a11yMoveToBottomLeft
+        case .bottomRight: L10n.a11yMoveToBottomRight
         }
     }
     
@@ -416,14 +427,14 @@ struct ElementCallTileView: View, Equatable {
                             style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
                         }
                         // Named as well as labelled: a share can sit in a grid cell right beside
-                        // its owner's camera now, so "(Screen share)" on its own no longer says
+                        // its owner's camera now, so "Screen share" on its own no longer says
                         // whose.
-                        Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+                        Text(tile.isScreenShare ? L10n.sharedScreenName(tile.displayName) : tile.displayName)
                             .lineLimit(1)
                     }
                 }
                 if let heroStack {
-                    badge { Text("\(heroStack.shown + 1) of \(heroStack.count)") }
+                    badge { Text(L10n.heroPosition(heroStack.shown + 1, heroStack.count)) }
                         // One element, so the identifier lands on something a test can find and
                         // VoiceOver reads the position as one phrase.
                         .accessibilityElement(children: .combine)
@@ -456,10 +467,10 @@ struct ElementCallTileView: View, Equatable {
                 .padding(6)
                 .background(Color.black.opacity(0.5), in: Circle())
         }
-        .accessibilityLabel("Switch camera")
+        .accessibilityLabel(L10n.a11ySwitchCamera)
         // Which camera is in use, so a VoiceOver user hears what the button changed, and a UI test
         // can tell a tap that reached it from one that did not (019 R22).
-        .accessibilityValue(isFrontCamera ? "Front camera" : "Back camera")
+        .accessibilityValue(isFrontCamera ? L10n.a11yFrontCamera : L10n.a11yBackCamera)
     }
     
     /// Where the picture sits between filled (0) and fitted (1).
@@ -540,20 +551,20 @@ struct ElementCallMediaIndicator: View {
     var body: some View {
         switch state {
         case .keysMissing:
-            keyOff(style.theme.textPrimary).accessibilityLabel(style.strings.mediaKeysMissing)
+            keyOff(style.theme.textPrimary).accessibilityLabel(L10n.a11yMediaKeysMissing)
         case .keyInvalid:
-            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(style.strings.mediaKeyInvalid)
+            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(L10n.a11yMediaKeyInvalid)
         case .notEncrypted:
-            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(style.strings.mediaNotEncrypted)
+            keyOff(style.theme.iconCriticalPrimary).accessibilityLabel(L10n.a11yMediaNotEncrypted)
         case .undecryptable:
             ElementCallSpinner()
-                .accessibilityLabel(style.strings.mediaUndecryptable)
+                .accessibilityLabel(L10n.a11yMediaUndecryptable)
         case .connecting:
             ElementCallSpinner()
-                .accessibilityLabel(style.strings.mediaConnecting)
+                .accessibilityLabel(L10n.a11yMediaConnecting)
         case .live, .reconnecting:
             ElementCallSpinner()
-                .accessibilityLabel(style.strings.mediaReconnecting)
+                .accessibilityLabel(L10n.a11yMediaReconnecting)
         }
     }
     
@@ -608,7 +619,7 @@ struct ElementCallRaisedHandBadge: View {
     }
     
     static func spokenLabel(position: Int) -> String {
-        "Hand raised, number \(position) in the queue"
+        L10n.a11yHandRaisedPosition(position)
     }
 }
 

@@ -26,7 +26,7 @@ struct ElementCallInterruptionsIndicator: View {
             HStack(spacing: 8) {
                 style.icons.icon(.info, size: .small, relativeTo: .bodySMSemibold)
                     .accessibilityHidden(true)
-                Text(style.strings.interruptions)
+                Text(L10n.interruptions)
                     .font(style.theme.bodySMSemibold)
                     .lineLimit(1)
                 style.icons.icon(.chevronRight, size: .small, relativeTo: .bodySMSemibold)
@@ -65,7 +65,7 @@ struct ElementCallInterruptionsList: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(interruptions, id: \.self) { interruption in
-                Text(style.strings.text(for: interruption))
+                Text(interruption.text)
                     .font(style.theme.bodySM)
                     .foregroundStyle(style.theme.textPrimary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -80,17 +80,17 @@ struct ElementCallInterruptionsList: View {
     }
 }
 
-extension ElementCallStrings {
+extension ElementCallInterruption {
     /// An entry's text. The lapse changes what the server entry says rather than adding an entry
     /// of its own (R13).
-    func text(for interruption: ElementCallInterruption) -> String {
-        switch interruption {
+    var text: String {
+        switch self {
         case .ownServer(let isMembershipLapsed):
-            return isMembershipLapsed ? ownServerLapsed : ownServerUnreachable
+            isMembershipLapsed ? L10n.interruptionOwnServerLapsed : L10n.interruptionOwnServer
         case .ownMedia:
-            return ownMediaReconnecting
+            L10n.interruptionOwnMedia
         case .othersMedia:
-            return othersMediaInterrupted
+            L10n.interruptionOthersMedia
         }
     }
 }

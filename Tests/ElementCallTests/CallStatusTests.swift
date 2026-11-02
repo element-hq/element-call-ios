@@ -183,11 +183,10 @@ struct CallStatusTests {
     /// Each cause has its own words, so both platforms can say the same thing for it (034 R27).
     @Test
     func everyFailureIsWordedOnItsOwn() {
-        let strings = ElementCallStrings()
         let texts = [ElementCallFailure.connectionLost(.budget), .connectionLost(.refused), .connectionLost(.neverConnected), .joinTimedOut, .joinRefused]
-            .map(strings.text(for:))
+            .map(\.text)
         #expect(Set(texts).count == texts.count)
-        #expect(strings.text(for: .other("Media failed")) == "Media failed")
+        #expect(ElementCallFailure.other("Media failed").text == "Media failed")
     }
     
     @Test

@@ -48,12 +48,12 @@ struct ElementCallControlsView: View {
         layout {
             controlButton(icon: context.viewState.isMicrophoneMuted ? .micOff : .micOn,
                           isActive: !context.viewState.isMicrophoneMuted,
-                          label: context.viewState.isMicrophoneMuted ? "Unmute" : "Mute") {
+                          label: context.viewState.isMicrophoneMuted ? L10n.a11yUnmuteMicrophone : L10n.a11yMuteMicrophone) {
                 context.send(viewAction: .toggleMicrophone)
             }
             controlButton(icon: context.viewState.isCameraEnabled ? .videoCall : .videoCallOff,
                           isActive: context.viewState.isCameraEnabled,
-                          label: context.viewState.isCameraEnabled ? "Turn camera off" : "Turn camera on") {
+                          label: context.viewState.isCameraEnabled ? L10n.a11yTurnCameraOff : L10n.a11yTurnCameraOn) {
                 context.send(viewAction: .toggleCamera)
             }
             audioRouteButton
@@ -64,7 +64,7 @@ struct ElementCallControlsView: View {
                 controlButton(icon: .shareScreen,
                               isActive: !context.viewState.isScreenSharing,
                               isEnabled: context.viewState.isScreenShareControlEnabled,
-                              label: context.viewState.isScreenSharing ? "Stop sharing screen" : "Share screen") {
+                              label: context.viewState.isScreenSharing ? L10n.a11yStopScreenShare : L10n.a11yStartScreenShare) {
                     context.send(viewAction: .toggleScreenShare)
                 }
             }
@@ -76,7 +76,7 @@ struct ElementCallControlsView: View {
                     .frame(width: 56, height: 56)
                     .background(style.theme.bgCriticalPrimary, in: Circle())
             }
-            .accessibilityLabel("Hang up")
+            .accessibilityLabel(L10n.a11yHangUp)
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.hangUp)
         }
         .padding(8)
@@ -97,8 +97,8 @@ struct ElementCallControlsView: View {
         let state = context.viewState
         if state.hasExternalAudioOutput {
             Menu {
-                Picker("Audio output", selection: Binding(get: { state.audioOutput },
-                                                          set: { $0.map { context.send(viewAction: .selectAudioOutput($0)) } })) {
+                Picker(L10n.audioOutputTitle, selection: Binding(get: { state.audioOutput },
+                                                                 set: { $0.map { context.send(viewAction: .selectAudioOutput($0)) } })) {
                     ForEach(state.audioOutputs) { output in
                         Label(label(for: output), systemImage: systemImage(for: output))
                             .tag(Optional(output))
@@ -108,14 +108,14 @@ struct ElementCallControlsView: View {
             } label: {
                 controlCircle(icon: audioOutputIcon, isActive: isOnEarpiece)
             }
-            .accessibilityLabel("Audio output")
+            .accessibilityLabel(L10n.a11yAudioOutput)
             .accessibilityValue(audioOutputValue)
             // Set here because `control(for:)` reaches only `controlButton`.
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.audioOutput)
         } else {
             controlButton(icon: audioOutputIcon,
                           isActive: isOnEarpiece,
-                          label: "Audio output") {
+                          label: L10n.a11yAudioOutput) {
                 context.send(viewAction: .toggleLoudspeaker)
             }
             .accessibilityValue(audioOutputValue)
@@ -133,8 +133,8 @@ struct ElementCallControlsView: View {
             controlCircle(icon: .raisedHand, isActive: !state.isHandRaised, isEnabled: state.isHandControlEnabled)
         }
         .disabled(!state.isHandControlEnabled)
-        .accessibilityLabel(state.isHandRaised ? "Lower hand" : "Raise hand")
-        .accessibilityValue(state.isHandControlEnabled ? state.isHandRaised ? "Raised" : "" : style.strings.unavailable)
+        .accessibilityLabel(state.isHandRaised ? L10n.a11yLowerHand : L10n.a11yRaiseHand)
+        .accessibilityValue(state.isHandControlEnabled ? state.isHandRaised ? L10n.a11yHandRaisedState : "" : L10n.a11yUnavailable)
         // The same identifier `controlButton` would derive, set here because this one is built by hand.
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: .raisedHand))
     }
@@ -164,9 +164,9 @@ struct ElementCallControlsView: View {
     
     private func label(for output: CallAudioOutput) -> String {
         switch output.kind {
-        case .speaker: style.strings.speaker
-        case .receiver: style.strings.phone
-        case .wired: style.strings.headphones
+        case .speaker: L10n.audioDeviceSpeaker
+        case .receiver: L10n.audioDeviceEarpiece
+        case .wired: L10n.audioDeviceHeadphones
         case .bluetooth, .usb, .car: output.name
         }
     }
@@ -197,7 +197,7 @@ struct ElementCallControlsView: View {
         }
         .disabled(!isEnabled)
         .accessibilityLabel(label)
-        .accessibilityValue(isEnabled ? "" : style.strings.unavailable)
+        .accessibilityValue(isEnabled ? "" : L10n.a11yUnavailable)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: icon))
     }
     
