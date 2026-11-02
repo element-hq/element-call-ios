@@ -13,38 +13,29 @@ import Synchronization
 // Fakes for every port, shipped in the product rather than the test target on purpose: a host needs
 // them for its own previews, and the example harness runs on them.
 
-/// The core's Matrix side, answering every send and delivering an encrypted room holding only us,
-/// with no call in it and one LiveKit transport on offer. Every room subject delivers its current
-/// value once, so the core would treat the room as ready. Enough for a controller that never joins,
-/// and the starting point for a test that scripts specific answers. A host's unit tests that start
-/// calls want ``opensRooms`` off.
+/// The core's Matrix side, answering every send and never letting a room become ready. A call
+/// started through ``ElementCallController/startCall(_:room:)`` stays `.joining`: there is no
+/// `MatrixRTCCall`, so no audio engine and no media.
+///
+/// Never, rather than on request: a room that opens lets the call join for real, and on the
+/// simulator the controller then starts the audio engine and dials a LiveKit service that does not
+/// exist. That is a host's unit test reaching outside its process, and when the simulator's audio
+/// service stops answering, AudioToolbox aborts the whole test run.
+///
+/// Hang up what a test starts. A hang-up while joining ends the call as `.ended(.left)`; a call
+/// nobody hangs up fails after 30 seconds (`MatrixRTCClient.seedingTimeout`) and tells the system
+/// port so.
 public final nonisolated class ElementCallFakeMatrixBackend: ElementCallMatrixBackendProtocol {
     public let userID: String
     public let deviceID: String
     public let transportsJSON: String
     
-    /// False for a host's unit tests that start a call through
-    /// ``ElementCallController/startCall(_:room:)``: no room ever becomes ready, so the call stays
-    /// `.joining` and never joins. There is no `MatrixRTCCall`, so no audio engine and no media.
-    ///
-    /// With rooms that open, a started call joins for real. On the simulator the controller then
-    /// activates the audio session itself, starts the audio engine and dials the LiveKit service
-    /// above, which does not exist. That is a test reaching outside its process, and when the
-    /// simulator's audio service stops answering, AudioToolbox aborts the whole test run.
-    ///
-    /// Hang up what a test starts. A hang-up while joining ends the call as `.ended(.left)`, but a
-    /// call nobody hangs up fails once the core stops waiting for the room, after 30 seconds
-    /// (`MatrixRTCClient.seedingTimeout`), and tells the system port it failed.
-    public let opensRooms: Bool
-    
     public init(userID: String = "@alice:example.org",
                 deviceID: String = "FAKEDEVICE",
-                transportsJSON: String = #"[{"type":"livekit","livekit_service_url":"https://sfu.example.org"}]"#,
-                opensRooms: Bool = true) {
+                transportsJSON: String = #"[{"type":"livekit","livekit_service_url":"https://sfu.example.org"}]"#) {
         self.userID = userID
         self.deviceID = deviceID
         self.transportsJSON = transportsJSON
-        self.opensRooms = opensRooms
     }
     
     public func sendStickyEvent(roomID: String, eventType: String, contentJSON: String, duration: Duration) async throws(ElementCallMatrixBackendError) -> String {
@@ -77,18 +68,10 @@ public final nonisolated class ElementCallFakeMatrixBackend: ElementCallMatrixBa
     
     public func redactEvent(roomID: String, eventID: String, reason: String?) async throws(ElementCallMatrixBackendError) { }
     
-    /// Delivers every subject at once, so the subscription has nothing to cancel. Without
-    /// ``opensRooms`` it delivers nothing, which the core reads as a room still loading: it has no
-    /// deadline of its own for that.
+    /// Delivers nothing, which the core reads as a room still loading. It has no deadline of its own
+    /// for that, so the room never becomes ready.
     public func subscribeToRoom(roomID: String, subjects: ElementCallRoomSubjects, sink: ElementCallRoomSink) throws(ElementCallMatrixBackendError) -> ElementCallBackendSubscription {
-        guard opensRooms else { return ElementCallBackendSubscription() }
-        sink.deliverEncryption(isEncrypted: true)
-        sink.deliverJoinedMembers([userID])
-        sink.deliverStickyEvents([])
-        for eventType in subjects.stateEventTypes {
-            sink.deliverStateEvents([], ofType: eventType)
-        }
-        return ElementCallBackendSubscription()
+        ElementCallBackendSubscription()
     }
     
     public func subscribeToDeviceMessages(eventTypes: [String], sink: ElementCallToDeviceSink) throws(ElementCallMatrixBackendError) -> ElementCallBackendSubscription {

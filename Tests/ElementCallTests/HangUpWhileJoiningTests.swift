@@ -12,8 +12,8 @@ import Foundation
 import Testing
 
 /// A real controller over the real core, starting calls in rooms that never open: what a host's unit
-/// tests get from `ElementCallFakeMatrixBackend(opensRooms: false)`, and the one place a hang-up
-/// can land while the join is still waiting for its room.
+/// tests get from `ElementCallFakeMatrixBackend`, and the one place a hang-up can land while the
+/// join is still waiting for its room.
 ///
 /// Every test hangs up what it started and waits for the join to unwind. A call left joining fails
 /// when the core stops waiting for its room, 30 seconds on, in whichever test is running by then.
@@ -92,7 +92,7 @@ struct HangUpWhileJoiningTests {
         init() {
             let system = ElementCallFakeSystem()
             let logger = ElementCallFakeLogger()
-            let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(opensRooms: false),
+            let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
                                                    system: system,
                                                    options: ElementCallOptions(),
                                                    style: .stock,
