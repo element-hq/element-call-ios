@@ -137,6 +137,9 @@ final class ElementCallExampleHost {
         case .outage(let outage):
             openOutage(outage, fixture: fixture)
             
+        case .reactions(let reactions):
+            openReactions(reactions, fixture: fixture)
+            
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())
             // The real host contract, and the only place in this repository it is exercised: the
@@ -377,6 +380,38 @@ final class ElementCallExampleHost {
             ringingTask = Task {
                 await playback.start()
                 await outage.play(on: scripted, tiles: playback)
+            }
+        } catch {
+            notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
+        }
+    }
+    
+    /// A scripted call connected from the start, as an outage's is, whose session the reactions are
+    /// pushed into; it lends its audio to the tiles' call, so they are heard.
+    private func openReactions(_ reactions: ElementCallExampleReactions, fixture: ElementCallExampleFixture) {
+        do {
+            let profiles = Dictionary(uniqueKeysWithValues: ElementCallExampleReactions.people.map { name in
+                let userID = "@\(name.lowercased()):example.com"
+                return (userID, ElementCallMemberProfile(userID: userID, displayName: name, avatarURL: nil))
+            })
+            let room = ElementCallFakeRoom(displayName: fixture.title, memberProfiles: profiles)
+            let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(ElementCallExampleReactions.scenario, name: fixture.rawValue),
+                                                                  localMemberID: ElementCallExampleReactions.localMemberID,
+                                                                  audioOf: scripted.call)
+            let controller = ElementCallController.fake(following: scripted.call,
+                                                        room: room,
+                                                        isAudioCall: false,
+                                                        call: playback.player.call)
+            controller.actions
+                .sink { [weak self] action in self?.handle(action) }
+                .store(in: &cancellables)
+            let viewModel = ElementCallScreenViewModel(controller: controller)
+            playback.attach(context: viewModel.context, controller: controller)
+            session = Session(fixture: fixture, presentation: .scripted(viewModel, playback), controller: controller)
+            ringingTask = Task {
+                await playback.start()
+                await reactions.play(tiles: playback)
             }
         } catch {
             notice = "Fixture \(fixture.rawValue) failed to load: \(error)"

@@ -43,6 +43,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case smallFour = "small_four"
     case smallFive = "small_five"
     case oneToOneSpeaking = "one_to_one_speaking"
+    case reactions
     case joining
     case connectingMedia = "connecting_media"
     case failed
@@ -108,6 +109,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .smallFour: "Small call of four"
         case .smallFive: "Small call of five"
         case .oneToOneSpeaking: "One to one, speaking"
+        case .reactions: "Reactions"
         case .ringingPickup: "Ringing, then picked up"
         case .ringingVoicePickup: "Ringing a voice call, then picked up"
         case .ringingDeclined: "Ringing, then declined"
@@ -147,6 +149,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .smallFour: "Two by two, Carol speaking; Dan's camera off. Three hands up, ours included."
         case .smallFive: "Two rows of two and one centred; two rows in landscape."
         case .oneToOneSpeaking: "A voice call: the sound waves come and go round Bob's avatar as he speaks."
+        case .reactions: "Reactions rising and sounding on a loop, then four claps at once; -reactionInterval for a stream."
         case .ringingPickup: "The ringing screen and ringback; Bob answers with video at 6 s."
         case .ringingVoicePickup: "A voice call ringing; Bob answers without video at 6 s."
         case .ringingDeclined: "Bob declines at 6 s: the screen closes and the decline sound plays out."
@@ -183,6 +186,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case played(scenario: String)
         /// A group call on a scripted call, with the core's interruptions played over it.
         case outage(ElementCallExampleOutage)
+        /// A small call on a scripted call, with reactions arriving on a loop.
+        case reactions(ElementCallExampleReactions)
     }
     
     /// Built from the same fixtures the snapshots use, so a failure here and a failure there are
@@ -271,6 +276,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
             // Speaking for 2 s in every 3, for half a minute. `BOB` is `@bob:example.com`.
             let frames = stride(from: 0, to: 30, by: 3).flatMap { second in ["\(second)s BOB", "\(second + 1)s BOB!"] }
             return .played(scenario: frames.joined(separator: "\n"))
+        case .reactions:
+            return .reactions(ElementCallExampleReactions())
         case .ringingPickup:
             return .ringing(ElementCallExampleRinging(isAudioCall: false, outcome: .pickUp))
         case .ringingVoicePickup:

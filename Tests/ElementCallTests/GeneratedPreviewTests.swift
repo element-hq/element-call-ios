@@ -39,6 +39,13 @@ extension PreviewTests {
         }
     }
 
+    @Test("ElementCallReactionsOverlay")
+    func elementCallReactionsOverlay() async throws {
+        for (index, preview) in ElementCallReactionsOverlay_Previews._allPreviews.enumerated() {
+            try await assertSnapshots(matching: preview, step: index)
+        }
+    }
+
     @Test("ElementCallStage")
     func elementCallStage() async throws {
         for (index, preview) in ElementCallStage_Previews._allPreviews.enumerated() {

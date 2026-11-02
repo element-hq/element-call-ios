@@ -284,6 +284,37 @@ public final class ElementCallScreenViewModel {
         }
     }
     
+    /// Each bubble's sender name, resolved the first time it is seen and kept, so it never changes
+    /// in flight (037 R7a).
+    private var reactionNames: [UInt64: String] = [:]
+    
+    /// Named as the sender's tile is: "You" for this device's membership, otherwise their display
+    /// name, or their Matrix ID without one. Another device of ours is another tile, named for us
+    /// rather than "You" (037 R7).
+    private func reactionBubbles(_ reactions: [MatrixRTCReaction], in call: MatrixRTCMediaSession) -> [ElementCallReactionBubble] {
+        let showing = Set(reactions.map(\.id))
+        reactionNames = reactionNames.filter { showing.contains($0.key) }
+        return reactions.map { reaction in
+            let name = reactionNames[reaction.id] ?? {
+                let name = if reaction.memberID == call.localMemberID {
+                    L10n.you
+                } else {
+                    reactionSenderName(memberID: reaction.memberID, in: call)
+                }
+                reactionNames[reaction.id] = name
+                return name
+            }()
+            return ElementCallReactionBubble(id: reaction.id, emoji: reaction.emoji, senderName: name, spread: reaction.spread)
+        }
+    }
+    
+    private func reactionSenderName(memberID: String, in call: MatrixRTCMediaSession) -> String {
+        let userID = call.tiles.order.first { $0.id.memberID == memberID }?.userID
+            ?? controller.rtcCall?.members.first { $0.memberID == memberID }?.userID
+        guard let userID else { return memberID }
+        return profiles[userID]?.displayName ?? userID
+    }
+    
     private func refresh() {
         var state = context.viewState
         state.connection = controller.connection
@@ -318,6 +349,7 @@ public final class ElementCallScreenViewModel {
         
         guard let call = controller.call else {
             state.tiles = []
+            state.reactions = []
             state.spotlightID = nil
             // So the next call on a reused view model starts its speaker afresh.
             state.smallCallSpeakerID = nil
@@ -358,6 +390,7 @@ public final class ElementCallScreenViewModel {
         // Here rather than in the tile, which cannot tell a one-to-one call's floating tile from a
         // small call's, and which would miss the full-screen badge drawn by the screen (009 R33).
         state.tiles = ElementCallScreenViewState.showingHands(state.tiles)
+        state.reactions = reactionBubbles(call.reactions, in: call)
         
         let spotlight = ElementCallSpotlight.choose(tiles: state.tiles,
                                                     shownHeroID: context.shownHeroID,

@@ -119,6 +119,8 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     public var audioOutput: CallAudioOutput?
     public var isTileStatsVisible = false
     public var isDeveloperModeEnabled = false
+    /// The reactions to draw, oldest first, once each has waited out its spread (037).
+    public var reactions: [ElementCallReactionBubble] = []
     public var isScreenSharingEnabled = false
     /// Our hand as the user asked for it, from our own tile, which the core moves at once and
     /// keeps there until it lands or is refused (009 R5, 034 C12).
@@ -250,6 +252,25 @@ extension ElementCallTile {
         tile.isMicrophoneMuted = isMicrophoneMuted
         tile.hasVideo = hasVideo
         return tile
+    }
+}
+
+/// A received reaction, as a bubble rising over the call (037 R1).
+public nonisolated struct ElementCallReactionBubble: Identifiable, Equatable, Sendable {
+    public let id: UInt64
+    public let emoji: String
+    /// Fixed when the bubble appears: a profile that loads, or a sender who leaves, meanwhile does
+    /// not change it (037 R7a).
+    public let senderName: String
+    /// How long it waited before showing, which comes off its time on screen, so that every bubble
+    /// is gone four seconds after its reaction arrived (037 R1a, R2b).
+    public let spread: Duration
+    
+    public init(id: UInt64, emoji: String, senderName: String, spread: Duration = .zero) {
+        self.id = id
+        self.emoji = emoji
+        self.senderName = senderName
+        self.spread = spread
     }
 }
 

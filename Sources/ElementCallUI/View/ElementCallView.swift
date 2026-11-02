@@ -66,6 +66,13 @@ struct ElementCallView: View {
                         // already, so only the sides are given up here.
                         .ignoresSafeArea(.container, edges: fullscreenTile != nil ? .all : isFullBleed ? .horizontal : [])
                     
+                    // Over the stage and any full-screen tile, under every control: bubbles rise from
+                    // behind the control bar, and show whether the chrome does or not (037 R8). The
+                    // whole screen, so they come up from its bottom edge and leave past its top.
+                    ElementCallReactionsOverlay(reactions: context.viewState.reactions)
+                        .ignoresSafeArea()
+                        .zIndex(0.5)
+                    
                     // Every overlay gets an explicit z position. A view leaving a `ZStack` without
                     // one is drawn behind its siblings for the length of its removal, so the
                     // chrome went in with a slide and out with none.
