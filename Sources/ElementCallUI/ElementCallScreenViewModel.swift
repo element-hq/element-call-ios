@@ -135,7 +135,18 @@ public final class ElementCallScreenContext {
                 // Queued after every remote hand, as the harness numbers hands (009 C7).
                 let position = isRaised ? 1 + context.viewState.tiles.count { !$0.isLocal && $0.hasHandRaised } : nil
                 context.viewState.tiles = ElementCallScreenViewState.showingHands(context.viewState.tiles.map { $0.withHandPosition(position) })
+            case .showPreferences:
+                context.viewState.isPreferencesPresented = true
+            case .dismissPreferences:
+                context.viewState.isPreferencesPresented = false
+            case let .setReactionsPreference(preference):
+                context.viewState.reactionsPreference = preference
+            case let .setSoundEffectsVolume(volume):
+                context.viewState.soundEffectsVolume = volume
+            case .playSoundEffectsVolumeSample:
+                break
             case .minimize, .hangUp, .dismiss:
+                context.viewState.isPreferencesPresented = false
                 onHostAction?(action)
             }
         }
@@ -256,6 +267,16 @@ public final class ElementCallScreenViewModel {
             controller.setHandRaised(!controller.isHandRaised)
         case .toggleTileStats:
             controller.toggleTileStats()
+        case .showPreferences:
+            context.viewState.isPreferencesPresented = true
+        case .dismissPreferences:
+            context.viewState.isPreferencesPresented = false
+        case let .setReactionsPreference(preference):
+            controller.setReactionsPreference(preference)
+        case let .setSoundEffectsVolume(volume):
+            controller.setSoundEffectsVolume(volume)
+        case .playSoundEffectsVolumeSample:
+            controller.playSoundEffectsVolumeSample()
         case .minimize:
             controller.requestMinimize()
         case .hangUp:
@@ -329,6 +350,18 @@ public final class ElementCallScreenViewModel {
         state.audioOutput = controller.audioOutput
         state.isTileStatsVisible = controller.isTileStatsVisible
         state.isMaximized = controller.isMaximized
+        state.reactionsPreference = controller.reactionsPreference
+        state.soundEffectsVolume = controller.soundEffectsVolume
+        // Nowhere to draw it once the call is out of the way, and nothing to come back to after the
+        // call (037 R12a).
+        switch controller.connection {
+        case .ended, .failed:
+            state.isPreferencesPresented = false
+        default:
+            if !state.isMaximized {
+                state.isPreferencesPresented = false
+            }
+        }
         state.memberCount = controller.rtcCall?.memberCount ?? 0
         // Above the guard below: these two are the only controls that mean anything before there is
         // a call, and without them a mute tapped while joining draws itself back unmuted.

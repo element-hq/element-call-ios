@@ -10,12 +10,13 @@ import Foundation
 
 /// What the call does with the reactions it receives, as the user chose it (037 R13).
 public nonisolated enum ElementCallReactionsPreference: String, Sendable, CaseIterable {
+    // In the order the menu offers them, the most first: each step takes something away.
+    /// Bubbles and sounds: Element Call web's default too. "On" in the menu.
+    case withSound
+    /// Bubbles, no sound. "Silent" in the menu.
+    case withoutSound
     /// Nothing shown, nothing played.
     case off
-    /// Bubbles, no sound.
-    case withoutSound
-    /// Bubbles and sounds: Element Call web's default too.
-    case withSound
     
     var mode: MatrixRTCReactionsMode {
         switch self {
@@ -35,12 +36,16 @@ public nonisolated enum ElementCallReactionsPreference: String, Sendable, CaseIt
 /// settings implements this.
 public protocol ElementCallPreferencesStoreProtocol: AnyObject {
     var reactions: ElementCallReactionsPreference { get set }
+    /// How loud the call's sound effects play, 0 to 1 of the call's level; half by default, as on
+    /// Element Call web (037 R22).
+    var soundEffectsVolume: Float { get set }
 }
 
 /// The preferences in `UserDefaults`: kept on this device, surviving a restart, shared with nothing
 /// (037 R14).
 public final class ElementCallUserDefaultsPreferencesStore: ElementCallPreferencesStoreProtocol {
     static let reactionsKey = "io.element.call.preferences.reactions"
+    static let soundEffectsVolumeKey = "io.element.call.preferences.soundEffectsVolume"
     
     private let defaults: UserDefaults
     
@@ -54,6 +59,16 @@ public final class ElementCallUserDefaultsPreferencesStore: ElementCallPreferenc
         }
         set {
             defaults.set(newValue.rawValue, forKey: Self.reactionsKey)
+        }
+    }
+    
+    public var soundEffectsVolume: Float {
+        get {
+            guard let volume = defaults.object(forKey: Self.soundEffectsVolumeKey) as? Float else { return 0.5 }
+            return min(max(volume, 0), 1)
+        }
+        set {
+            defaults.set(min(max(newValue, 0), 1), forKey: Self.soundEffectsVolumeKey)
         }
     }
 }

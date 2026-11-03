@@ -29,7 +29,8 @@ nonisolated enum CallSoundEffect: CaseIterable, Sendable {
 /// Reactions are not effects: there is a sound per reaction name rather than one per case, and the
 /// same one may overlap itself, so they get a pool of voices of their own (037 R10).
 final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
-    /// Web's default effect volume, relative to the call (R14).
+    /// Web's default effect volume, relative to the call (024 R14), and where the user's sound
+    /// effects volume starts (037 R22).
     static let gain: Float = 0.5
     /// At most this many reaction sounds at once, whichever they are. Separate from the effects'
     /// voices, so a room full of applause never silences a join (037 R10).
@@ -51,6 +52,8 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
     /// Decoded only for a call that plays reactions, and installed once (``installReactionSounds(_:)``).
     private let reactionSounds = AtomicLazyReference<ReactionSounds>()
     private let reactionRequests = RequestRing()
+    /// The user's sound effects volume, as a `Float`'s bits: there is no atomic `Float`.
+    private let effectsGain = Atomic<UInt32>(CallSoundEffectRenderer.gain.bitPattern)
     // Render thread only.
     private let reactionVoices: UnsafeMutableBufferPointer<ReactionVoice>
     private var limiterGain: Float = 1
@@ -87,6 +90,13 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
         .seconds(Double(voice(for: sound).length) / AudioFormat.float32.sampleRate)
     }
     
+    /// From any thread. How loud every effect plays, 0 to 1 of the call's own level, taking effect on
+    /// the next render, sounds already playing included (037 R22). Not the ringback, which is the
+    /// call still ringing rather than an effect (037 R23).
+    func setEffectsGain(_ gain: Float) {
+        effectsGain.store(min(max(gain, 0), 1).bitPattern, ordering: .relaxed)
+    }
+    
     /// Hands over the reaction sounds; only the first call counts. Until then a reaction plays nothing,
     /// as an effect plays nothing before the effects are decoded.
     func installReactionSounds(_ sounds: ReactionSounds) {
@@ -121,13 +131,14 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
         for index in 0..<count {
             output[index] = 0
         }
-        join.mix(into: output, count: count)
-        leave.mix(into: output, count: count)
-        raiseHand.mix(into: output, count: count)
-        ringback.mix(into: output, count: count)
-        declined.mix(into: output, count: count)
-        timeout.mix(into: output, count: count)
-        mixReactions(into: output, count: count)
+        let gain = Float(bitPattern: effectsGain.load(ordering: .relaxed))
+        join.mix(into: output, count: count, gain: gain)
+        leave.mix(into: output, count: count, gain: gain)
+        raiseHand.mix(into: output, count: count, gain: gain)
+        ringback.mix(into: output, count: count, gain: Self.gain)
+        declined.mix(into: output, count: count, gain: gain)
+        timeout.mix(into: output, count: count, gain: gain)
+        mixReactions(into: output, count: count, gain: gain)
         limit(output, count: count)
         for index in 0..<count {
             output[index] = min(1, max(-1, output[index]))
@@ -135,7 +146,7 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
         return noErr
     }
     
-    private func mixReactions(into output: UnsafeMutablePointer<Float>, count: Int) {
+    private func mixReactions(into output: UnsafeMutablePointer<Float>, count: Int, gain: Float) {
         guard let sounds = reactionSounds.load() else { return }
         reactionRequests.drain { sound in
             for slot in 0..<Self.reactionVoiceCount where reactionVoices[slot].sound < 0 {
@@ -148,7 +159,7 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
             let playhead = reactionVoices[slot].playhead
             let available = min(count, samples.count - playhead)
             for index in 0..<available {
-                output[index] += samples[playhead + index] * Self.gain
+                output[index] += samples[playhead + index] * gain
             }
             reactionVoices[slot].playhead += available
             if reactionVoices[slot].playhead >= samples.count {
@@ -246,7 +257,7 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
             requested.wrappingAdd(1, ordering: .releasing)
         }
         
-        func mix(into output: UnsafeMutablePointer<Float>, count: Int) {
+        func mix(into output: UnsafeMutablePointer<Float>, count: Int, gain: Float) {
             let generation = requested.load(ordering: .acquiring)
             if generation != started {
                 started = generation
@@ -265,7 +276,7 @@ final nonisolated class CallSoundEffectRenderer: @unchecked Sendable {
                 }
                 let available = min(count - written, samples.count - playhead)
                 for index in 0..<available {
-                    output[written + index] += samples[playhead + index] * CallSoundEffectRenderer.gain
+                    output[written + index] += samples[playhead + index] * gain
                 }
                 playhead += available
                 written += available

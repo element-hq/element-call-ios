@@ -36,6 +36,27 @@ struct ReactionsPreferenceTests {
     }
     
     @Test
+    func theSoundEffectsVolumeStartsAtHalfAndIsKept() throws {
+        let defaults = try freshDefaults()
+        #expect(ElementCallUserDefaultsPreferencesStore(defaults: defaults).soundEffectsVolume == 0.5)
+        ElementCallUserDefaultsPreferencesStore(defaults: defaults).soundEffectsVolume = 0.8
+        #expect(ElementCallUserDefaultsPreferencesStore(defaults: defaults).soundEffectsVolume == 0.8)
+        ElementCallUserDefaultsPreferencesStore(defaults: defaults).soundEffectsVolume = 3
+        #expect(ElementCallUserDefaultsPreferencesStore(defaults: defaults).soundEffectsVolume == 1)
+    }
+    
+    @Test
+    func theControllerKeepsTheVolume() {
+        let store = ElementCallFakePreferencesStore(soundEffectsVolume: 0.2)
+        let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
+                                               system: ElementCallFakeSystem(),
+                                               preferences: store)
+        #expect(controller.soundEffectsVolume == 0.2)
+        controller.setSoundEffectsVolume(0.7)
+        #expect(store.soundEffectsVolume == 0.7)
+    }
+    
+    @Test
     func theControllerStartsFromTheStoreAndWritesItBack() {
         let store = ElementCallFakePreferencesStore(reactions: .off)
         let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),

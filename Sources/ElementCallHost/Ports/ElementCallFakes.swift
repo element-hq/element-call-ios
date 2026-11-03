@@ -185,9 +185,11 @@ public final nonisolated class ElementCallFakeLogger: ElementCallLoggingProtocol
 /// Preferences held in memory, so a preview or the harness never writes the device's.
 public final class ElementCallFakePreferencesStore: ElementCallPreferencesStoreProtocol {
     public var reactions: ElementCallReactionsPreference
+    public var soundEffectsVolume: Float
     
-    public init(reactions: ElementCallReactionsPreference = .withSound) {
+    public init(reactions: ElementCallReactionsPreference = .withSound, soundEffectsVolume: Float = 0.5) {
         self.reactions = reactions
+        self.soundEffectsVolume = soundEffectsVolume
     }
 }
 

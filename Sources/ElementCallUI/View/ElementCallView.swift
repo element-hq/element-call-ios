@@ -143,6 +143,20 @@ struct ElementCallView: View {
             }
         }
         .environment(\.colorScheme, .dark)
+        .sheet(isPresented: Binding(get: { context.viewState.isPreferencesPresented },
+                                    set: {
+                                        if !$0 {
+                                            context.send(viewAction: .dismissPreferences)
+                                        }
+                                    })) {
+            ElementCallPreferencesSheet(context: context)
+                // A sheet is a presentation of its own, which takes the window's appearance rather
+                // than the call's: without this it came up light over the dark call on a phone in
+                // light mode. The environment value covers its content and the preference its
+                // container, glass and all.
+                .environment(\.colorScheme, .dark)
+                .preferredColorScheme(.dark)
+        }
         .alert(context.alertInfo?.title ?? "",
                isPresented: Binding(get: { context.alertInfo != nil },
                                     set: {
@@ -429,41 +443,15 @@ struct ElementCallView: View {
             
             Spacer()
             
-            // The diagnostics menu, and only that. Screen sharing used to be duplicated here from
-            // the control bar, which is where a user actually reaches for it; the audio test tone
-            // that used to sit alongside the stats overlay is gone entirely.
-            //
-            // The version row is why the menu is never empty, which matters because everything else
-            // in it is gated. Unlocalised, like the toggle: neither is a product string.
+            // One way in to the Preferences sheet, which holds the settings, the developer options
+            // and the versions (037 R12, R16, R17). The developer options and the version used to be
+            // here, unlocalised; a sheet has room to say what each does, and grows without the menu
+            // turning into a list of switches.
             Menu {
-                // Absent rather than inert when developer mode is off. The toggle was always shown
-                // and the controller silently refused the tap, which looked like a broken toggle.
-                //
-                // A nested Menu is a submenu, which keeps the diagnostics one level down and leaves
-                // the top level to things a user might actually want. The Toggle inside renders as
-                // a checked menu item, so the checkmark is the state: there is no need to say
-                // "show/hide" in the label, and a plain Button would lose that.
-                if context.viewState.isDeveloperModeEnabled {
-                    Menu("Developer Options") {
-                        Toggle("Tile stats", isOn: Binding(get: { context.viewState.isTileStatsVisible }, set: { _ in context.send(viewAction: .toggleTileStats) }))
-                    }
-                    Divider()
+                Button { context.send(viewAction: .showPreferences) } label: {
+                    Label { Text(L10n.preferencesTitle) } icon: { style.icons.icon(.preferences) }
                 }
-                // A disabled button rather than a Section header or a bare Text: an empty Section
-                // is dropped by SwiftUI, and a Menu does not render loose Text. Disabled gives a
-                // dimmed, unselectable row, which is what this is.
-                //
-                // One row with a second Text rather than two rows: a menu ignores `.font`, and the
-                // second Text is drawn as the system's smaller subtitle, which is the only way to
-                // make the core line smaller.
-                Button { } label: {
-                    Text("version: \(ElementCallVersion.current)")
-                    Text("matrix-rust-rtc \(ElementCallVersion.core)")
-                }
-                .disabled(true)
-                // The menu draws the subtitle but leaves it out of the row's label, so VoiceOver,
-                // and the UI test, would only ever hear the first line.
-                .accessibilityLabel("version: \(ElementCallVersion.current), matrix-rust-rtc \(ElementCallVersion.core)")
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.preferences)
             } label: {
                 style.icons.icon(.overflow)
             }
@@ -472,6 +460,7 @@ struct ElementCallView: View {
             // The constant existed and was pinned by name in the identifier tests, but reached no
             // view, so nothing could find this button — including the UI test that reads the menu.
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.more)
+            .accessibilityLabel(L10n.a11yMoreOptions)
         }
     }
     

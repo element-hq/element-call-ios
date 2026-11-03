@@ -89,6 +89,26 @@ nonisolated struct CallSoundEffectRendererTests {
         #expect(abs(later[479] - 0.1) < 1e-4)
     }
     
+    // MARK: - The sound effects volume (037 R22, R23)
+    
+    @Test
+    func theVolumeSetsEveryEffectsLevelIncludingOneAlreadyPlaying() {
+        let renderer = withReactions([("generic", [0.4, 0.4])])
+        renderer.play(.join)
+        renderer.playReaction("generic")
+        #expect(matches(render(renderer, frames: 1), [0.3]))
+        renderer.setEffectsGain(0.25)
+        #expect(matches(render(renderer, frames: 1), [0.15]))
+    }
+    
+    @Test
+    func theRingbackKeepsItsLevelWhateverTheVolume() {
+        let renderer = CallSoundEffectRenderer(join: [], leave: [], raiseHand: [], ringback: [0.2, 0.4])
+        renderer.setEffectsGain(0)
+        renderer.play(.ringback)
+        #expect(matches(render(renderer, frames: 2), [0.1, 0.2]))
+    }
+    
     // MARK: - Reactions (037 R10)
     
     private func withReactions(_ sounds: [(String, [Float])]) -> CallSoundEffectRenderer {

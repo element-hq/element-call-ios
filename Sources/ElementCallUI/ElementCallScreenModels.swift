@@ -121,6 +121,13 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     public var isDeveloperModeEnabled = false
     /// The reactions to draw, oldest first, once each has waited out its spread (037).
     public var reactions: [ElementCallReactionBubble] = []
+    /// The user's choice for reactions, which the Preferences sheet shows and changes (037 R13).
+    public var reactionsPreference: ElementCallReactionsPreference = .withSound
+    /// How loud the call's sound effects play, 0 to 1 of the call's level (037 R22).
+    public var soundEffectsVolume: Float = 0.5
+    /// Whether the Preferences sheet is open. Closed by the screen when the call is minimised, enters
+    /// Picture in Picture or ends, since there is no room for it there (037 R12a).
+    public var isPreferencesPresented = false
     public var isScreenSharingEnabled = false
     /// Our hand as the user asked for it, from our own tile, which the core moves at once and
     /// keeps there until it lands or is refused (009 R5, 034 C12).
@@ -283,6 +290,12 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleRaisedHand
     case selectAudioOutput(CallAudioOutput)
     case toggleTileStats
+    case showPreferences
+    case dismissPreferences
+    case setReactionsPreference(ElementCallReactionsPreference)
+    case setSoundEffectsVolume(Float)
+    /// The slider was let go: one short sound at the volume chosen (037 R24).
+    case playSoundEffectsVolumeSample
     case minimize
     case hangUp
     case dismiss

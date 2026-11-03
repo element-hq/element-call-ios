@@ -23,6 +23,8 @@ final class CallAudio {
     /// Wanted once the call plays reaction sounds, and kept for the rest of the call after that.
     private var reactionSounds: CallSoundEffectRenderer.ReactionSounds?
     private var reactionDecoding: Task<Void, Never>?
+    /// Kept, so sounds decoded after it was set still play at it.
+    private var effectsGain = CallSoundEffectRenderer.gain
     
     /// The bundled sounds, decoded off this actor, unless a test hands over sounds of known length.
     init(soundEffects: CallSoundEffectRenderer? = nil) {
@@ -56,6 +58,12 @@ final class CallAudio {
             reactionSounds = sounds
             soundEffects?.installReactionSounds(sounds)
         }
+    }
+    
+    /// The user's sound effects volume, 0 to 1 of the call's level (037 R22).
+    func setEffectsGain(_ gain: Float) {
+        effectsGain = gain
+        soundEffects?.setEffectsGain(gain)
     }
     
     /// Nothing until ``prepareReactionSounds()`` has finished.
@@ -92,6 +100,7 @@ final class CallAudio {
     
     private func install(_ renderer: CallSoundEffectRenderer) {
         soundEffects = renderer
+        renderer.setEffectsGain(effectsGain)
         if let reactionSounds {
             renderer.installReactionSounds(reactionSounds)
         }
