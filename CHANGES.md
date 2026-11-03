@@ -11,7 +11,13 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**Call preferences go through a new port, `ElementCallPreferencesStoreProtocol`.** It holds the
+reactions setting and the sound effects volume, and `ElementCallController(…, preferences:)` takes
+it. The default, `ElementCallUserDefaultsPreferencesStore`, keeps them in `UserDefaults.standard`
+under `io.element.call.preferences.*`; pass your own store to keep them elsewhere. The `…` menu now
+holds a single Preferences item (`elementCall.preferences`), which opens a sheet holding the
+developer options and versions that used to be in the menu. `MatrixRTCCallEvent.reaction` gains
+`sound:`.
 
 ## 0.1.0-rc.14 - 2026-11-02
 
