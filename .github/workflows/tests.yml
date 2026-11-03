@@ -168,6 +168,13 @@ jobs:
           udid=$(xcrun simctl create "$SIMULATOR_LABEL" "$SIMULATOR_NAME" "$SIMULATOR_RUNTIME")
           echo "udid=$udid" >> "$GITHUB_OUTPUT"
 
+      # The cache carries the coverage of the run that wrote it, and the Codecov uploader reads every
+      # Coverage.profdata under DerivedData. The restored one was converted after this run's, over
+      # the same report file, so a pull request uploaded old counters against its new code: every
+      # line only a new test reached read as never run.
+      - name: Drop restored coverage
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData/*/Build/ProfileData
+
       # Two flags that are not optional, both of which fail in confusing ways when missed.
       #
       # `-ObjC` keeps libwebrtc's Objective-C categories from being dead-stripped out of the static
@@ -203,10 +210,9 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
+      # The uploader finds the coverage itself, in DerivedData; v7 has no input for a result bundle.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-          xcode: true
-          xcode_archive_path: Logs/ElementCallTests.xcresult
