@@ -85,6 +85,7 @@ struct ElementCallReactionBubbleView: View {
     let frame: ElementCallReactionBubbleMotion.Frame
     
     @Environment(\.elementCallStyle) private var style
+    @Environment(\.elementCallGlassEnabled) private var isGlassEnabled
     
     /// The design size, which the motion scales: the circle, the emoji in it, and how wide a name
     /// may be before it is shortened.
@@ -96,7 +97,8 @@ struct ElementCallReactionBubbleView: View {
             Text(bubble.emoji)
                 .font(.system(size: Self.diameter * 0.56))
                 .frame(width: Self.diameter, height: Self.diameter)
-                .elementCallGlass(in: Circle(), fallback: style.theme.bgSubtleSecondary)
+                .background { fallbackRound }
+                .elementCallGlass(in: Circle(), fallback: .clear)
             Text(bubble.senderName)
                 .font(style.theme.bodySMSemibold)
                 .foregroundStyle(style.theme.textPrimary)
@@ -115,6 +117,23 @@ struct ElementCallReactionBubbleView: View {
         .opacity(frame.opacity)
         .position(frame.center)
     }
+    
+    /// Glass flexes by itself as the bubble moves, which is what makes it read as a bubble; a flat
+    /// fill holds still, so below iOS 26 the motion's wobble stands in for it. Nothing where there
+    /// is glass, or iOS 26 would wobble twice.
+    @ViewBuilder
+    private var fallbackRound: some View {
+        if #available(iOS 26, *), isGlassEnabled {
+            EmptyView()
+        } else {
+            // The fill is close to the stage's own dark, so without the rim the round, and its
+            // wobble, all but vanished and only the emoji was seen to move.
+            Circle()
+                .fill(style.theme.bgSubtleSecondary)
+                .overlay(Circle().strokeBorder(style.theme.borderInteractiveSecondary, lineWidth: 1))
+                .scaleEffect(x: frame.wobble.width, y: frame.wobble.height)
+        }
+    }
 }
 
 /// Where a bubble is, how big, how tilted and how visible, at any moment of its flight (R1, R1a, R2,
@@ -130,6 +149,8 @@ nonisolated struct ElementCallReactionBubbleMotion: Sendable {
         var scale: CGFloat
         var angle: Angle
         var opacity: Double
+        /// How far the round is stretched across and up, each near 1 and out of step with the other.
+        var wobble: CGSize
     }
     
     /// From appearing to gone: four seconds from the reaction's arrival, less what it waited (R1a).
@@ -142,6 +163,8 @@ nonisolated struct ElementCallReactionBubbleMotion: Sendable {
     private let swayAmplitude: CGFloat
     private let swayFrequencies: (CGFloat, CGFloat)
     private let swayPhases: (CGFloat, CGFloat)
+    private let wobbleFrequency: CGFloat
+    private let wobblePhase: CGFloat
     
     /// Small at first, full size a third of the way up (R3).
     static let startScale: CGFloat = 0.55
@@ -151,6 +174,8 @@ nonisolated struct ElementCallReactionBubbleMotion: Sendable {
     /// lower bound in landscape.
     static let sizeForHeight: CGFloat = 0.065
     static let sizeRange: ClosedRange<CGFloat> = 0.6...1.1
+    /// How far the round stretches either way as it wobbles, as a fraction of its size.
+    static let wobbleAmplitude: CGFloat = 0.1
     
     init(seed: UInt64, spread: Duration = .zero) {
         let spread = min(max(spread, .zero), MatrixRTCMediaSession.maximumReactionSpread)
@@ -161,6 +186,9 @@ nonisolated struct ElementCallReactionBubbleMotion: Sendable {
         swayAmplitude = 0.6 + 0.4 * random.unit()
         swayFrequencies = (0.55 + 0.3 * random.unit(), 1.3 + 0.6 * random.unit())
         swayPhases = (2 * .pi * random.unit(), 2 * .pi * random.unit())
+        // Drawn last, so every earlier value of a seed stays what it was.
+        wobbleFrequency = 0.9 + 0.4 * random.unit()
+        wobblePhase = 2 * .pi * random.unit()
     }
     
     /// How far up it has come, 0 to 1: fastest at first, then slowing (R3).
@@ -200,7 +228,14 @@ nonisolated struct ElementCallReactionBubbleMotion: Sendable {
         let visible = CGFloat(visibleFor / .seconds(1))
         let fadeOut = seconds <= visible ? 1 : max(0, 1 - (seconds - visible) / (CGFloat(lifetime / .seconds(1)) - visible))
         
-        return Frame(center: CGPoint(x: x, y: y), scale: scale, angle: angle, opacity: Double(max(0, min(fadeIn, fadeOut))))
+        // Wider as it gets shorter and back, a quarter turn apart, so the round flexes rather than
+        // pulses.
+        let wobbleAngle = 2 * .pi * wobbleFrequency * seconds + wobblePhase
+        let wobble = CGSize(width: 1 + Self.wobbleAmplitude * sin(wobbleAngle),
+                            height: 1 + Self.wobbleAmplitude * sin(wobbleAngle + .pi / 2))
+        
+        return Frame(center: CGPoint(x: x, y: y), scale: scale, angle: angle,
+                     opacity: Double(max(0, min(fadeIn, fadeOut))), wobble: wobble)
     }
 }
 

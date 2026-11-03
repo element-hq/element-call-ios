@@ -89,4 +89,19 @@ nonisolated struct ReactionBubbleMotionTests {
         #expect(frame(motion, at: 0, in: landscape).center.y > landscape.height)
         #expect(frame(motion, at: 4000, in: landscape).center.y < 0)
     }
+    
+    /// The fallback's stand-in for glass flexing: it keeps going all the way up, stays a few percent
+    /// either way, and never stretches both ways at once, which would be a pulse rather than a flex.
+    @Test(arguments: 1...20)
+    func theRoundWobblesAllTheWayUp(seed: UInt64) {
+        let motion = ElementCallReactionBubbleMotion(seed: seed)
+        let wobbles = stride(from: 0, through: 3900, by: 20).map { frame(motion, at: $0).wobble }
+        let amplitude = ElementCallReactionBubbleMotion.wobbleAmplitude
+        for wobble in wobbles {
+            #expect(abs(wobble.width - 1) <= amplitude + 1e-9 && abs(wobble.height - 1) <= amplitude + 1e-9)
+        }
+        let lastSecond = wobbles.suffix(50).map(\.width)
+        #expect((lastSecond.max() ?? 1) - (lastSecond.min() ?? 1) > amplitude, "Still flexing near the top.")
+        #expect(!wobbles.contains { $0.width > 1 + amplitude * 0.9 && $0.height > 1 + amplitude * 0.9 })
+    }
 }
