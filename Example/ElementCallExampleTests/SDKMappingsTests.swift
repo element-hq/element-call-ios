@@ -161,6 +161,21 @@ struct SDKMappingsTests {
     }
     
     @Test
+    func aCryptoRefusalIsFinal() {
+        let error = SDKMappings.backendError(ClientError.Generic(msg: "encryption failed due to an error collecting the recipient devices: Encryption failed because your device is not verified", details: nil))
+        
+        #expect(error.errorCode == nil)
+        #expect(error.isPermanent)
+    }
+    
+    @Test
+    func anyOtherClientErrorIsTransient() {
+        let error = SDKMappings.backendError(ClientError.Generic(msg: "connection reset", details: nil))
+        
+        #expect(!error.isPermanent)
+    }
+    
+    @Test
     func aRateLimitCarriesTheServersDelay() {
         let error = SDKMappings.backendError(ClientError.MatrixApi(kind: .limitExceeded(retryAfterMs: 7000), code: "M_LIMIT_EXCEEDED", msg: "slow down", details: nil))
         

@@ -139,6 +139,9 @@ nonisolated enum SDKMappings {
     /// carry the HTTP status. The server's retry-after is passed on so the core waits that long
     /// rather than its own backoff step, though the SDK has usually spent it already, retrying a
     /// rate limit itself before the call returns.
+    /// How the SDK words a recipient-collection refusal (`OlmError::SessionRecipientCollectionError`).
+    static let cryptoRefusal = "error collecting the recipient devices"
+    
     static func backendError(_ error: any Error) -> ElementCallMatrixBackendError {
         switch error {
         case let error as ElementCallMatrixBackendError:
@@ -147,6 +150,13 @@ nonisolated enum SDKMappings {
             ElementCallMatrixBackendError(errorCode: code, retryAfter: retryAfter.map { .milliseconds($0) }, reason: message)
         case ClientError.MatrixApi(_, let code, let message, _):
             ElementCallMatrixBackendError(errorCode: code, reason: message)
+        case ClientError.Generic(let message, _) where message.contains(cryptoRefusal):
+            // Our own crypto refusing the recipients (MSC4153, with an identity-based room key
+            // strategy: our device unsigned, or a verified member's identity changed). Decided on
+            // this device before anything is sent: final, and no word on the homeserver, so not
+            // "signalling unreachable" (034 R3). A refused membership then fails the join at once.
+            // The bindings carry it only as text; the core's Rust backend matches the variant.
+            ElementCallMatrixBackendError(isPermanent: true, reason: message)
         default:
             ElementCallMatrixBackendError(reason: "\(error)")
         }

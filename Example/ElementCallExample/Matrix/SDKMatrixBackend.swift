@@ -115,10 +115,10 @@ final nonisolated class SDKMatrixBackend: ElementCallMatrixBackendProtocol {
         var handles = [TaskHandle]()
         handles.append(room.subscribeToStickyEvents(listener: SDKStickyEventsListener(sink: sink)))
         // The SDK answers at once from the store, an empty set included, which is the first delivery
-        // the core waits on. Only the state the sync asks for is stored, which is why the call keeps
-        // to the room-state format: `m.rtc.slot` is not in sliding sync's `required_state`, so the
-        // store reads every room as slotless.
-        for eventType in subjects.stateEventTypes {
+        // the core waits on. Only the state the sync asks for is stored: `m.rtc.slot` is not in
+        // sliding sync's `required_state`, so the slot types are read from the homeserver instead.
+        let slotTypes = subjects.stateEventTypes.filter(SDKSlotFeed.eventTypes.contains)
+        for eventType in subjects.stateEventTypes where !SDKSlotFeed.eventTypes.contains(eventType) {
             handles.append(room.subscribeToStateEvents(eventType: stateEventTypeFromString(s: eventType),
                                                        listener: SDKStateEventsListener { events in
                                                            sink.deliverStateEvents(events.compactMap { SDKMappings.event($0, subscribedAs: eventType) }, ofType: eventType)
@@ -138,19 +138,29 @@ final nonisolated class SDKMatrixBackend: ElementCallMatrixBackendProtocol {
                                                          }))
         
         let roomInfo = SDKRoomInfoFeed(room: room, logger: logger)
-        let tasks = [Task { await roomInfo.deliverEncryption(into: sink) },
+        var tasks = [Task { await roomInfo.deliverEncryption(into: sink) },
                      Task { await roomInfo.deliverJoinedMembers(into: sink) }]
+        handles.append(roomInfo.handle)
+        if !slotTypes.isEmpty {
+            let slots = SDKSlotFeed(client: client, room: room, eventTypes: slotTypes, logger: logger)
+            tasks.append(Task { await slots.deliver(into: sink) })
+            handles.append(slots.handle)
+        }
         
-        let allHandles = handles + [roomInfo.handle]
+        let allHandles = handles
+        let allTasks = tasks
         return ElementCallBackendSubscription {
             allHandles.forEach { $0.cancel() }
-            tasks.forEach { $0.cancel() }
+            allTasks.forEach { $0.cancel() }
         }
     }
     
     func subscribeToDeviceMessages(eventTypes: [String], sink: ElementCallToDeviceSink) throws(ElementCallMatrixBackendError) -> ElementCallBackendSubscription {
         logger?.log(.info, "subscribing to to-device \(eventTypes)")
-        let handle = client.subscribeToCustomToDeviceMessages(eventTypes: eventTypes, listener: SDKToDeviceListener { message in
+        let handle = client.subscribeToCustomToDeviceMessages(eventTypes: eventTypes, listener: SDKToDeviceListener { [logger] message in
+            if case .red(let code)? = message.encryptionInfo?.shieldState {
+                logger?.log(.warning, "to-device \(message.eventType) from \(message.senderId): sender not confirmed: \(code)")
+            }
             sink.deliver(SDKMappings.toDeviceMessage(message))
         })
         return ElementCallBackendSubscription { handle.cancel() }
