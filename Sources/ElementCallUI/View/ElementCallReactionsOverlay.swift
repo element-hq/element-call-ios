@@ -22,29 +22,14 @@ import SwiftUI
 struct ElementCallReactionsOverlay: View {
     let reactions: [ElementCallReactionBubble]
     
-    /// At most this many on screen; one arriving past it is not shown, nor kept for later (R2a).
-    static let maximumBubbles = 30
-    
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var bubbles: [Flight] = []
-    /// Every reaction already accounted for, drawn or not, so none is drawn late.
-    @State private var seen: Set<UInt64> = []
-    
-    struct Flight: Identifiable {
-        let bubble: ElementCallReactionBubble
-        let appeared: Date
-        let motion: ElementCallReactionBubbleMotion
-        
-        var id: UInt64 {
-            bubble.id
-        }
-    }
+    @State private var flights = ElementCallReactionFlights()
     
     var body: some View {
         GeometryReader { geometry in
-            TimelineView(.animation(paused: bubbles.isEmpty)) { timeline in
+            TimelineView(.animation(paused: flights.bubbles.isEmpty)) { timeline in
                 ZStack {
-                    ForEach(bubbles) { flight in
+                    ForEach(flights.bubbles) { flight in
                         let elapsed = Duration.seconds(timeline.date.timeIntervalSince(flight.appeared))
                         ElementCallReactionBubbleView(bubble: flight.bubble,
                                                       frame: flight.motion.frame(at: elapsed, in: geometry.size))
@@ -58,24 +43,63 @@ struct ElementCallReactionsOverlay: View {
         // Initially, every reaction already there is marked seen and not drawn: this view is gone
         // while the call is minimised, and what arrived then is not shown on the way back (R8).
         .onChange(of: reactions.map(\.id), initial: true) { previous, current in
-            receive(current, isInitial: previous == current && bubbles.isEmpty && seen.isEmpty)
+            let launched = flights.receive(reactions, isInitial: previous == current && flights.isEmpty,
+                                           reduceMotion: reduceMotion, at: .now)
+            for flight in launched {
+                Task {
+                    try? await Task.sleep(for: flight.motion.lifetime)
+                    flights.land(flight.id)
+                }
+            }
+        }
+    }
+}
+
+/// Which reactions rise, kept apart from the view so the rules can be tested without drawing.
+struct ElementCallReactionFlights {
+    /// At most this many on screen; one arriving past it is not shown, nor kept for later (R2a).
+    static let maximumBubbles = 30
+    
+    struct Flight: Identifiable {
+        let bubble: ElementCallReactionBubble
+        let appeared: Date
+        let motion: ElementCallReactionBubbleMotion
+        
+        var id: UInt64 {
+            bubble.id
         }
     }
     
-    private func receive(_ ids: [UInt64], isInitial: Bool) {
+    private(set) var bubbles: [Flight] = []
+    /// Every reaction already accounted for, drawn or not, so none is drawn late.
+    private var seen: Set<UInt64> = []
+    
+    var isEmpty: Bool {
+        bubbles.isEmpty && seen.isEmpty
+    }
+    
+    /// Takes the model's current reactions and returns the flights it launched. `isInitial` marks the
+    /// ones already there when the overlay appears as seen without drawing them: the overlay is gone
+    /// while the call is minimised, and what arrived then is not shown on the way back (R8).
+    mutating func receive(_ reactions: [ElementCallReactionBubble], isInitial: Bool, reduceMotion: Bool, at now: Date) -> [Flight] {
         // Once a reaction leaves the model it never comes back, so it need not be remembered.
-        seen.formIntersection(ids)
+        seen.formIntersection(reactions.map(\.id))
+        var launched: [Flight] = []
         for bubble in reactions where !seen.contains(bubble.id) {
             seen.insert(bubble.id)
             // R6: with reduced motion nothing rises at all; the sound still plays.
             guard !isInitial, !reduceMotion, bubbles.count < Self.maximumBubbles else { continue }
-            let motion = ElementCallReactionBubbleMotion(seed: bubble.id, spread: bubble.spread)
-            bubbles.append(Flight(bubble: bubble, appeared: .now, motion: motion))
-            Task {
-                try? await Task.sleep(for: motion.lifetime)
-                bubbles.removeAll { $0.id == bubble.id }
-            }
+            let flight = Flight(bubble: bubble, appeared: now,
+                                motion: ElementCallReactionBubbleMotion(seed: bubble.id, spread: bubble.spread))
+            bubbles.append(flight)
+            launched.append(flight)
         }
+        return launched
+    }
+    
+    /// A flight is over: it leaves the screen, and its place under the cap.
+    mutating func land(_ id: UInt64) {
+        bubbles.removeAll { $0.id == id }
     }
 }
 
