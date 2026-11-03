@@ -26,8 +26,7 @@ public nonisolated enum ElementCallConnection: Equatable, Sendable {
     case failed(ElementCallFailure)
 }
 
-/// Why a call failed, typed so a host words each one through ``ElementCallStrings`` and both
-/// platforms say the same thing for the same cause (034 R27).
+/// Why a call failed, typed so both platforms say the same thing for the same cause (034 R27).
 public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Our own media server was lost and not back within the core's budget, refused us, or was
     /// never reached.
@@ -39,6 +38,30 @@ public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Anything else that stopped the call from starting: the room not opening, the microphone not
     /// publishing. Developer text, shown as it is, which is what every failure was before 034.
     case other(String)
+}
+
+package nonisolated extension ElementCallFailure {
+    /// The failure screen's title.
+    var title: String {
+        switch self {
+        case .connectionLost(.budget): L10n.failureConnectionLostTitle
+        case .connectionLost(.refused), .connectionLost(.neverConnected): L10n.failureConnectionFailedTitle
+        case .joinTimedOut, .joinRefused: L10n.failureJoinFailedTitle
+        case .other: L10n.callFailed
+        }
+    }
+    
+    /// The sentence beneath the title.
+    var text: String {
+        switch self {
+        case .connectionLost(.budget): L10n.failureConnectionLost
+        case .connectionLost(.refused): L10n.failureConnectionRefused
+        case .connectionLost(.neverConnected): L10n.failureConnectionNeverEstablished
+        case .joinTimedOut: L10n.failureJoinTimedOut
+        case .joinRefused: L10n.failureJoinRefused
+        case .other(let message): message
+        }
+    }
 }
 
 /// What the host has to do about a change in the call, beyond drawing it.
@@ -454,7 +477,7 @@ public final class ElementCallController {
                 }
             } catch {
                 log(.warning, "could not \(raised ? "raise" : "lower") the hand: \(error)")
-                errorMessage = raised ? "Your hand could not be raised." : "Your hand could not be lowered."
+                errorMessage = raised ? L10n.handRaiseFailed : L10n.handLowerFailed
             }
         }
     }
@@ -545,6 +568,14 @@ public final class ElementCallController {
     /// land anywhere inside it; without this the join carried on, published camera and microphone
     /// into a session nobody owned any more, and the app kept both open with no screen left to stop
     /// them.
+    ///
+    /// A step that throws after the cancel is not a failure, so every catch in the join checks for
+    /// the cancel before failing. The cancel is usually why it threw: the wait for the room gives up
+    /// on it with `roomNotReady`, and a join or a media connection still in flight has the room or
+    /// the call torn down under it by `endCall`. By then `endCall` has ended the call, so failing it
+    /// turned `.ended(.left)` into `.failed` and ended the call a second time, and that was the next
+    /// call if the host had started one on `.ended`. Nothing needs tearing down there either: a step
+    /// that threw made nothing, and `endCall` released what the steps before it made.
     private var runTask: Task<Void, Never>?
     
     private func runCall(_ callData: ElementCallData, room: any ElementCallRoomContextProtocol) async {
@@ -559,6 +590,10 @@ public final class ElementCallController {
         do {
             call = try await rtcCall.connectMedia(isSFUFallbackEnabled: options.isSFUFallbackEnabled)
         } catch {
+            guard !Task.isCancelled else {
+                log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
+                return
+            }
             fail("Media failed: \(error)")
             return
         }
@@ -597,6 +632,10 @@ public final class ElementCallController {
         do {
             rtcRoom = try await rtcClient.room(roomID: room.roomID, format: format)
         } catch {
+            guard !Task.isCancelled else {
+                log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
+                return nil
+            }
             fail("Could not open the room: \(error)")
             return nil
         }
@@ -609,6 +648,9 @@ public final class ElementCallController {
         let rtcCall: MatrixRTCCall
         do {
             rtcCall = try await rtcRoom.joinCall(kind: Self.kind(for: callData, isDirect: room.isDirect))
+        } catch let error where Task.isCancelled {
+            log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
+            return nil
         } catch MatrixRTCError.joinTimedOut {
             fail(.joinTimedOut)
             return nil
@@ -638,6 +680,10 @@ public final class ElementCallController {
         do {
             try await call.publishMicrophone(muted: pendingMicrophoneMuted)
         } catch {
+            guard !Task.isCancelled else {
+                log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
+                return
+            }
             fail("Microphone failed: \(error)")
             return
         }

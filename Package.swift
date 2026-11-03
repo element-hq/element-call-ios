@@ -4,6 +4,8 @@ import PackageDescription
 
 let package = Package(
     name: "ElementCall",
+    // The language every string is written in, in Localazy, and the one a lookup falls back to.
+    defaultLocalization: "en",
     platforms: [.iOS(.v18)],
     products: [
         // One dependency and one import for a host that wants all of it, under the name a host
@@ -45,6 +47,9 @@ let package = Package(
                 dependencies: ["ElementCallKit",
                                .product(name: "MatrixRtc", package: "matrix-rust-rtc"),
                                .product(name: "CompoundDesignTokens", package: "compound-design-tokens")],
+                // The call screen's strings, downloaded from Localazy by scripts/download-strings.sh.
+                // Here rather than in the UI because ElementCallStrings, whose defaults they are, is a port.
+                resources: [.process("Resources")],
                 swiftSettings: [.defaultIsolation(MainActor.self)]),
         .target(name: "ElementCallUI",
                 dependencies: ["ElementCallHost"],

@@ -40,7 +40,7 @@ struct ElementCallFullscreenChrome: View {
                 style.icons.icon(.collapse)
             }
             .buttonStyle(ElementCallRoundButtonStyle())
-            .accessibilityLabel("Exit full screen")
+            .accessibilityLabel(L10n.a11yExitFullscreen)
             .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.exitFullscreen)
             
             // The room name and the call timer are on the top bar, which full screen has hidden, so
@@ -53,9 +53,9 @@ struct ElementCallFullscreenChrome: View {
                     style.icons.icon(tile.isMicrophoneMuted ? .micOff : .micOn, size: .xSmall, relativeTo: .bodySM)
                 }
                 // Named as well as labelled, and for the same reason the tile's own pill is: a
-                // share is a tile of its own now, beside its owner's camera, so "(Screen share)"
+                // share is a tile of its own now, beside its owner's camera, so "Screen share"
                 // alone no longer says whose screen you are looking at.
-                Text(tile.isScreenShare ? "\(tile.displayName) (Screen share)" : tile.displayName)
+                Text(tile.isScreenShare ? L10n.sharedScreenName(tile.displayName) : tile.displayName)
                     .lineLimit(1)
             }
             .font(style.theme.bodySMSemibold)
@@ -72,10 +72,12 @@ struct ElementCallFullscreenChrome: View {
             if tile.isLocal, tile.hasVideo {
                 Button { onAction(.switchCamera) } label: {
                     style.icons.icon(.switchCamera, size: .small, relativeTo: .bodySM)
+                        .foregroundStyle(style.theme.iconPrimary)
                         .padding(6)
-                        .background(Color.black.opacity(0.5), in: Circle())
+                        // Interactive, and it has to be: see `ElementCallGlass`.
+                        .elementCallGlass(in: Circle(), fallback: style.theme.bgSubtleSecondary, isInteractive: true)
                 }
-                .accessibilityLabel("Switch camera")
+                .accessibilityLabel(L10n.a11ySwitchCamera)
             }
         }
     }

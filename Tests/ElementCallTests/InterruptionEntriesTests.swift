@@ -146,11 +146,11 @@ struct InterruptedTileTests {
         #expect(tiles(bob(connection: .reconnecting, unableToDecrypt: .missingKey)).first?.mediaState == .reconnecting)
     }
     
-    /// Past the wait the tile says the keys are missing, and only while they still are.
+    /// Past the wait the tile says whether the key is missing or does not decrypt, and only while so.
     @Test
     func aMemberMissingKeysSaysSo() {
         #expect(tiles(bob(unableToDecrypt: .missingKey), missingKeys: ["@bob:x:B"]).first?.mediaState == .keysMissing)
-        #expect(tiles(bob(unableToDecrypt: .badKey), missingKeys: ["@bob:x:B"]).first?.mediaState == .keysMissing)
+        #expect(tiles(bob(unableToDecrypt: .badKey), missingKeys: ["@bob:x:B"]).first?.mediaState == .keyInvalid)
         #expect(tiles(bob(), missingKeys: ["@bob:x:B"]).first?.mediaState == .live)
         #expect(tiles(bob(connection: .reconnecting, unableToDecrypt: .missingKey), missingKeys: ["@bob:x:B"]).first?.mediaState == .reconnecting)
     }
@@ -181,11 +181,9 @@ struct InterruptedTileTests {
 /// What the list says (034 R13, R17).
 @Suite("Interruption text")
 struct InterruptionTextTests {
-    private let strings = ElementCallStrings()
-    
     @Test
     func theLapseChangesTheServerEntryRatherThanAddingOne() {
-        #expect(strings.text(for: .ownServer(isMembershipLapsed: false)) == strings.ownServerUnreachable)
-        #expect(strings.text(for: .ownServer(isMembershipLapsed: true)) == strings.ownServerLapsed)
+        #expect(ElementCallInterruption.ownServer(isMembershipLapsed: false).text == L10n.interruptionOwnServer)
+        #expect(ElementCallInterruption.ownServer(isMembershipLapsed: true).text == L10n.interruptionOwnServerLapsed)
     }
 }

@@ -125,7 +125,7 @@ struct ElementCallView: View {
             // Announced as it comes and goes, never per entry, so an outage is one sentence rather
             // than a burst (034 R40).
             .onChange(of: context.viewState.interruptions.isEmpty) { _, isEmpty in
-                AccessibilityNotification.Announcement(isEmpty ? style.strings.interruptionsResolved : style.strings.interruptions).post()
+                AccessibilityNotification.Announcement(isEmpty ? L10n.interruptionsResolved : L10n.interruptions).post()
             }
             .onChange(of: context.viewState.isRinging, initial: true) { wasRinging, isRinging in
                 if isRinging {
@@ -144,7 +144,7 @@ struct ElementCallView: View {
                                         }
                                     }),
                presenting: context.alertInfo) { _ in
-            Button("OK") { context.alertInfo = nil }
+            Button(L10n.ok) { context.alertInfo = nil }
         } message: { alert in
             Text(alert.message)
         }
@@ -403,7 +403,7 @@ struct ElementCallView: View {
                 style.icons.icon(.collapse)
             }
             .buttonStyle(ElementCallRoundButtonStyle())
-            .accessibilityLabel(style.strings.back)
+            .accessibilityLabel(L10n.actionBack)
             // The same omission as the one fixed for `.more` below, and for the same reason: the
             // top bar does not go through `ElementCallControlsView.controlButton`, which is the
             // only caller of `control(for:)`, so a constant that exists and is pinned by name in
@@ -472,10 +472,10 @@ struct ElementCallView: View {
     private var screenShareBanner: some View {
         HStack(spacing: 8) {
             style.icons.icon(.shareScreen, size: .xSmall, relativeTo: .bodySMSemibold)
-            Text("You\u{2019}re sharing your screen")
+            Text(L10n.sharingYourScreen)
                 .font(style.theme.bodySMSemibold)
                 .lineLimit(1)
-            Button(style.strings.stop) {
+            Button(L10n.actionStop) {
                 context.send(viewAction: .toggleScreenShare)
             }
             .font(style.theme.bodySMSemibold)
@@ -494,14 +494,14 @@ struct ElementCallView: View {
     private var statusLine: some View {
         switch context.viewState.connection {
         case .idle, .joining:
-            Text("Joining…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(L10n.joining).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connectingMedia:
-            Text("Connecting…").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(L10n.connecting).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .calling:
             HStack(spacing: 4) {
                 style.icons.icon(context.viewState.isAudioCall ? .voiceCall : .videoCall, size: .xSmall, relativeTo: .bodySM)
                     .accessibilityHidden(true)
-                Text(style.strings.calling)
+                Text(L10n.calling)
             }
             .font(style.theme.bodySM)
             .foregroundStyle(style.theme.textSecondary)
@@ -513,9 +513,9 @@ struct ElementCallView: View {
                     .monospacedDigit()
             }
         case .ended:
-            Text("Call ended").font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
+            Text(L10n.callEnded).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .failed(let failure):
-            Text(style.strings.text(for: failure)).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
+            Text(failure.text).font(style.theme.bodySM).foregroundStyle(style.theme.textCriticalPrimary).lineLimit(2)
         }
     }
     
