@@ -33,8 +33,7 @@ nonisolated extension MatrixRTCStreamKind {
 nonisolated extension MatrixRTCMembershipFormat {
     var ffi: FfiMembershipFormat {
         switch self {
-        case .current: .current
-        case .sticky2025: .sticky2025
+        case .msc: .msc
         case .roomState: .roomState
         }
     }

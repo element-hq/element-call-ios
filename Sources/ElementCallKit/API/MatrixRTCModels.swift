@@ -100,10 +100,8 @@ public nonisolated struct MatrixRTCStreamRef: Sendable, Hashable {
 
 /// How the membership is published, fixed when the room is opened.
 public nonisolated enum MatrixRTCMembershipFormat: String, Sendable, CaseIterable, Codable {
-    /// MSC4143 as it stands.
-    case current
-    /// Membership as an MSC4354 sticky event with legacy fields alongside.
-    case sticky2025
+    /// MSC4143 as it stands: the membership as an MSC4354 sticky event.
+    case msc
     /// `org.matrix.msc3401.call.member` room state and delayed state events; what Element Web speaks today.
     case roomState
 }
@@ -526,9 +524,9 @@ public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {
     case frameEncryptionState(memberID: String, state: MatrixRTCFrameEncryptionState)
     case handRaised(memberID: String, raisedAt: Date)
     case handLowered(memberID: String)
-    /// `sound` is the core's hint, verbatim; what is actually played and drawn is
-    /// ``MatrixRTCReaction``'s, which corrects it to match web (037 R9).
-    case reaction(memberID: String, emoji: String, name: String, sound: String?)
+    /// `emoji` and `sound` are what Element Call web shows and plays for `name` (037 R9): the core
+    /// resolves both, so a mixed call looks and sounds the same on every client.
+    case reaction(memberID: String, emoji: String, name: String, sound: String)
 }
 
 /// What the call does with the reactions it receives (037 R13).

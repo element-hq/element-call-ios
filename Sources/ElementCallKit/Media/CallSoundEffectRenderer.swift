@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import MatrixRtc
 import Synchronization
 
 /// A short cue mixed over the call, as opposed to the call's own audio.
@@ -354,11 +355,14 @@ nonisolated extension CallSoundEffectRenderer {
         }
     }
     
+    /// Every sound a received reaction can name: the catalogue's, and what plays for a name outside it.
+    static let reactionSoundNames = Set(reactionCatalog().map(\.sound) + [reactionSoundFor(name: "")]).sorted()
+    
     /// Web's reaction files, decoded; about 4.6 MB, so per call rather than per process, and only for
     /// a call that plays them. Nil if any fails, which is logged: reactions still show.
     static func decodeReactionSounds() -> ReactionSounds? {
         do {
-            return try ReactionSounds(MatrixRTCReactionCatalogue.sounds.map { name in
+            return try ReactionSounds(reactionSoundNames.map { name in
                 try (name, decode(resource: name, subdirectory: "Sounds/reactions"))
             })
         } catch {

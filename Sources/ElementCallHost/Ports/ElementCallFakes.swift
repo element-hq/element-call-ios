@@ -86,6 +86,10 @@ public final nonisolated class ElementCallFakeMatrixBackend: ElementCallMatrixBa
         ElementCallOpenIDToken(accessToken: "", tokenType: "Bearer", matrixServerName: "example.org", expiresIn: .seconds(3600))
     }
     
+    public func liveKitToken(for request: ElementCallLiveKitTokenRequest) async throws(ElementCallMatrixBackendError) -> String {
+        "jwt-for-\(request.url)"
+    }
+    
     public func rtcTransportsJSON() async throws(ElementCallMatrixBackendError) -> String {
         transportsJSON
     }

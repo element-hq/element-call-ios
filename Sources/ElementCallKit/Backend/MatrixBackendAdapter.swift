@@ -123,6 +123,16 @@ final nonisolated class MatrixBackendAdapter: MatrixBackend {
                               expiresInSecs: UInt64(max(0, token.expiresIn.components.seconds)))
     }
     
+    func livekitToken(request: FfiLiveKitTokenRequest) async throws -> String {
+        try await carry { () async throws(ElementCallMatrixBackendError) in
+            try await backend.liveKitToken(for: ElementCallLiveKitTokenRequest(serverName: request.serverName,
+                                                                               url: request.url,
+                                                                               roomID: request.roomId,
+                                                                               slotID: request.slotId,
+                                                                               memberID: request.memberId))
+        }
+    }
+    
     func rtcTransports() async throws -> String {
         try await carry { () async throws(ElementCallMatrixBackendError) in
             try await backend.rtcTransportsJSON()
