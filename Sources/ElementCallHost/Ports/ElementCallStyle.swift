@@ -171,10 +171,14 @@ public nonisolated enum ElementCallIcon: Sendable, CaseIterable {
     case raisedHand
     case userProfile
     case overflow
+    /// The overflow menu's way into the Preferences sheet (037 R12).
+    case preferences
     case collapse
     /// The service interruptions indicator, and the arrow saying it opens something.
     case info
     case chevronRight
+    /// A sheet's way out (037 R12a).
+    case close
     /// The failure screen.
     case error
     /// A tile whose media is not arriving; turned by the view.

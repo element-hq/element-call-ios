@@ -330,8 +330,8 @@ nonisolated extension MatrixRTCCallEvent {
             self = .handRaised(memberID: memberID, raisedAt: Date(milliseconds: raisedAt))
         case .handLowered(let memberID):
             self = .handLowered(memberID: memberID)
-        case .reaction(let memberID, let emoji, let name, _):
-            self = .reaction(memberID: memberID, emoji: emoji, name: name)
+        case .reaction(let memberID, let emoji, let name, let sound):
+            self = .reaction(memberID: memberID, emoji: emoji, name: name, sound: sound)
         case .unknownParticipant(let identity):
             // The transport knows an identity the membership projection doesn't (yet). What the UI
             // shows for it comes from the interruptions record, which lists it for as long as it

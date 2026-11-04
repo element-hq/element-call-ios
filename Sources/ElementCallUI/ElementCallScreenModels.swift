@@ -119,6 +119,15 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     public var audioOutput: CallAudioOutput?
     public var isTileStatsVisible = false
     public var isDeveloperModeEnabled = false
+    /// The reactions to draw, oldest first, once each has waited out its spread (037).
+    public var reactions: [ElementCallReactionBubble] = []
+    /// The user's choice for reactions, which the Preferences sheet shows and changes (037 R13).
+    public var reactionsPreference: ElementCallReactionsPreference = .withSound
+    /// How loud the call's sound effects play, 0 to 1 of the call's level (037 R22).
+    public var soundEffectsVolume: Float = 0.5
+    /// Whether the Preferences sheet is open. Closed by the screen when the call is minimised, enters
+    /// Picture in Picture or ends, since there is no room for it there (037 R12a).
+    public var isPreferencesPresented = false
     public var isScreenSharingEnabled = false
     /// Our hand as the user asked for it, from our own tile, which the core moves at once and
     /// keeps there until it lands or is refused (009 R5, 034 C12).
@@ -253,6 +262,25 @@ extension ElementCallTile {
     }
 }
 
+/// A received reaction, as a bubble rising over the call (037 R1).
+public nonisolated struct ElementCallReactionBubble: Identifiable, Equatable, Sendable {
+    public let id: UInt64
+    public let emoji: String
+    /// Fixed when the bubble appears: a profile that loads, or a sender who leaves, meanwhile does
+    /// not change it (037 R7a).
+    public let senderName: String
+    /// How long it waited before showing, which comes off its time on screen, so that every bubble
+    /// is gone four seconds after its reaction arrived (037 R1a, R2b).
+    public let spread: Duration
+    
+    public init(id: UInt64, emoji: String, senderName: String, spread: Duration = .zero) {
+        self.id = id
+        self.emoji = emoji
+        self.senderName = senderName
+        self.spread = spread
+    }
+}
+
 public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleMicrophone
     case toggleCamera
@@ -262,6 +290,12 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case toggleRaisedHand
     case selectAudioOutput(CallAudioOutput)
     case toggleTileStats
+    case showPreferences
+    case dismissPreferences
+    case setReactionsPreference(ElementCallReactionsPreference)
+    case setSoundEffectsVolume(Float)
+    /// The slider was let go: one short sound at the volume chosen (037 R24).
+    case playSoundEffectsVolumeSample
     case minimize
     case hangUp
     case dismiss

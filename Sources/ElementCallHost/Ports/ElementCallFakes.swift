@@ -182,6 +182,17 @@ public final nonisolated class ElementCallFakeLogger: ElementCallLoggingProtocol
     }
 }
 
+/// Preferences held in memory, so a preview or the harness never writes the device's.
+public final class ElementCallFakePreferencesStore: ElementCallPreferencesStoreProtocol {
+    public var reactions: ElementCallReactionsPreference
+    public var soundEffectsVolume: Float
+    
+    public init(reactions: ElementCallReactionsPreference = .withSound, soundEffectsVolume: Float = 0.5) {
+        self.reactions = reactions
+        self.soundEffectsVolume = soundEffectsVolume
+    }
+}
+
 public extension ElementCallController {
     /// A controller with faked dependencies, for previews and snapshot tests. Never joins anything.
     static func fake(connection: ElementCallConnection,
@@ -205,7 +216,8 @@ public extension ElementCallController {
                                                system: ElementCallFakeSystem(),
                                                options: options,
                                                style: style,
-                                               logger: nil)
+                                               logger: nil,
+                                               preferences: ElementCallFakePreferencesStore())
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
                                    room: room,
                                    connection: connection,
@@ -228,7 +240,8 @@ public extension ElementCallController {
                                                system: ElementCallFakeSystem(),
                                                options: ElementCallOptions(isDeveloperModeEnabled: true),
                                                style: .stock,
-                                               logger: nil)
+                                               logger: nil,
+                                               preferences: ElementCallFakePreferencesStore())
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
                                    room: room,
                                    connection: .joining,

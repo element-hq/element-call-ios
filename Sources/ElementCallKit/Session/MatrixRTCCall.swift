@@ -149,6 +149,17 @@ public final class MatrixRTCCall {
         audio.start()
     }
     
+    /// How loud the call's sound effects play, 0 to 1 of the call's own level; half until set
+    /// (037 R22). Applies to sounds already playing too.
+    public func setSoundEffectsVolume(_ volume: Float) {
+        audio.setEffectsGain(volume)
+    }
+    
+    /// One short effect at the current volume, so the user hears what they chose (037 R24).
+    public func playSoundEffectsVolumeSample() {
+        audio.play(.join)
+    }
+    
     /// CallKit's `didDeactivate`.
     public func stopAudio() {
         audio.stop()

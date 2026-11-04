@@ -176,6 +176,40 @@ package nonisolated enum L10n {
   package static var joining: String { ElementCallLocalization.string("Localizable", "element_call_joining") }
   /// OK
   package static var ok: String { ElementCallLocalization.string("Localizable", "element_call_ok") }
+  /// About
+  package static var preferencesAbout: String { ElementCallLocalization.string("Localizable", "element_call_preferences_about") }
+  /// matrix-rust-rtc %1$@
+  package static func preferencesCoreVersion(_ p1: Any) -> String {
+    ElementCallLocalization.string("Localizable", "element_call_preferences_core_version", String(describing: p1))
+  }
+  /// Developer options
+  package static var preferencesDeveloperOptions: String { ElementCallLocalization.string("Localizable", "element_call_preferences_developer_options") }
+  /// Show an animation and play a sound when anyone sends a reaction.
+  package static var preferencesReactionsDescription: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_description") }
+  /// Off
+  package static var preferencesReactionsOff: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_off") }
+  /// On
+  package static var preferencesReactionsOn: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_on") }
+  /// Show reactions
+  package static var preferencesReactionsShow: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_show") }
+  /// Silent
+  package static var preferencesReactionsSilent: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_silent") }
+  /// Reactions
+  package static var preferencesReactionsTitle: String { ElementCallLocalization.string("Localizable", "element_call_preferences_reactions_title") }
+  /// Sound effects
+  package static var preferencesSoundEffects: String { ElementCallLocalization.string("Localizable", "element_call_preferences_sound_effects") }
+  /// Sound effects volume
+  package static var preferencesSoundEffectsVolume: String { ElementCallLocalization.string("Localizable", "element_call_preferences_sound_effects_volume") }
+  /// Tile stats
+  package static var preferencesTileStats: String { ElementCallLocalization.string("Localizable", "element_call_preferences_tile_stats") }
+  /// Show each tile's media statistics.
+  package static var preferencesTileStatsDescription: String { ElementCallLocalization.string("Localizable", "element_call_preferences_tile_stats_description") }
+  /// Preferences
+  package static var preferencesTitle: String { ElementCallLocalization.string("Localizable", "element_call_preferences_title") }
+  /// Version %1$@
+  package static func preferencesVersion(_ p1: Any) -> String {
+    ElementCallLocalization.string("Localizable", "element_call_preferences_version", String(describing: p1))
+  }
   /// The other person could not be called
   package static var ringNotSent: String { ElementCallLocalization.string("Localizable", "element_call_ring_not_sent") }
   /// %1$@’s screen

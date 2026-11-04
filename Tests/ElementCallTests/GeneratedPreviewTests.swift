@@ -39,6 +39,20 @@ extension PreviewTests {
         }
     }
 
+    @Test("ElementCallPreferencesSheet")
+    func elementCallPreferencesSheet() async throws {
+        for (index, preview) in ElementCallPreferencesSheet_Previews._allPreviews.enumerated() {
+            try await assertSnapshots(matching: preview, step: index)
+        }
+    }
+
+    @Test("ElementCallReactionsOverlay")
+    func elementCallReactionsOverlay() async throws {
+        for (index, preview) in ElementCallReactionsOverlay_Previews._allPreviews.enumerated() {
+            try await assertSnapshots(matching: preview, step: index)
+        }
+    }
+
     @Test("ElementCallStage")
     func elementCallStage() async throws {
         for (index, preview) in ElementCallStage_Previews._allPreviews.enumerated() {

@@ -63,9 +63,11 @@ final class ElementCallExampleScenarioPlayback {
     
     /// `localMemberID` is the player's own unless given: the ringing fixtures are Alice, whom the
     /// test pattern draws as a camera, upright in the phone's orientation.
-    init(scenario: MatrixRTCScenario, localMemberID: String? = nil) {
+    /// `audioOf` lends the call a scripted call's audio, for a fixture that is heard (``MatrixRTCScenarioPlayer``).
+    init(scenario: MatrixRTCScenario, localMemberID: String? = nil, audioOf rtcCall: MatrixRTCCall? = nil) {
         self.scenario = scenario
-        player = localMemberID.map { MatrixRTCScenarioPlayer(scenario: scenario, localMemberID: $0) } ?? MatrixRTCScenarioPlayer(scenario: scenario)
+        player = localMemberID.map { MatrixRTCScenarioPlayer(scenario: scenario, localMemberID: $0, audioOf: rtcCall) }
+            ?? MatrixRTCScenarioPlayer(scenario: scenario, audioOf: rtcCall)
     }
     
     func attach(context: ElementCallScreenContext, controller: ElementCallController) {
