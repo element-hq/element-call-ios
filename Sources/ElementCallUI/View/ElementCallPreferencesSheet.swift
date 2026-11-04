@@ -20,6 +20,9 @@ import SwiftUI
 /// with no number to change: the page reports its height and the sheet's one detent follows.
 struct ElementCallPreferencesSheet: View {
     @Bindable var context: ElementCallScreenContext
+    /// Injected so the previews can pin them: the real values move with every release and core bump.
+    var version = ElementCallVersion.current
+    var coreVersion = ElementCallVersion.core
     
     @Environment(\.elementCallStyle) private var style
     @State private var height: CGFloat = 300
@@ -142,10 +145,10 @@ struct ElementCallPreferencesSheet: View {
     private var about: some View {
         section(L10n.preferencesAbout) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(L10n.preferencesVersion(ElementCallVersion.current))
+                Text(L10n.preferencesVersion(version))
                     .padding(.vertical, 12)
                 divider
-                Text(L10n.preferencesCoreVersion(ElementCallVersion.core))
+                Text(L10n.preferencesCoreVersion(coreVersion))
                     .padding(.vertical, 12)
             }
             .font(style.theme.bodyLG)
@@ -212,7 +215,7 @@ struct ElementCallPreferencesSheet_Previews: PreviewProvider, TestablePreview {
         var state = ElementCallPreviewFixtures.connected(tiles: ElementCallPreviewFixtures.group)
         state.isDeveloperModeEnabled = isDeveloperModeEnabled
         state.reactionsPreference = .withoutSound
-        return ElementCallPreferencesSheet(context: .preview(state: state))
+        return ElementCallPreferencesSheet(context: .preview(state: state), version: "1.2.3", coreVersion: "4.5.6")
             // The whole frame, so the image is the sheet on the call's canvas rather than a dark
             // band between two white ones.
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
