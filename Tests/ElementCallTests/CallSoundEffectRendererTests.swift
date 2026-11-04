@@ -238,18 +238,19 @@ nonisolated struct CallSoundEffectRendererTests {
         #expect(samples.allSatisfy { abs($0) <= 1 })
     }
     
-    /// Web's file is 24 kHz and 0.648 s; at the engine's 48 kHz that is about 31,100 frames. Left at
-    /// its own rate it would play an octave up in half the time.
-    /// Web's twelve reaction files, all in the bundle and decodable.
+    /// Every sound the core can name is in the bundle and decodes, or that reaction would be silent.
     @Test
     func theReactionSoundsDecode() throws {
-        for name in MatrixRTCReactionCatalogue.sounds {
+        #expect(CallSoundEffectRenderer.reactionSoundNames.count == 12)
+        for name in CallSoundEffectRenderer.reactionSoundNames {
             let samples = try CallSoundEffectRenderer.decode(resource: name, subdirectory: "Sounds/reactions")
             #expect(samples.count > 4800, "\(name)")
             #expect(samples.contains { $0 != 0 }, "\(name)")
         }
     }
     
+    /// Web's file is 24 kHz and 0.648 s; at the engine's 48 kHz that is about 31,100 frames. Left at
+    /// its own rate it would play an octave up in half the time.
     @Test
     func theRaisedHandIsResampledToTheEnginesRate() throws {
         let samples = try CallSoundEffectRenderer.decode(resource: "raise_hand")

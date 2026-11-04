@@ -74,6 +74,12 @@ public nonisolated protocol ElementCallMatrixBackendProtocol: AnyObject, Sendabl
     /// A fresh OpenID token for the account.
     func openIDToken() async throws(ElementCallMatrixBackendError) -> ElementCallOpenIDToken
     
+    /// The homeserver's MSC4195 LiveKit token: `POST` the request to its `get_token` endpoint and
+    /// return the `jwt` of the answer. Asked only for a transport naming an SFU `url` without a
+    /// `livekit_service_url`. A client that cannot make the request answers `M_UNRECOGNIZED` with
+    /// status 404, as a homeserver without the endpoint would.
+    func liveKitToken(for request: ElementCallLiveKitTokenRequest) async throws(ElementCallMatrixBackendError) -> String
+    
     /// The `rtc_transports` array of `GET /_matrix/client/v1/rtc/transports`, as JSON; `[]` when the
     /// homeserver lacks the endpoint.
     func rtcTransportsJSON() async throws(ElementCallMatrixBackendError) -> String
@@ -192,6 +198,25 @@ public nonisolated struct ElementCallOpenIDToken: Sendable, Equatable {
         self.tokenType = tokenType
         self.matrixServerName = matrixServerName
         self.expiresIn = expiresIn
+    }
+}
+
+/// The body of an MSC4195 `get_token` request, field for field.
+public nonisolated struct ElementCallLiveKitTokenRequest: Sendable, Equatable {
+    /// The SFU's homeserver; nil for the account's own, in which case the field is omitted.
+    public var serverName: String?
+    /// The SFU's WebSocket URL.
+    public var url: String
+    public var roomID: String
+    public var slotID: String
+    public var memberID: String
+    
+    public init(serverName: String?, url: String, roomID: String, slotID: String, memberID: String) {
+        self.serverName = serverName
+        self.url = url
+        self.roomID = roomID
+        self.slotID = slotID
+        self.memberID = memberID
     }
 }
 

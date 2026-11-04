@@ -952,8 +952,8 @@ public final class MatrixRTCMediaSession {
             playJoinLeaveSound(.leave, for: memberID, participantCount: participantCount)
         case .handRaised(let memberID, _):
             playRaisedHandSound(for: memberID)
-        case .reaction(let memberID, let emoji, let name, _):
-            receiveReaction(from: memberID, emoji: emoji, name: name)
+        case .reaction(let memberID, let emoji, let name, let sound):
+            receiveReaction(from: memberID, emoji: emoji, name: name, sound: sound)
         case .streamStarted(let memberID, let kind):
             reopenStream(of: memberID, kind: kind)
         default:
@@ -986,15 +986,14 @@ public final class MatrixRTCMediaSession {
     /// Which reactions arrive at all is the core's: only while we are in the call, never a replay,
     /// and never a member's second inside three seconds. What is left here is the user's preference,
     /// the spread, and how long it lasts.
-    private func receiveReaction(from memberID: String, emoji: String, name: String) {
+    private func receiveReaction(from memberID: String, emoji: String, name: String, sound: String) {
         let mode = reactionsMode
         MatrixRTCLog.info("\(memberID) reacted \(name): \(mode)")
         guard mode != .off else { return }
-        let resolved = MatrixRTCReactionCatalogue.resolve(name: name, emoji: emoji)
         nextReactionID += 1
         let id = nextReactionID
         let spread = min(max(reactionSpread(), .zero), Self.maximumReactionSpread)
-        let reaction = MatrixRTCReaction(id: id, memberID: memberID, emoji: resolved.emoji, sound: resolved.sound, spread: spread)
+        let reaction = MatrixRTCReaction(id: id, memberID: memberID, emoji: emoji, sound: sound, spread: spread)
         let show = clock.schedule(after: spread) { [weak self] in
             guard let self else { return }
             reactions.append(reaction)

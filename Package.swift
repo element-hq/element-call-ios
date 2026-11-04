@@ -18,7 +18,7 @@ let package = Package(
         .library(name: "ElementCallUI", targets: ["ElementCallUI"])
     ],
     dependencies: [
-        .package(url: "https://github.com/element-hq/matrix-rust-rtc", exact: "0.5.0-rc.8"),
+        .package(url: "https://github.com/element-hq/matrix-rust-rtc", exact: "0.5.0-rc.9"),
         // .package(path: "../matrix-rust-rtc"),
         // The design *tokens*, not the Compound component library. Tokens are static values in
         // their own small package, so depending on them is safe. Compound itself is not, because its

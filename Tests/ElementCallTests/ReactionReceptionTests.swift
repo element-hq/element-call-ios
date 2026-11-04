@@ -82,16 +82,6 @@ struct ReactionReceptionTests {
         #expect(call.session.reactions.map(\.memberID) == ["@bob:example.com:DEVICE"])
     }
     
-    /// R9: what web would show and play, not the core's hint.
-    @Test
-    func aKnownReactionWithoutASoundPlaysTheGenericOne() async throws {
-        let call = try await Call(mode: .withSound, spread: .zero)
-        call.react("@bob:example.com:DEVICE", name: "thumbsup", emoji: "👍", sound: nil)
-        try await waitUntil { !call.session.reactions.isEmpty }
-        #expect(call.session.reactions.first?.sound == "generic")
-        #expect(call.renderPeak() > 0)
-    }
-    
     /// Spreads beyond half a second are cut to it, so nothing can outlive R1a's four seconds.
     @Test
     func theSpreadIsCappedAtHalfASecond() async throws {
@@ -114,7 +104,7 @@ struct ReactionReceptionTests {
             scripted = MatrixRTCScriptedSession(localMemberID: "@alice:example.com:DEVICE", clock: clock)
             renderer = CallSoundEffectRenderer(join: [], leave: [], raiseHand: [])
             // Every sound a single loud sample, installed before the call can decode the real ones.
-            renderer.installReactionSounds(.init(MatrixRTCReactionCatalogue.sounds.map { ($0, [1, 1, 1, 1]) }))
+            renderer.installReactionSounds(.init(CallSoundEffectRenderer.reactionSoundNames.map { ($0, [1, 1, 1, 1]) }))
             session = MatrixRTCMediaSession(localMemberID: "@alice:example.com:DEVICE",
                                             mediaSession: scripted,
                                             audio: CallAudio(soundEffects: renderer),
@@ -125,7 +115,10 @@ struct ReactionReceptionTests {
             await session.start()
         }
         
-        func react(_ memberID: String, name: String, emoji: String = "🎉", sound: String? = "party") {
+        /// The emoji and sound the core resolves for `name`, as it delivers them.
+        func react(_ memberID: String, name: String) {
+            let emoji = reactionCatalog().first { $0.name == name }?.emoji ?? "🎉"
+            let sound = reactionSoundFor(name: name)
             scripted.push(event: .reaction(memberId: memberID, emoji: emoji, name: name, sound: sound))
         }
         

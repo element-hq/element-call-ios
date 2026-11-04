@@ -414,18 +414,17 @@ extension MatrixRTCMembershipFormat {
     /// The lab's name for a format, as the page writes it in the code: `current` or `state`, room
     /// state when absent.
     init(labName: String?) {
-        self = labName == "current" ? .current : .roomState
+        self = labName == "current" ? .msc : .roomState
     }
     
     var labName: String {
-        self == .current ? "current" : "state"
+        self == .msc ? "current" : "state"
     }
     
     /// How the Lab tab names the format, the same words as the lab page's banner.
     var labLabel: String {
         switch self {
-        case .current: "Current (sticky events)"
-        case .sticky2025: "Sticky 2025"
+        case .msc: "Current (sticky events)"
         case .roomState: "Room state (legacy)"
         }
     }
