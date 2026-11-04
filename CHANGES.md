@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.15 - 2026-11-04
+
 **Call preferences go through a new port, `ElementCallPreferencesStoreProtocol`.** It holds the
 reactions setting and the sound effects volume, and `ElementCallController(…, preferences:)` takes
 it. The default, `ElementCallUserDefaultsPreferencesStore`, keeps them in `UserDefaults.standard`
@@ -18,6 +22,28 @@ under `io.element.call.preferences.*`; pass your own store to keep them elsewher
 holds a single Preferences item (`elementCall.preferences`), which opens a sheet holding the
 developer options and versions that used to be in the menu. `MatrixRTCCallEvent.reaction` gains
 `sound:`.
+
+
+
+### What's Changed
+
+✨ Features
+* Support reading and showing call reactions, with new settings. by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/88
+
+🙌 Improvements
+* A tile's missing key shows the key icon in normal tint, a decryption error in red by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/84
+
+🐛 Bugfixes
+* UI | Update switch camera button to match design by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/87
+
+⚠️ API Changes
+* Translate the call screen from the element-call Localazy project by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/86
+
+Others
+* chore: bump matrix-rust-rtc 0.5.0-rc.9 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/89
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.14...0.1.0-rc.15
 
 ## 0.1.0-rc.14 - 2026-11-02
 
