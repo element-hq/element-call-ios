@@ -83,10 +83,16 @@ final class ElementCallExampleHost {
         notice = nil
         do {
             let playback = try ElementCallExampleScenarioPlayback(scenario: scenario.load())
+            let room = ElementCallFakeRoom(displayName: scenario.name)
+            // A membership, or the screen reads the call as not joined and never offers the hand
+            // or reactions however many people the scenario brings in.
+            let membership = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+            Self.echoReactions(of: membership, into: playback, as: playback.player.session.localMemberID)
             let controller = ElementCallController.fake(connection: .connected,
-                                                        room: ElementCallFakeRoom(displayName: scenario.name),
+                                                        room: room,
                                                         connectedAt: .now,
-                                                        call: playback.player.call)
+                                                        call: playback.player.call,
+                                                        rtcCall: membership.call)
             controller.actions
                 .sink { [weak self] action in self?.handle(action) }
                 .store(in: &cancellables)
@@ -320,6 +326,17 @@ final class ElementCallExampleHost {
         }
     }
     
+    /// Our own reactions come back from the room as everyone's do; here the scripted session is the
+    /// room, so a reaction sent from the picker rises as "You".
+    private static func echoReactions(of membership: MatrixRTCScriptedCall,
+                                      into playback: ElementCallExampleScenarioPlayback,
+                                      as localMemberID: String) {
+        let room = playback.player.session
+        membership.onReactionSent = { emoji, name in
+            room.push(event: .reaction(memberId: localMemberID, emoji: emoji, name: name, sound: reactionSoundFor(name: name)))
+        }
+    }
+    
     /// Running only while a ringing or an outage fixture is up.
     private var ringingTask: Task<Void, Never>?
     
@@ -399,6 +416,7 @@ final class ElementCallExampleHost {
             let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(ElementCallExampleReactions.scenario, name: fixture.rawValue),
                                                                   localMemberID: ElementCallExampleReactions.localMemberID,
                                                                   audioOf: scripted.call)
+            Self.echoReactions(of: scripted, into: playback, as: ElementCallExampleReactions.localMemberID)
             let controller = ElementCallController.fake(following: scripted.call,
                                                         room: room,
                                                         isAudioCall: false,
