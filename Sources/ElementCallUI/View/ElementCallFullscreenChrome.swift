@@ -116,12 +116,23 @@ struct ElementCallFloatingControls: View {
     static let edgePadding: CGFloat = 12
     static let clearance: CGFloat = ElementCallControlsView.thickness + edgePadding
     
+    private var isPickerShown: Bool {
+        context.viewState.presentedSheet == .reactions
+    }
+    
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 8) {
             Spacer()
+            // Over the stage rather than in the clearance, so the tiles do not move when a hand
+            // goes up. Not while the bar holds the reaction grid, which it would sit on.
+            if context.viewState.showsRaisedHandBanner, !isPickerShown {
+                ElementCallRaisedHandBanner(context: context)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
             ElementCallControlsView(context: context, axis: .horizontal)
                 .padding(.bottom, Self.edgePadding)
         }
+        .animation(.easeInOut(duration: 0.25), value: context.viewState.showsRaisedHandBanner)
     }
 }
 

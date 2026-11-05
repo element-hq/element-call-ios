@@ -70,7 +70,7 @@ struct ElementCallPreferencesSheet: View {
                 .accessibilityAddTraits(.isHeader)
             HStack {
                 Spacer()
-                Button { context.send(viewAction: .dismissPreferences) } label: { style.icons.icon(.close) }
+                Button { context.send(viewAction: .dismissSheet) } label: { style.icons.icon(.close) }
                     .buttonStyle(ElementCallRoundButtonStyle())
                     .accessibilityLabel(L10n.actionClose)
                     .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.preferencesClose)

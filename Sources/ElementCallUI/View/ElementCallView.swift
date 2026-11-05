@@ -18,6 +18,7 @@ struct ElementCallView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @Environment(\.elementCallChromeReturnDelay) private var chromeReturnDelay
+    @Environment(\.scenePhase) private var scenePhase
     @Bindable var context: ElementCallScreenContext
     /// Measured while drawn and kept while not, so the clearance it reserves can change in the same
     /// transaction as the chrome rather than a layout pass later. Started at what they measure at
@@ -114,6 +115,19 @@ struct ElementCallView: View {
                                          reduceMotion: reduceMotion)
                             .zIndex(2)
                     }
+                    
+                    // Over everything, the full-screen controls included, since it is opened from
+                    // either bar (009 R30). Two views so each has its own transition: a transition
+                    // applies only to the view inserted, never to its children, and the card should
+                    // rise from the edge while the call behind it only darkens.
+                    if context.viewState.presentedSheet == .reactions {
+                        ElementCallReactionPickerScrim(context: context)
+                            .transition(.opacity)
+                            .zIndex(4)
+                        ElementCallReactionPicker(context: context)
+                            .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                            .zIndex(5)
+                    }
                 } else {
                     Color.clear
                         .onAppear(perform: declareMinimizedDetailWindow)
@@ -123,11 +137,14 @@ struct ElementCallView: View {
             .animation(.easeInOut(duration: 0.25), value: context.viewState.isScreenSharing)
             .animation(.easeInOut(duration: 0.3), value: isStageShown)
             .animation(.easeInOut(duration: 0.3), value: context.viewState.isRinging)
+            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(duration: 0.35, bounce: 0.1),
+                       value: context.viewState.presentedSheet == .reactions)
             .frame(width: geometry.size.width, height: geometry.size.height)
             // In landscape the status bar goes with the chrome; in portrait it stays (R8, R9).
             .statusBarHidden(fullscreenTile != nil ? !context.isFullscreenChromeVisible : isTopBarHideable(isLandscape: isLandscape) && !isStageChromeVisible)
             .onChange(of: isLandscape) { _, isLandscape in
                 applyStageChrome(.rotated(isLandscape: isLandscape))
+                closeReactionsSheet()
             }
             // Announced as it comes and goes, never per entry, so an outage is one sentence rather
             // than a burst (034 R40).
@@ -143,19 +160,25 @@ struct ElementCallView: View {
             }
         }
         .environment(\.colorScheme, .dark)
-        .sheet(isPresented: Binding(get: { context.viewState.isPreferencesPresented },
-                                    set: {
-                                        if !$0 {
-                                            context.send(viewAction: .dismissPreferences)
-                                        }
-                                    })) {
-            ElementCallPreferencesSheet(context: context)
-                // A sheet is a presentation of its own, which takes the window's appearance rather
-                // than the call's: without this it came up light over the dark call on a phone in
-                // light mode. The environment value covers its content and the preference its
-                // container, glass and all.
-                .environment(\.colorScheme, .dark)
-                .preferredColorScheme(.dark)
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                closeReactionsSheet()
+            }
+        }
+        .sheet(item: presentedSheet) { sheet in
+            Group {
+                if sheet == .preferences {
+                    ElementCallPreferencesSheet(context: context)
+                } else {
+                    ElementCallMoreSheet(context: context)
+                }
+            }
+            // A sheet is a presentation of its own, which takes the window's appearance rather
+            // than the call's: without this it came up light over the dark call on a phone in
+            // light mode. The environment value covers its content and the preference its
+            // container, glass and all.
+            .environment(\.colorScheme, .dark)
+            .preferredColorScheme(.dark)
         }
         .alert(context.alertInfo?.title ?? "",
                isPresented: Binding(get: { context.alertInfo != nil },
@@ -285,6 +308,28 @@ struct ElementCallView: View {
     
     /// Assigned only on a change: the context is observed, and the scroll reports a direction many
     /// times a second while the answer stays the same.
+    /// The system sheets. The picker is not one of them: it is drawn over the call, so More hands
+    /// over to it by its sheet going down as the picker comes up.
+    private var presentedSheet: Binding<ElementCallSheet?> {
+        Binding {
+            context.viewState.presentedSheet == .reactions ? nil : context.viewState.presentedSheet
+        } set: { sheet in
+            // Only a swipe down closes the state: the sheet also goes when More hands over to the
+            // picker, which must not close the picker with it.
+            if sheet == nil, context.viewState.presentedSheet != .reactions {
+                context.send(viewAction: .dismissSheet)
+            }
+        }
+    }
+    
+    /// The picker closes when the phone turns or the app goes to the background, and does not come
+    /// back: it was opened for a moment that has passed (009 R27). Preferences stay, being settings.
+    private func closeReactionsSheet() {
+        if let sheet = context.viewState.presentedSheet, sheet != .preferences {
+            context.send(viewAction: .dismissSheet)
+        }
+    }
+    
     private func applyStageChrome(_ event: ElementCallChromeVisibility.Event) {
         var chrome = context.stageChrome
         chrome.apply(event)
@@ -448,7 +493,7 @@ struct ElementCallView: View {
             // here, unlocalised; a sheet has room to say what each does, and grows without the menu
             // turning into a list of switches.
             Menu {
-                Button { context.send(viewAction: .showPreferences) } label: {
+                Button { context.send(viewAction: .present(.preferences)) } label: {
                     Label { Text(L10n.preferencesTitle) } icon: { style.icons.icon(.preferences) }
                 }
                 .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.preferences)

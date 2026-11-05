@@ -124,6 +124,7 @@ public final class ElementCallScreenContext {
                 context.viewState.isFrontCamera.toggle()
             case .toggleScreenShare:
                 context.viewState.isScreenSharing.toggle()
+                context.viewState.presentedSheet = nil
             case .toggleLoudspeaker:
                 let state = context.viewState
                 context.viewState.audioOutput = state.isLoudspeaker ? state.audioOutputs.first { $0.kind != .speaker } ?? .receiver : .speaker
@@ -135,10 +136,14 @@ public final class ElementCallScreenContext {
                 // Queued after every remote hand, as the harness numbers hands (009 C7).
                 let position = isRaised ? 1 + context.viewState.tiles.count { !$0.isLocal && $0.hasHandRaised } : nil
                 context.viewState.tiles = ElementCallScreenViewState.showingHands(context.viewState.tiles.map { $0.withHandPosition(position) })
-            case .showPreferences:
-                context.viewState.isPreferencesPresented = true
-            case .dismissPreferences:
-                context.viewState.isPreferencesPresented = false
+            case let .present(sheet):
+                context.viewState.presentedSheet = sheet
+            case .dismissSheet:
+                context.viewState.presentedSheet = nil
+            case .sendReaction:
+                // Ours comes back from the room as everyone's does, and a fixture has no room. The
+                // `reactions` fixture runs the real path, over a scripted call that echoes it.
+                context.viewState.presentedSheet = nil
             case let .setReactionsPreference(preference):
                 context.viewState.reactionsPreference = preference
             case let .setSoundEffectsVolume(volume):
@@ -146,7 +151,7 @@ public final class ElementCallScreenContext {
             case .playSoundEffectsVolumeSample:
                 break
             case .minimize, .hangUp, .dismiss:
-                context.viewState.isPreferencesPresented = false
+                context.viewState.presentedSheet = nil
                 onHostAction?(action)
             }
         }
@@ -259,6 +264,9 @@ public final class ElementCallScreenViewModel {
             controller.switchCamera()
         case .toggleScreenShare:
             controller.setScreenShareEnabled(!(controller.call?.isScreenSharing ?? false))
+            // Only the More sheet offers it outside the bar, and a share is something to watch
+            // start rather than a setting to come back to.
+            context.viewState.presentedSheet = nil
         case .toggleLoudspeaker:
             controller.setLoudspeaker(!controller.isLoudspeaker)
         case let .selectAudioOutput(output):
@@ -267,10 +275,15 @@ public final class ElementCallScreenViewModel {
             controller.setHandRaised(!controller.isHandRaised)
         case .toggleTileStats:
             controller.toggleTileStats()
-        case .showPreferences:
-            context.viewState.isPreferencesPresented = true
-        case .dismissPreferences:
-            context.viewState.isPreferencesPresented = false
+        case let .present(sheet):
+            context.viewState.presentedSheet = sheet
+        case .dismissSheet:
+            context.viewState.presentedSheet = nil
+        case let .sendReaction(kind):
+            controller.sendReaction(kind)
+            // Sending dismisses the picker (009 R19), whatever then happens to the send: a refused
+            // or failed one shows nothing (R23), so there is nothing to keep it open for.
+            context.viewState.presentedSheet = nil
         case let .setReactionsPreference(preference):
             controller.setReactionsPreference(preference)
         case let .setSoundEffectsVolume(volume):
@@ -356,10 +369,10 @@ public final class ElementCallScreenViewModel {
         // call (037 R12a).
         switch controller.connection {
         case .ended, .failed:
-            state.isPreferencesPresented = false
+            state.presentedSheet = nil
         default:
             if !state.isMaximized {
-                state.isPreferencesPresented = false
+                state.presentedSheet = nil
             }
         }
         state.memberCount = controller.rtcCall?.memberCount ?? 0
