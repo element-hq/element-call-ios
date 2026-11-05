@@ -523,6 +523,20 @@ public final class ElementCallController {
         }
     }
     
+    /// A no-op before the join. A failure shows nothing (009 R23): inside the cooldown it is a
+    /// refusal rather than an error (R12), and a reaction that did not land in time is dropped
+    /// rather than shown late, so there is nothing for the user to retry.
+    public func sendReaction(_ kind: MatrixRTCReactionKind) {
+        guard let rtcCall else { return }
+        Task {
+            do {
+                try await rtcCall.sendReaction(kind)
+            } catch {
+                log(.info, "reaction \(kind.name) not sent: \(error)")
+            }
+        }
+    }
+    
     private func bindPictureInPictureIfEnabled(_ call: MatrixRTCMediaSession) {
         guard options.isPictureInPictureEnabled, !pictureInPicture.isBound else { return }
         pictureInPicture.automaticStartIncludesAudioCalls = options.isAutomaticPictureInPictureForAudioCallsEnabled

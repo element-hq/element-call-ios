@@ -215,7 +215,10 @@ public extension ElementCallController {
                      style: ElementCallStyle = .stock,
                      // A scripted call (`MatrixRTCScenarioPlayer`), so a real view model can run
                      // over a controller that never joined. Nil for the stills the previews want.
-                     call: MatrixRTCMediaSession? = nil) -> ElementCallController {
+                     call: MatrixRTCMediaSession? = nil,
+                     // A membership, for the controls that need one, the hand and reactions. A
+                     // scripted one (`MatrixRTCScriptedCall`) in the harness; nil in a preview.
+                     rtcCall: MatrixRTCCall? = nil) -> ElementCallController {
         let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
                                                system: ElementCallFakeSystem(),
                                                options: options,
@@ -226,7 +229,8 @@ public extension ElementCallController {
                                    room: room,
                                    connection: connection,
                                    connectedAt: connectedAt,
-                                   call: call)
+                                   call: call,
+                                   rtcCall: rtcCall)
         return controller
     }
     
