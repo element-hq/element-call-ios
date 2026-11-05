@@ -26,6 +26,8 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
         var requests: [HandRequest] = []
         var pending: [CheckedContinuation<Void, Error>] = []
         var leaveCount = 0
+        var reactions: [(emoji: String, name: String)] = []
+        var refusesReactions = false
     }
     
     private let state = Mutex(State())
@@ -39,6 +41,16 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
     /// Every hand request made, answered or not.
     var requests: [HandRequest] {
         state.withLock { $0.requests }
+    }
+    
+    /// Every reaction sent, as `(emoji, name)`, refused ones included.
+    var reactions: [(emoji: String, name: String)] {
+        state.withLock { $0.reactions }
+    }
+    
+    /// Refuse every reaction from now on, as the core does inside its cooldown.
+    func refuseReactions() {
+        state.withLock { $0.refusesReactions = true }
     }
     
     var leaveCount: Int {
@@ -113,7 +125,14 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
     }
     
     func sendReaction(emoji: String, name: String) async throws -> String {
-        ""
+        let refuses = state.withLock { state in
+            state.reactions.append((emoji, name))
+            return state.refusesReactions
+        }
+        if refuses {
+            throw RefusedError()
+        }
+        return "$reaction"
     }
     
     func status() -> FfiCallStatus {

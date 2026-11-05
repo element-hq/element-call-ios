@@ -14,7 +14,8 @@ import Synchronization
 ///
 /// What it hands out is a genuine ``MatrixRTCCall``, so everything above the core runs as it ships:
 /// the controller follows the status, the screen draws it, and the call's own audio plays the
-/// ringback and the end sounds. Only the membership is inert: no roster, no hands, no reactions.
+/// ringback and the end sounds. Only the membership is inert: no roster, no hands, and a reaction we
+/// send goes only to ``onReactionSent``, which is how a harness echoes it back as the room would.
 public final class MatrixRTCScriptedCall {
     public let call: MatrixRTCCall
     private let core: ScriptedCore
@@ -23,6 +24,12 @@ public final class MatrixRTCScriptedCall {
         core = ScriptedCore(roomID: roomID, status: status.ffi)
         call = MatrixRTCCall(rtcCall: core)
         call.start()
+    }
+    
+    /// Called with each reaction we send, as `(emoji, name)`.
+    public var onReactionSent: (@Sendable (String, String) -> Void)? {
+        get { core.onReactionSent.withLock { $0.action } }
+        set { core.onReactionSent.withLock { $0 = ReactionSentAction(action: newValue) } }
     }
     
     /// What the core would report next. A hang-up reports `.ended(.left)` by itself, as the core does.
@@ -87,9 +94,16 @@ private nonisolated extension Date {
     }
 }
 
-/// The membership side of the scripted call: the status as pushed, and nothing else.
+/// Boxed, because a function value stored directly in a `Mutex` is reabstracted on every access.
+private nonisolated struct ReactionSentAction {
+    var action: (@Sendable (String, String) -> Void)?
+}
+
+/// The membership side of the scripted call: the status as pushed, and a sent reaction handed to
+/// ``MatrixRTCScriptedCall/onReactionSent``.
 private final nonisolated class ScriptedCore: RtcCallProtocol, Sendable {
     let subscription = ScriptedStatusSubscription()
+    let onReactionSent = Mutex(ReactionSentAction())
     private let roomID: String
     private let initialStatus: FfiCallStatus
     
@@ -143,7 +157,8 @@ private final nonisolated class ScriptedCore: RtcCallProtocol, Sendable {
     }
     
     func sendReaction(emoji: String, name: String) async throws -> String {
-        ""
+        onReactionSent.withLock { $0.action }?(emoji, name)
+        return ""
     }
     
     func subscribeMembershipSnapshots() async -> MembershipSnapshotSubscription {

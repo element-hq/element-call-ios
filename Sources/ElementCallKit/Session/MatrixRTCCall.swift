@@ -215,6 +215,22 @@ public final class MatrixRTCCall {
         }
     }
     
+    // MARK: - Reactions
+    
+    /// Returns once the reaction has landed. Throws inside the core's send cooldown, since peers
+    /// would drop a second reaction while the first still shows (009 R12), and when it has not landed
+    /// within five seconds, rather than delivering it late. Ours comes back as an event like
+    /// everyone else's, which is what shows it.
+    public func sendReaction(_ kind: MatrixRTCReactionKind) async throws {
+        do {
+            _ = try await rtcCall.sendReaction(emoji: kind.emoji, name: kind.name)
+            MatrixRTCLog.info("Reaction \(kind.name) sent in \(roomID)/\(slotID)")
+        } catch {
+            MatrixRTCLog.info("Reaction \(kind.name) not sent in \(roomID)/\(slotID): \(error)")
+            throw MatrixRTCError.ffi("\(error)")
+        }
+    }
+    
     private func updateStatus(_ status: MatrixRTCCallStatus) {
         guard status != self.status else { return }
         MatrixRTCLog.info("\(roomID)/\(slotID) is \(status)")
