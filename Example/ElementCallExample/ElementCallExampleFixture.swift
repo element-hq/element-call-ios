@@ -44,6 +44,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case smallFive = "small_five"
     case oneToOneSpeaking = "one_to_one_speaking"
     case reactions
+    case shareEnabled = "share_enabled"
+    case oneToOneShareEnabled = "one_to_one_share_enabled"
     case joining
     case connectingMedia = "connecting_media"
     case failed
@@ -110,6 +112,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .smallFive: "Small call of five"
         case .oneToOneSpeaking: "One to one, speaking"
         case .reactions: "Reactions"
+        case .shareEnabled: "Screen share enabled"
+        case .oneToOneShareEnabled: "One to one, screen share enabled"
         case .ringingPickup: "Ringing, then picked up"
         case .ringingVoicePickup: "Ringing a voice call, then picked up"
         case .ringingDeclined: "Ringing, then declined"
@@ -149,6 +153,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .smallFour: "Two by two, Carol speaking; Dan's camera off. Three hands up, ours included."
         case .smallFive: "Two rows of two and one centred; two rows in landscape."
         case .oneToOneSpeaking: "A voice call: the sound waves come and go round Bob's avatar as he speaks."
+        case .shareEnabled: "The host enables screen share: the bar's `…` sheet adds Share screen to the hand and reactions."
+        case .oneToOneShareEnabled: "The host enables screen share; no hand or reactions one to one, so Share screen has the button."
         case .reactions: "Reactions rising and sounding on a loop, then four claps at once; -reactionInterval for a stream."
         case .ringingPickup: "The ringing screen and ringback; Bob answers with video at 6 s."
         case .ringingVoicePickup: "A voice call ringing; Bob answers without video at 6 s."
@@ -278,6 +284,13 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return .played(scenario: frames.joined(separator: "\n"))
         case .reactions:
             return .reactions(ElementCallExampleReactions())
+        // A host option every other fixture leaves off. Starting a share only lights the control:
+        // there is no capture here to make a tile of.
+        case .shareEnabled:
+            return Self.connected([me, Fixtures.tile("Carol", hasVideo: true), Fixtures.tile("Bob", hasVideo: true)],
+                                  isScreenSharingEnabled: true)
+        case .oneToOneShareEnabled:
+            return Self.connected([me, Fixtures.tile("Bob", hasVideo: true)], isDirect: true, isScreenSharingEnabled: true)
         case .ringingPickup:
             return .ringing(ElementCallExampleRinging(isAudioCall: false, outcome: .pickUp))
         case .ringingVoicePickup:
@@ -314,11 +327,12 @@ enum ElementCallExampleFixture: String, CaseIterable {
     /// The controls start where our own tile is, so the first tap on the camera or the microphone
     /// turns it the other way rather than lighting a button our tile already agreed with.
     @MainActor
-    private static func connected(_ tiles: [ElementCallTile], isDirect: Bool = false) -> Kind {
+    private static func connected(_ tiles: [ElementCallTile], isDirect: Bool = false, isScreenSharingEnabled: Bool = false) -> Kind {
         let own = tiles.first { $0.isLocal }
         var state = ElementCallPreviewFixtures.connected(tiles: tiles,
                                                          isDirect: isDirect,
-                                                         isMicrophoneMuted: own?.isMicrophoneMuted ?? false)
+                                                         isMicrophoneMuted: own?.isMicrophoneMuted ?? false,
+                                                         isScreenSharingEnabled: isScreenSharingEnabled)
         state.isCameraEnabled = own?.hasVideo ?? false
         state.isHandRaised = own?.hasHandRaised ?? false
         return .connected(state)

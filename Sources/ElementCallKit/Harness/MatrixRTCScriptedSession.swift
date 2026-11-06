@@ -121,6 +121,13 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         pending?.resume(returning: state.withLock { $0.localState })
     }
     
+    /// Our hand, the rest of us as the last `me` left it: what a raise or lower from the screen
+    /// changes, where a scenario's `me` frame sets all three.
+    public func push(hasHandRaised: Bool) {
+        let me = state.withLock { $0.me }
+        push(me: me.hasVideo, isMicrophoneMuted: me.isMicrophoneMuted, hasHandRaised: hasHandRaised)
+    }
+    
     /// An event the call sees as if from the core: a reaction, for the harness to send some without a
     /// homeserver (037).
     public func push(event: FfiCallEvent) {

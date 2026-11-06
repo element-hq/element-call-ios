@@ -340,3 +340,9 @@ nonisolated extension MatrixRTCCallEvent {
         }
     }
 }
+
+public nonisolated extension MatrixRTCReactionKind {
+    /// Read from the core rather than copied, so a reaction the core adds reaches the picker with no
+    /// edit here, in the place web shows it.
+    static let catalogue: [MatrixRTCReactionKind] = reactionCatalog().map { MatrixRTCReactionKind(name: $0.name, emoji: $0.emoji) }
+}
