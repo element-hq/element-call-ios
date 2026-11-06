@@ -138,7 +138,8 @@ public final class ElementCallController {
     /// what a tile shows is about that tile.
     public static let interruptionHold: Duration = .milliseconds(2500)
     
-    /// What the hold is timed on; a test's manual clock.
+    /// What the hold and the wait for a room to open are timed on; a test's manual clock. Set
+    /// before the first call: the room's wait reads it when the client is made.
     @ObservationIgnored var clock: any Clock<Duration> = ContinuousClock()
     @ObservationIgnored private var interruptionsTask: Task<Void, Never>?
     @ObservationIgnored private(set) var interruptionHoldTask: Task<Void, Never>?
@@ -229,7 +230,9 @@ public final class ElementCallController {
     public let options: ElementCallOptions
     
     @ObservationIgnored private let preferences: any ElementCallPreferencesStoreProtocol
-    private let rtcClient: MatrixRTCClient
+    @ObservationIgnored private let backend: any ElementCallMatrixBackendProtocol
+    /// Made on first use rather than in `init`, so a test's ``clock`` is set by then.
+    @ObservationIgnored private lazy var rtcClient = MatrixRTCClient(backend: backend, clock: clock)
     /// The room the call is in, open from before the join until after the leave.
     private var rtcRoom: MatrixRTCRoom?
     private let system: any ElementCallSystemProvidingProtocol
@@ -249,7 +252,7 @@ public final class ElementCallController {
                 style: ElementCallStyle = .stock,
                 logger: (any ElementCallLoggingProtocol)? = nil,
                 preferences: any ElementCallPreferencesStoreProtocol = ElementCallUserDefaultsPreferencesStore()) {
-        rtcClient = MatrixRTCClient(backend: backend)
+        self.backend = backend
         self.system = system
         self.options = options
         self.preferences = preferences
