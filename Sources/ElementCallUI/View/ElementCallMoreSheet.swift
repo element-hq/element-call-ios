@@ -22,36 +22,40 @@ struct ElementCallMoreSheet: View {
     
     var body: some View {
         let state = context.viewState
-        VStack(spacing: 0) {
-            ZStack {
-                Text(L10n.moreTitle)
-                    .font(style.theme.headingMDBold)
-                    .foregroundStyle(style.theme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-                HStack(spacing: 0) {
-                    Spacer()
-                    Button { context.send(viewAction: .dismissSheet) } label: { style.icons.icon(.close) }
-                        .buttonStyle(ElementCallRoundButtonStyle())
-                        .accessibilityLabel(L10n.actionClose)
-                        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: .close))
+        // Scrolls when it outgrows the tallest sheet the system allows, as three rows at an
+        // accessibility text size do on a landscape phone; the detent is clamped to that height.
+        ScrollView {
+            VStack(spacing: 0) {
+                ZStack {
+                    Text(L10n.moreTitle)
+                        .font(style.theme.headingMDBold)
+                        .foregroundStyle(style.theme.textPrimary)
+                        .accessibilityAddTraits(.isHeader)
+                    HStack(spacing: 0) {
+                        Spacer()
+                        Button { context.send(viewAction: .dismissSheet) } label: { style.icons.icon(.close) }
+                            .buttonStyle(ElementCallRoundButtonStyle())
+                            .accessibilityLabel(L10n.actionClose)
+                            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: .close))
+                    }
+                }
+                .padding(.top, 16)
+                .padding(.bottom, 12)
+                ForEach(state.extraActions, id: \.self) { action in
+                    divider
+                    row(for: action)
                 }
             }
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            ForEach(state.extraActions, id: \.self) { action in
-                divider
-                row(for: action)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
+            .fixedSize(horizontal: false, vertical: true)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { newHeight in
+                if newHeight != height {
+                    height = newHeight
+                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
-        .fixedSize(horizontal: false, vertical: true)
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { newHeight in
-            if newHeight != height {
-                height = newHeight
-            }
-        }
-        .frame(maxHeight: .infinity, alignment: .top)
+        .scrollBounceBehavior(.basedOnSize)
         .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { inset in
             if inset != bottomInset {
                 bottomInset = inset

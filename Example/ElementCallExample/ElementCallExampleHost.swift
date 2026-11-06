@@ -87,7 +87,7 @@ final class ElementCallExampleHost {
             // A membership, or the screen reads the call as not joined and never offers the hand
             // or reactions however many people the scenario brings in.
             let membership = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
-            Self.echoReactions(of: membership, into: playback, as: playback.player.session.localMemberID)
+            Self.echoOwnActions(of: membership, into: playback, as: playback.player.session.localMemberID)
             let controller = ElementCallController.fake(connection: .connected,
                                                         room: room,
                                                         connectedAt: .now,
@@ -326,14 +326,18 @@ final class ElementCallExampleHost {
         }
     }
     
-    /// Our own reactions come back from the room as everyone's do; here the scripted session is the
-    /// room, so a reaction sent from the picker rises as "You".
-    private static func echoReactions(of membership: MatrixRTCScriptedCall,
-                                      into playback: ElementCallExampleScenarioPlayback,
-                                      as localMemberID: String) {
+    /// Our own hand and reactions come back from the room as everyone's do; here the scripted
+    /// session is the room. Without the hand, Raise hand closed More and raised nothing, and the
+    /// banner's Cancel could not lower a hand a scenario had raised.
+    private static func echoOwnActions(of membership: MatrixRTCScriptedCall,
+                                       into playback: ElementCallExampleScenarioPlayback,
+                                       as localMemberID: String) {
         let room = playback.player.session
         membership.onReactionSent = { emoji, name in
             room.push(event: .reaction(memberId: localMemberID, emoji: emoji, name: name, sound: reactionSoundFor(name: name)))
+        }
+        membership.onHandRequested = { raised in
+            room.push(hasHandRaised: raised)
         }
     }
     
@@ -416,7 +420,7 @@ final class ElementCallExampleHost {
             let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(ElementCallExampleReactions.scenario, name: fixture.rawValue),
                                                                   localMemberID: ElementCallExampleReactions.localMemberID,
                                                                   audioOf: scripted.call)
-            Self.echoReactions(of: scripted, into: playback, as: ElementCallExampleReactions.localMemberID)
+            Self.echoOwnActions(of: scripted, into: playback, as: ElementCallExampleReactions.localMemberID)
             let controller = ElementCallController.fake(following: scripted.call,
                                                         room: room,
                                                         isAudioCall: false,
