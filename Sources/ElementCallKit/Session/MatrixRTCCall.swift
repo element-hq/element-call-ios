@@ -20,6 +20,9 @@ public final class MatrixRTCCall {
     public let slotID: String
     /// Minted by the core at join time; what every event, roster entry and key report is keyed by.
     public let localMemberID: String
+    /// Voice or video, as the join settled it: the intent we started the call with, else the one the
+    /// members already in it agree on. Start the camera for ``MatrixRTCCallIntent/video`` only.
+    public let intent: MatrixRTCCallIntent
     
     /// Who is in the call, from the core's membership projection, ourselves included.
     public private(set) var members: [MatrixRTCMembership] = []
@@ -59,6 +62,7 @@ public final class MatrixRTCCall {
         roomID = rtcCall.roomId()
         slotID = rtcCall.slotId()
         localMemberID = rtcCall.memberId()
+        intent = MatrixRTCCallIntent(rtcCall.callIntent())
         status = MatrixRTCCallStatus(rtcCall.status())
         (statusUpdates, statusContinuation) = AsyncStream.makeStream(bufferingPolicy: .unbounded)
         playSounds(for: status)

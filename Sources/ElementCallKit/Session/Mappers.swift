@@ -100,6 +100,15 @@ nonisolated extension MatrixRTCEndReason {
     }
 }
 
+nonisolated extension MatrixRTCCallIntent {
+    init(_ intent: FfiCallIntent) {
+        switch intent {
+        case .audio: self = .audio
+        case .video: self = .video
+        }
+    }
+}
+
 nonisolated extension MatrixRTCConnectionLossReason {
     init(_ reason: FfiConnectionLossReason) {
         switch reason {

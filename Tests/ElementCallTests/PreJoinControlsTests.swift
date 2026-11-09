@@ -79,6 +79,35 @@ struct PreJoinControlsTests {
         #expect(!isEnabled)
     }
     
+    /// Joining from a room's call button asks for video, because the button cannot know what is in
+    /// progress; the core does, and a voice call has to join with the camera off.
+    @Test
+    func aVoiceCallJoinsWithTheCameraOff() {
+        let (controller, _) = makeJoiningController()
+        #expect(controller.isCameraEnabled)
+        
+        controller.adoptIntent(.audio)
+        
+        #expect(!controller.isCameraEnabled)
+    }
+    
+    /// The control: a video call keeps the camera the join asked for.
+    @Test
+    func aVideoCallJoinsWithTheCameraOn() {
+        let (controller, _) = makeJoiningController()
+        
+        controller.adoptIntent(.video)
+        
+        #expect(controller.isCameraEnabled)
+    }
+    
+    /// What the controller reads the intent from: the core's, as the join settled it.
+    @Test
+    func theCallReportsTheIntentTheJoinSettledOn() {
+        #expect(MatrixRTCCall(rtcCall: FakeRTCCall(intent: .audio)).intent == .audio)
+        #expect(MatrixRTCCall(rtcCall: FakeRTCCall(intent: .video)).intent == .video)
+    }
+    
     /// The system call UI is the other way in -- the lock screen, or the CallKit banner -- and a
     /// user who mutes there while we are joining has the same expectation.
     ///
