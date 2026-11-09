@@ -11,7 +11,11 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+**Core: matrix-rust-rtc `0.5.0-rc.10`.** `MatrixRTCConnectionLossReason` gains
+`tokenEndpointUnsupported`, the homeserver offering no `get_token`. The reference
+`SDKMatrixBackend.liveKitToken` now makes the `get_token` request itself, as a workaround until the
+SDK bindings expose it (matrix-org/matrix-rust-sdk#7428); copy it to join MSC calls and `url`-only
+transports.
 
 ## 0.1.0-rc.15 - 2026-11-04
 

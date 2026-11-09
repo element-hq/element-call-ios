@@ -507,6 +507,8 @@ public nonisolated enum MatrixRTCConnectionLossReason: Sendable, Hashable {
     case refused
     /// Never established within the budget from the connect request.
     case neverConnected
+    /// Our homeserver has no MSC4195 `get_token`, so no SFU token can be had. Never retried.
+    case tokenEndpointUnsupported
 }
 
 public nonisolated enum MatrixRTCCallEvent: Sendable, Hashable {

@@ -106,6 +106,7 @@ nonisolated extension MatrixRTCConnectionLossReason {
         case .budget: self = .budget
         case .refused: self = .refused
         case .neverConnected: self = .neverConnected
+        case .tokenEndpointUnsupported: self = .tokenEndpointUnsupported
         }
     }
     
@@ -114,6 +115,7 @@ nonisolated extension MatrixRTCConnectionLossReason {
         case .budget: .budget
         case .refused: .refused
         case .neverConnected: .neverConnected
+        case .tokenEndpointUnsupported: .tokenEndpointUnsupported
         }
     }
 }

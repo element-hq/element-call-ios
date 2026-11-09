@@ -145,6 +145,10 @@ private final nonisolated class ScriptedCore: RtcCallProtocol, Sendable {
         "m.call#ROOM"
     }
     
+    func callIntent() -> FfiCallIntent {
+        .video
+    }
+    
     func memberId() -> String {
         "@alice:example.com:DEVICE"
     }

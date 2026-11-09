@@ -45,7 +45,8 @@ package nonisolated extension ElementCallFailure {
     var title: String {
         switch self {
         case .connectionLost(.budget): L10n.failureConnectionLostTitle
-        case .connectionLost(.refused), .connectionLost(.neverConnected): L10n.failureConnectionFailedTitle
+        case .connectionLost(.refused), .connectionLost(.neverConnected), .connectionLost(.tokenEndpointUnsupported):
+            L10n.failureConnectionFailedTitle
         case .joinTimedOut, .joinRefused: L10n.failureJoinFailedTitle
         case .other: L10n.callFailed
         }
@@ -55,7 +56,8 @@ package nonisolated extension ElementCallFailure {
     var text: String {
         switch self {
         case .connectionLost(.budget): L10n.failureConnectionLost
-        case .connectionLost(.refused): L10n.failureConnectionRefused
+        // No string of its own yet (Localazy): the server not offering tokens reads as a refusal.
+        case .connectionLost(.refused), .connectionLost(.tokenEndpointUnsupported): L10n.failureConnectionRefused
         case .connectionLost(.neverConnected): L10n.failureConnectionNeverEstablished
         case .joinTimedOut: L10n.failureJoinTimedOut
         case .joinRefused: L10n.failureJoinRefused
@@ -137,6 +139,9 @@ public final class ElementCallController {
     /// (R40). Once up the list follows the causes without a wait, and the tiles never wait for it:
     /// what a tile shows is about that tile.
     public static let interruptionHold: Duration = .milliseconds(2500)
+    /// How long a failed microphone publish waits for the core to end the call with its own reason
+    /// before failing the call as a microphone failure. The core reports within a few task hops.
+    static let publishFailureGrace: Duration = .seconds(2)
     
     /// What the hold and the wait for a room to open are timed on; a test's manual clock. Set
     /// before the first call: the room's wait reads it when the client is made.
@@ -728,6 +733,23 @@ public final class ElementCallController {
         return rtcCall
     }
     
+    /// Whether the core ends `rtcCall` within `grace`: the status follower then shows why.
+    private func callEnds(_ rtcCall: MatrixRTCCall, within grace: Duration) async -> Bool {
+        let step = Duration.milliseconds(50)
+        var waited = Duration.zero
+        while true {
+            if case .ended = rtcCall.status {
+                return true
+            }
+            guard waited < grace, !Task.isCancelled else {
+                return false
+            }
+            // On ``clock``, so a test's manual clock drives the wait.
+            try? await clock.sleep(for: step)
+            waited += step
+        }
+    }
+    
     /// Microphone, then camera for a video call. Whether the call is connected is the core's to
     /// say, through the status: our media being up is not it, in a DM still ringing.
     private func publishMedia(on call: MatrixRTCMediaSession,
@@ -741,6 +763,13 @@ public final class ElementCallController {
         } catch {
             guard !Task.isCancelled else {
                 log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
+                return
+            }
+            // The core may be ending the call under us: once it gives our own media server up, a
+            // publish fails at once, while the end and its reason come a moment later, after our
+            // leave is issued (034 R26). That reason is the one to show, so wait for it briefly.
+            if await callEnds(rtcCall, within: Self.publishFailureGrace) {
+                log(.info, "publishing the microphone failed as the call ended: \(error)")
                 return
             }
             fail("Microphone failed: \(error)")
