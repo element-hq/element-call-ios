@@ -100,6 +100,10 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
         "m.call#ROOM"
     }
     
+    func callIntent() -> FfiCallIntent {
+        .video
+    }
+    
     func memberId() -> String {
         "@me:example.com:DEVICE"
     }

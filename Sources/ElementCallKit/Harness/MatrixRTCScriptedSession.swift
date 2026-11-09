@@ -342,6 +342,10 @@ public final nonisolated class MatrixRTCScriptedSession: MediaSessionProtocol, S
         []
     }
     
+    public func unverifiedParticipants() -> [String] {
+        []
+    }
+    
     public func audioStream(memberId: String, kind: FfiStreamKind) -> AudioFrameStream? {
         nil
     }
