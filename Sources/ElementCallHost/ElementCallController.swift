@@ -620,11 +620,12 @@ public final class ElementCallController {
     }
     
     /// A video call is looked at, not held to an ear, so it starts on the loudspeaker. A headset
-    /// still wins over both built-in outputs when one is connected.
+    /// still wins over both built-in outputs when one is connected. Video as the join settled it,
+    /// not as the host asked: joining from a room's call button asks for video whatever is going on.
     private func startAudioIfReady() {
         guard isAudioSessionActive, let rtcCall else { return }
         rtcCall.startAudio()
-        if let callData, !callData.isAudioCall, CallAudioSessionConfigurator.isBuiltInReceiver {
+        if rtcCall.intent == .video, CallAudioSessionConfigurator.isBuiltInReceiver {
             setLoudspeaker(true)
         }
         refreshAudioRoute()
