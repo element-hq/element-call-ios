@@ -167,6 +167,9 @@ public final class ElementCallController {
     /// dropped: the button snapped back on the next refresh and the microphone went up unmuted.
     private var pendingMicrophoneMuted = false
     private var pendingCameraEnabled = false
+    /// Whether the user has turned the camera on or off since the call started. Their choice wins
+    /// over the voice or video intent the join settles on.
+    private var isCameraChosenByUser = false
     
     /// Computed rather than mirrored, so the call is the single truth the moment it exists and the
     /// two cannot drift -- `applySystemMute(_:)` writes to the call directly.
@@ -324,6 +327,7 @@ public final class ElementCallController {
         // exists overwrites these, and `publishMedia` joins with whatever they end up saying.
         pendingMicrophoneMuted = false
         pendingCameraEnabled = !callData.isAudioCall
+        isCameraChosenByUser = false
         
         // The system window has to show something when the member on screen has their camera off.
         // Built here rather than in the view layer because everything it needs, the host's avatars
@@ -458,6 +462,7 @@ public final class ElementCallController {
                 // After the gate, so declining the prompt leaves the intent off rather than joining
                 // with a camera the user was never given.
                 pendingCameraEnabled = enabled
+                isCameraChosenByUser = true
                 try await call?.setCameraEnabled(enabled)
             } catch {
                 log(.warning, "could not \(enabled ? "enable" : "disable") the camera: \(error)")
@@ -615,11 +620,12 @@ public final class ElementCallController {
     }
     
     /// A video call is looked at, not held to an ear, so it starts on the loudspeaker. A headset
-    /// still wins over both built-in outputs when one is connected.
+    /// still wins over both built-in outputs when one is connected. Video as the join settled it,
+    /// not as the host asked: joining from a room's call button asks for video whatever is going on.
     private func startAudioIfReady() {
         guard isAudioSessionActive, let rtcCall else { return }
         rtcCall.startAudio()
-        if let callData, !callData.isAudioCall, CallAudioSessionConfigurator.isBuiltInReceiver {
+        if rtcCall.intent == .video, CallAudioSessionConfigurator.isBuiltInReceiver {
             setLoudspeaker(true)
         }
         refreshAudioRoute()
@@ -644,6 +650,7 @@ public final class ElementCallController {
     private func runCall(_ callData: ElementCallData, room: any ElementCallRoomContextProtocol) async {
         log(.info, "joining \(room.roomID)")
         guard let rtcCall = await joinCall(for: callData, room: room) else { return }
+        adoptIntent(rtcCall.intent)
         
         follow(rtcCall, roomID: room.roomID)
         // From the join rather than from media: the ring goes out now, and its ringback with it.
@@ -671,6 +678,15 @@ public final class ElementCallController {
         bindPictureInPictureIfEnabled(call)
         
         await publishMedia(on: call, rtcCall: rtcCall, room: room)
+    }
+    
+    /// A voice call joins with the camera off, whatever the host asked: joining from a room's call
+    /// button does not know what kind of call is in progress, and the core does, from its members.
+    /// Only ever turns the camera off, and never over a choice the user made while joining.
+    func adoptIntent(_ intent: MatrixRTCCallIntent) {
+        guard intent == .audio, pendingCameraEnabled, !isCameraChosenByUser else { return }
+        log(.info, "joining a voice call: the camera stays off")
+        pendingCameraEnabled = false
     }
     
     /// Claims the system call, opens the room and joins its call, which puts our membership out.

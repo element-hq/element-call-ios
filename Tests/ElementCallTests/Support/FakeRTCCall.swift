@@ -32,10 +32,12 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
     
     private let state = Mutex(State())
     private let initialStatus: FfiCallStatus
+    private let intent: FfiCallIntent
     let statusSubscription = FakeStatusSubscription()
     
-    init(status: FfiCallStatus = .connected(sinceMs: 0, degraded: false)) {
+    init(status: FfiCallStatus = .connected(sinceMs: 0, degraded: false), intent: FfiCallIntent = .video) {
         initialStatus = status
+        self.intent = intent
     }
     
     /// Every hand request made, answered or not.
@@ -101,7 +103,7 @@ final class FakeRTCCall: RtcCallProtocol, Sendable {
     }
     
     func callIntent() -> FfiCallIntent {
-        .video
+        intent
     }
     
     func memberId() -> String {
