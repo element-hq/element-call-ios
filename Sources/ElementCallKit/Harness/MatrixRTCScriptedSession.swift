@@ -435,7 +435,8 @@ public final class MatrixRTCScenarioPlayer {
                                      mediaSession: session,
                                      audio: rtcCall?.audio ?? CallAudio(),
                                      clock: clock,
-                                     capturesCamera: false)
+                                     capturesCamera: false,
+                                     capturesMicrophone: false)
     }
     
     /// Starts the call's pumps. Nothing has been applied yet; the first `step()` applies frame 0.

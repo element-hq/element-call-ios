@@ -49,6 +49,7 @@
 "element_call_action_back" = "Back";
 "element_call_action_cancel" = "Cancel";
 "element_call_action_close" = "Close";
+"element_call_action_open_settings" = "Open settings";
 "element_call_action_return_ios" = "Return";
 "element_call_action_stop" = "Stop";
 "element_call_audio_device_bluetooth" = "Bluetooth";
@@ -87,6 +88,10 @@
 "element_call_lower_hand" = "Lower hand";
 "element_call_more_title" = "More options";
 "element_call_ok" = "OK";
+"element_call_permission_camera_description" = "Allow access to the camera in settings to turn it on.";
+"element_call_permission_camera_title" = "Camera not allowed";
+"element_call_permission_microphone_description" = "Allow access to the microphone in settings, then start the call again.";
+"element_call_permission_microphone_title" = "Microphone needed";
 "element_call_preferences_about" = "About";
 "element_call_preferences_core_version" = "matrix-rust-rtc %1$@";
 "element_call_preferences_developer_options" = "Developer options";

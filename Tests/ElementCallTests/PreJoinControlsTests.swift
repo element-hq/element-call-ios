@@ -42,7 +42,8 @@ struct PreJoinControlsTests {
                                                options: ElementCallOptions(isDeveloperModeEnabled: true,
                                                                            isScreenSharingEnabled: true),
                                                style: .stock,
-                                               logger: nil)
+                                               logger: nil,
+                                               permissions: ElementCallFakeMediaPermissions())
         controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .joining)
@@ -65,8 +66,19 @@ struct PreJoinControlsTests {
         #expect(isMuted)
     }
     
-    /// Only the disabling direction. Enabling goes through `AVCaptureDevice.requestAccess`, which
-    /// nothing in process can answer for, whereas `if enabled, ...` skips that branch entirely here.
+    /// Enabling, through the faked permissions `fake(...)` grants: no prompt, and the intent holds.
+    @Test
+    func turningTheCameraOnBeforeTheCallExistsIsRemembered() async throws {
+        let controller = ElementCallController.fake(connection: .joining, isAudioCall: true)
+        #expect(!controller.isCameraEnabled)
+        let enabled = deferFulfillment(values { controller.isCameraEnabled }) { $0 }
+        
+        controller.setCameraEnabled(true)
+        
+        let isEnabled = try await enabled.fulfill()
+        #expect(isEnabled)
+    }
+    
     @Test
     func turningTheCameraOffBeforeTheCallExistsIsRemembered() async throws {
         let controller = ElementCallController.fake(connection: .joining)

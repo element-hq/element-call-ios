@@ -146,6 +146,9 @@ final class ElementCallExampleHost {
         case .reactions(let reactions):
             openReactions(reactions, fixture: fixture)
             
+        case .permissionProbe:
+            openPermissionProbe(fixture: fixture)
+            
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())
             // The real host contract, and the only place in this repository it is exercised: the
@@ -434,6 +437,35 @@ final class ElementCallExampleHost {
             ringingTask = Task {
                 await playback.start()
                 await reactions.play(tiles: playback)
+            }
+        } catch {
+            notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
+        }
+    }
+    
+    /// fixtures.md's `permission_probe`: a video call with Bob through the real controller, so the
+    /// microphone gate, the failure screen and the camera's explanation run as they ship, over the
+    /// system's own dialogs. Reset the answers with `xcrun simctl privacy booted reset all <bundle id>`.
+    private func openPermissionProbe(fixture: ElementCallExampleFixture) {
+        do {
+            let room = ElementCallFakeRoom(displayName: fixture.title,
+                                           isDirect: true,
+                                           memberProfiles: ["@bob:example.com": ElementCallMemberProfile(userID: "@bob:example.com", displayName: "Bob", avatarURL: nil)])
+            let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse("0s BOBv", name: fixture.rawValue),
+                                                                  localMemberID: ElementCallExampleOutage.localMemberID,
+                                                                  audioOf: scripted.call)
+            let controller = ElementCallController.permissionProbe(following: scripted.call, call: playback.player.call)
+            controller.actions
+                .sink { [weak self] action in self?.handle(action) }
+                .store(in: &cancellables)
+            let viewModel = ElementCallScreenViewModel(controller: controller)
+            playback.attach(context: viewModel.context, controller: controller)
+            session = Session(fixture: fixture, presentation: .scripted(viewModel, playback), controller: controller)
+            controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: true), room: room)
+            ringingTask = Task {
+                await playback.start()
+                await playback.step()
             }
         } catch {
             notice = "Fixture \(fixture.rawValue) failed to load: \(error)"

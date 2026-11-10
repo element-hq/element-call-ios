@@ -238,6 +238,9 @@ public final class MatrixRTCMediaSession {
     /// opening the device there is a privacy abort. The camera state still changes, so our tile
     /// follows it and the harness draws its test pattern there.
     private let capturesCamera: Bool
+    /// Whether publishing the microphone starts its tap. Off for a scripted call, whose track has no
+    /// Rust object to hand frames to; the mute state is still recorded (042's `permission_probe`).
+    private let capturesMicrophone: Bool
     
     /// `audio` defaults to one of its own for a session with no call around it: the harness's and
     /// the tests'.
@@ -246,12 +249,14 @@ public final class MatrixRTCMediaSession {
          audio: CallAudio = CallAudio(),
          clock: any Clock<Duration> = ContinuousClock(),
          capturesCamera: Bool = true,
+         capturesMicrophone: Bool = true,
          reactionSpread: @escaping () -> Duration = { .milliseconds(Int.random(in: 0...500)) }) {
         self.localMemberID = localMemberID
         self.audio = audio
         self.mediaSession = mediaSession
         self.clock = clock
         self.capturesCamera = capturesCamera
+        self.capturesMicrophone = capturesMicrophone
         self.reactionSpread = reactionSpread
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(participantCap: Self.defaultParticipantCapForJoinLeaveSounds)
         elapsed = stopwatch(clock)
@@ -328,7 +333,9 @@ public final class MatrixRTCMediaSession {
             throw MatrixRTCError.media("Failed to publish the microphone: \(error)")
         }
         microphoneTrack = track
-        microphone.start(track: track)
+        if capturesMicrophone {
+            microphone.start(track: track)
+        }
         // The transport already knows, from the publish. This is what closes the capturer's own gate
         // and records the state.
         await setMicrophoneMuted(muted)

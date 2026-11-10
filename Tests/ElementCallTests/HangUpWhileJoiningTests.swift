@@ -98,7 +98,8 @@ struct HangUpWhileJoiningTests {
                                                    system: system,
                                                    options: ElementCallOptions(),
                                                    style: .stock,
-                                                   logger: logger)
+                                                   logger: logger,
+                                                   permissions: ElementCallFakeMediaPermissions())
             controller.clock = MatrixRTCManualClock()
             self.system = system
             self.logger = logger

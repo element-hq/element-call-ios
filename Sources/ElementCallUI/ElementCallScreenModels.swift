@@ -85,10 +85,18 @@ public nonisolated struct ElementCallAlert: Identifiable, Equatable, Sendable {
     public let id = UUID()
     public let title: String
     public let message: String
+    /// A second button beside Cancel. Nil for a message, which has OK alone.
+    public let action: Action?
     
-    public init(title: String, message: String) {
+    public nonisolated enum Action: Sendable, Equatable {
+        /// The camera is refused: Open settings (042 R11).
+        case openSettings
+    }
+    
+    public init(title: String, message: String, action: Action? = nil) {
         self.title = title
         self.message = message
+        self.action = action
     }
 }
 
@@ -377,4 +385,6 @@ public nonisolated enum ElementCallScreenViewAction: Sendable {
     case minimize
     case hangUp
     case dismiss
+    /// The app's page in the system Settings, for a refused microphone or camera (042 R7, R11).
+    case openSettings
 }

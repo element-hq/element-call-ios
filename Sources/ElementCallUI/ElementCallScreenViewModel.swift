@@ -148,7 +148,8 @@ public final class ElementCallScreenContext {
                 context.viewState.reactionsPreference = preference
             case let .setSoundEffectsVolume(volume):
                 context.viewState.soundEffectsVolume = volume
-            case .playSoundEffectsVolumeSample:
+            case .playSoundEffectsVolumeSample, .openSettings:
+                // A fixture screen has no permissions of its own.
                 break
             case .minimize, .hangUp, .dismiss:
                 context.viewState.presentedSheet = nil
@@ -296,6 +297,8 @@ public final class ElementCallScreenViewModel {
             controller.hangUp()
         case .dismiss:
             controller.reset()
+        case .openSettings:
+            controller.openSettings()
         }
     }
     
@@ -391,6 +394,12 @@ public final class ElementCallScreenViewModel {
         if let message = controller.errorMessage {
             context.alertInfo = ElementCallAlert(title: L10n.error, message: message)
             controller.errorMessage = nil
+        }
+        if controller.isCameraRefusalNoticePending {
+            context.alertInfo = ElementCallAlert(title: L10n.permissionCameraTitle,
+                                                 message: L10n.permissionCameraDescription,
+                                                 action: .openSettings)
+            controller.isCameraRefusalNoticePending = false
         }
         
         guard let call = controller.call else {
