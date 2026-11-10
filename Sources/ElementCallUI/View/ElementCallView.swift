@@ -48,7 +48,14 @@ struct ElementCallView: View {
                 // A failed call is over: its screen says why and offers the way out, and nothing
                 // of the call is left to draw (034 R27).
                 if case .failed(let failure) = context.viewState.connection {
-                    ElementCallFailureView(failure: failure) { context.send(viewAction: .hangUp) }
+                    // Open settings ends the call as Close does: it has failed, and the user starts
+                    // it again after a grant (042 C2, C7).
+                    ElementCallFailureView(failure: failure,
+                                           onOpenSettings: failure == .microphoneRefused ? {
+                                               context.send(viewAction: .openSettings)
+                                               context.send(viewAction: .hangUp)
+                                           } : nil,
+                                           onClose: { context.send(viewAction: .hangUp) })
                 } else if context.viewState.isMaximized {
                     // Minimized (bar or Picture in Picture): nothing mounted, so the tiles' streams
                     // close and only the window's own slot keeps decoding.
@@ -187,8 +194,17 @@ struct ElementCallView: View {
                                             context.alertInfo = nil
                                         }
                                     }),
-               presenting: context.alertInfo) { _ in
-            Button(L10n.ok) { context.alertInfo = nil }
+               presenting: context.alertInfo) { alert in
+            switch alert.action {
+            case .openSettings:
+                Button(L10n.actionOpenSettings) {
+                    context.alertInfo = nil
+                    context.send(viewAction: .openSettings)
+                }
+                Button(L10n.actionCancel, role: .cancel) { context.alertInfo = nil }
+            case nil:
+                Button(L10n.ok) { context.alertInfo = nil }
+            }
         } message: { alert in
             Text(alert.message)
         }

@@ -17,6 +17,11 @@ version will actually read it.
 SDK bindings expose it (matrix-org/matrix-rust-sdk#7428); copy it to join MSC calls and `url`-only
 transports.
 
+- `ElementCallFailure` gains `microphoneRefused`: a call started with the microphone refused fails before it joins (042).
+- `ElementCallSystemProvidingProtocol.endCall` can now arrive without a `startCall` before it, when the call stopped at the microphone; end the answered ringing call for that room, if any.
+- `ElementCallController.init` takes `permissions:`, defaulting to the system's; a host's tests of a real controller pass `ElementCallFakeMediaPermissions` to avoid the system dialog.
+- The host's Info.plist must have both `NSMicrophoneUsageDescription` and `NSCameraUsageDescription`, the camera one now for voice-only hosts too.
+
 ## 0.1.0-rc.15 - 2026-11-04
 
 **Call preferences go through a new port, `ElementCallPreferencesStoreProtocol`.** It holds the

@@ -77,6 +77,8 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     public static let interruptionsList = "\(prefix).interruptionsList"
     /// The failure screen's close button (034 R27).
     public static let failureClose = "\(prefix).failureClose"
+    /// The failure screen's Open settings, for a refused microphone (042 R7).
+    public static let failureOpenSettings = "\(prefix).failureOpenSettings"
     
     /// A tile, identified by the member on it **and the stream it draws**.
     ///

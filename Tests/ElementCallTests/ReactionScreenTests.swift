@@ -168,7 +168,8 @@ struct ReactionScreenTests {
             scripted.push(roster: [.init(name: "BOB"), .init(name: "CAROL"), .init(name: "ME")])
             controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
                                                system: ElementCallFakeSystem(),
-                                               preferences: preferences)
+                                               preferences: preferences,
+                                               permissions: ElementCallFakeMediaPermissions())
             controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
                                        room: room, connection: .connected, call: session)
             viewModel = ElementCallScreenViewModel(controller: controller)

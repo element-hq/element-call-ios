@@ -114,6 +114,8 @@ package nonisolated enum L10n {
   package static var actionCancel: String { ElementCallLocalization.string("Localizable", "element_call_action_cancel") }
   /// Close
   package static var actionClose: String { ElementCallLocalization.string("Localizable", "element_call_action_close") }
+  /// Open settings
+  package static var actionOpenSettings: String { ElementCallLocalization.string("Localizable", "element_call_action_open_settings") }
   /// Return
   package static var actionReturnIos: String { ElementCallLocalization.string("Localizable", "element_call_action_return_ios") }
   /// Stop
@@ -192,6 +194,14 @@ package nonisolated enum L10n {
   package static var moreTitle: String { ElementCallLocalization.string("Localizable", "element_call_more_title") }
   /// OK
   package static var ok: String { ElementCallLocalization.string("Localizable", "element_call_ok") }
+  /// Allow access to the camera in settings to turn it on.
+  package static var permissionCameraDescription: String { ElementCallLocalization.string("Localizable", "element_call_permission_camera_description") }
+  /// Camera not allowed
+  package static var permissionCameraTitle: String { ElementCallLocalization.string("Localizable", "element_call_permission_camera_title") }
+  /// Allow access to the microphone in settings, then start the call again.
+  package static var permissionMicrophoneDescription: String { ElementCallLocalization.string("Localizable", "element_call_permission_microphone_description") }
+  /// Microphone needed
+  package static var permissionMicrophoneTitle: String { ElementCallLocalization.string("Localizable", "element_call_permission_microphone_title") }
   /// About
   package static var preferencesAbout: String { ElementCallLocalization.string("Localizable", "element_call_preferences_about") }
   /// matrix-rust-rtc %1$@

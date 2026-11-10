@@ -63,6 +63,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case outagePeerSFU1m = "outage.peer_sfu.1m"
     case outageKeyUndeliveredThenDelivered = "outage.key.undelivered_then_delivered"
     case outageKeyMissing = "outage.key.missing"
+    case permissionProbe = "permission_probe"
     
     /// `-fixture <key>` opens a fixture and `-scenario <name>` a scenario file, mirroring Android's
     /// `--es fixture` and `--es scenario` so one recipe reads the same on both.
@@ -76,6 +77,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case connecting = "Connecting"
         case ringing = "Ringing"
         case outages = "Outages"
+        case permissions = "Permissions"
     }
     
     var category: Category {
@@ -84,6 +86,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .ringingPickup, .ringingVoicePickup, .ringingDeclined, .ringingUnanswered: .ringing
         case .outageHomeserver30s, .outageHomeserverLapse, .outageOwnSFURecovers40s, .outageOwnSFUBudget, .outagePeerSFU1m,
              .outageKeyUndeliveredThenDelivered, .outageKeyMissing: .outages
+        case .permissionProbe: .permissions
         default: .connected
         }
     }
@@ -129,6 +132,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .outagePeerSFU1m: "Carol and Bob's media server away for 1 min"
         case .outageKeyUndeliveredThenDelivered: "Erin's key late, then delivered"
         case .outageKeyMissing: "Erin's key never arrives"
+        case .permissionProbe: "Microphone and camera permissions"
         }
     }
     
@@ -171,7 +175,24 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .outagePeerSFU1m: "From 5 s Carol and Bob are avatars with a spinner, until 65 s."
         case .outageKeyUndeliveredThenDelivered: "From 5 s Erin's key is missing, until 12 s: her spinner, and no indicator."
         case .outageKeyMissing: "From 5 s Erin's key is missing: her spinner, the key-off icon from 15 s, and no indicator."
+        case .permissionProbe: "A video call with Bob through the real controller, so the system's dialogs appear (042)."
         }
+    }
+    
+    /// What the catalogue shows under the row: for the probe, the current authorization, read
+    /// afresh each time the list is drawn (fixtures.md, "Permissions").
+    @MainActor
+    var catalogueDetail: String {
+        guard self == .permissionProbe else { return detail }
+        let permissions = ElementCallSystemMediaPermissions()
+        func describe(_ permission: ElementCallMediaPermission) -> String {
+            switch permission {
+            case .notAsked: "never asked"
+            case .refused: "refused"
+            case .granted: "allowed"
+            }
+        }
+        return "Microphone: \(describe(permissions.permission(for: .microphone))) · Camera: \(describe(permissions.permission(for: .camera)))"
     }
     
     /// Android draws the video call as its floating tile and the voice call as its bar; iOS has
@@ -194,6 +215,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case outage(ElementCallExampleOutage)
         /// A small call on a scripted call, with reactions arriving on a loop.
         case reactions(ElementCallExampleReactions)
+        /// A video call with Bob through the real controller and the system's permissions (042).
+        case permissionProbe
     }
     
     /// Built from the same fixtures the snapshots use, so a failure here and a failure there are
@@ -313,6 +336,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return .outage(.keyUndeliveredThenDelivered)
         case .outageKeyMissing:
             return .outage(.keyMissing)
+        case .permissionProbe:
+            return .permissionProbe
         case .joining:
             return .connecting(.joining)
         case .connectingMedia:
