@@ -322,7 +322,8 @@ public final class MatrixRTCMediaSession {
                                                                                                           numChannels: UInt32(AudioFormat.channelCount)),
                                                                               video: nil,
                                                                               simulcast: false,
-                                                                              muted: muted))
+                                                                              muted: muted,
+                                                                              videoCodec: .auto))
         } catch {
             throw MatrixRTCError.media("Failed to publish the microphone: \(error)")
         }
@@ -363,7 +364,8 @@ public final class MatrixRTCMediaSession {
                                                                                       video: FfiVideoSourceConfig(width: UInt32(size.width),
                                                                                                                   height: UInt32(size.height)),
                                                                                       simulcast: true,
-                                                                                      muted: false))
+                                                                                      muted: false,
+                                                                                      videoCodec: .auto))
                 } catch {
                     throw MatrixRTCError.media("Failed to publish the camera: \(error)")
                 }
@@ -496,7 +498,8 @@ public final class MatrixRTCMediaSession {
                                                                                   video: FfiVideoSourceConfig(width: UInt32(ScreenShareCapturer.maxLongEdge),
                                                                                                               height: UInt32(ScreenShareCapturer.maxLongEdge * 9 / 16)),
                                                                                   simulcast: true,
-                                                                                  muted: false))
+                                                                                  muted: false,
+                                                                                  videoCodec: .auto))
             } catch {
                 throw MatrixRTCError.media("Failed to publish the screen share: \(error)")
             }
