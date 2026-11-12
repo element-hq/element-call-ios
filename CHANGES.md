@@ -11,6 +11,10 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.16 - 2026-11-10
+
 **Core: matrix-rust-rtc `0.5.0-rc.11`.** `MatrixRTCConnectionLossReason` gains
 `tokenEndpointUnsupported`, the homeserver offering no `get_token`. The reference
 `SDKMatrixBackend.liveKitToken` now makes the `get_token` request itself, as a workaround until the
@@ -21,6 +25,23 @@ transports.
 - `ElementCallSystemProvidingProtocol.endCall` can now arrive without a `startCall` before it, when the call stopped at the microphone; end the answered ringing call for that room, if any.
 - `ElementCallController.init` takes `permissions:`, defaulting to the system's; a host's tests of a real controller pass `ElementCallFakeMediaPermissions` to avoid the system dialog.
 - The host's Info.plist must have both `NSMicrophoneUsageDescription` and `NSCameraUsageDescription`, the camera one now for voice-only hosts too.
+
+
+
+### What's Changed
+
+✨ Features
+* Support sending reactions 🎉 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/92
+* Gracefully handle microphone and camera permissions by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/97
+
+🐛 Bugfixes
+* Joining a voice call from the room no longer turns the camera on by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/95
+
+Others
+* Bump matrix-rust-rtc to 0.5.0-rc.11 by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/96
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.15...0.1.0-rc.16
 
 ## 0.1.0-rc.15 - 2026-11-04
 
