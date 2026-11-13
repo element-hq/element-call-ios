@@ -175,6 +175,10 @@ public nonisolated enum ElementCallIcon: Sendable, CaseIterable {
     case overflow
     /// The overflow menu's way into the Preferences sheet (037 R12).
     case preferences
+    /// The top bar's settings menu (043 R1).
+    case settings
+    /// Developer options, in the settings menu (043 R3).
+    case developerOptions
     case collapse
     /// The service interruptions indicator, and the arrow saying it opens something.
     case info

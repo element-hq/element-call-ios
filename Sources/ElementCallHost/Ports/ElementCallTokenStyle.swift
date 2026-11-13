@@ -146,6 +146,8 @@ public nonisolated struct ElementCallTokenIcons: ElementCallIconRenderingProtoco
         case .userProfile: icons.userProfileSolid
         case .overflow: icons.overflowHorizontal
         case .preferences: icons.preferences
+        case .settings: icons.settingsSolid
+        case .developerOptions: icons.advancedSettings
         case .collapse: icons.collapse
         case .info: icons.infoSolid
         case .chevronRight: icons.chevronRight

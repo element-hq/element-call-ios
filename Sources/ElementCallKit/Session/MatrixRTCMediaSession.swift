@@ -182,6 +182,11 @@ public final class MatrixRTCMediaSession {
         set { joinLeaveSoundPolicy.participantCap = newValue }
     }
     
+    /// The codec the camera and a screen share are published with; the microphone is always Auto.
+    /// Set by whoever connected the call, before media is published, and read at each publish
+    /// (043 R16a).
+    public var videoCodec: MatrixRTCVideoCodec = .auto
+    
     /// The reactions showing now, in order of arrival (037). Each joins once its spread is over and
     /// leaves four seconds after it arrived; how long it is drawn for, within that, is the UI's.
     public private(set) var reactions: [MatrixRTCReaction] = []
@@ -372,7 +377,7 @@ public final class MatrixRTCMediaSession {
                                                                                                                   height: UInt32(size.height)),
                                                                                       simulcast: true,
                                                                                       muted: false,
-                                                                                      videoCodec: .auto))
+                                                                                      videoCodec: videoCodec.ffi))
                 } catch {
                     throw MatrixRTCError.media("Failed to publish the camera: \(error)")
                 }
@@ -506,7 +511,7 @@ public final class MatrixRTCMediaSession {
                                                                                                               height: UInt32(ScreenShareCapturer.maxLongEdge * 9 / 16)),
                                                                                   simulcast: true,
                                                                                   muted: false,
-                                                                                  videoCodec: .auto))
+                                                                                  videoCodec: videoCodec.ffi))
             } catch {
                 throw MatrixRTCError.media("Failed to publish the screen share: \(error)")
             }
