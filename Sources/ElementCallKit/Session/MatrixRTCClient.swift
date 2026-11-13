@@ -52,6 +52,12 @@ public final class MatrixRTCClient {
         client.reportConnectivity(online: isOnline)
     }
     
+    /// The codecs a developer may choose for video: Auto, then each one this device can encode, and no
+    /// others (043 R15). Static because it is the device's answer, not the account's.
+    public static func supportedVideoCodecs() -> [MatrixRTCVideoCodec] {
+        [.auto] + MatrixRtc.supportedVideoCodecs().map(MatrixRTCVideoCodec.init).filter { $0 != .auto }
+    }
+    
     /// Opens the room in a membership format and returns once the core has applied its current state.
     public func room(roomID: String, format: MatrixRTCMembershipFormat) async throws -> MatrixRTCRoom {
         MatrixRTCLog.info("Opening \(roomID) in format \(format)")

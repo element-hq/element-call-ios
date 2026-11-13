@@ -41,6 +41,11 @@ public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Anything else that stopped the call from starting: the room not opening, the microphone not
     /// publishing. Developer text, shown as it is, which is what every failure was before 034.
     case other(String)
+    /// A join in the MSC membership format failed other than by timing out, or its media connection
+    /// was lost because the homeserver has no MSC4195 `get_token`. The homeserver may lack what MSC
+    /// needs, and the screen says so rather than guessing which piece (043 R18). The developer text
+    /// is logged, not shown.
+    case mscJoinFailed(String)
 }
 
 package nonisolated extension ElementCallFailure {
@@ -50,7 +55,7 @@ package nonisolated extension ElementCallFailure {
         case .connectionLost(.budget): L10n.failureConnectionLostTitle
         case .connectionLost(.refused), .connectionLost(.neverConnected), .connectionLost(.tokenEndpointUnsupported):
             L10n.failureConnectionFailedTitle
-        case .joinTimedOut, .joinRefused: L10n.failureJoinFailedTitle
+        case .joinTimedOut, .joinRefused, .mscJoinFailed: L10n.failureJoinFailedTitle
         case .microphoneRefused: L10n.permissionMicrophoneTitle
         case .other: L10n.callFailed
         }
@@ -67,6 +72,7 @@ package nonisolated extension ElementCallFailure {
         case .joinRefused: L10n.failureJoinRefused
         case .microphoneRefused: L10n.permissionMicrophoneDescription
         case .other(let message): message
+        case .mscJoinFailed: L10n.failureJoinMembershipFormat
         }
     }
 }
@@ -107,8 +113,18 @@ public final class ElementCallController {
     public private(set) var audioOutput: CallAudioOutput?
     public private(set) var isMaximized = true
     public private(set) var isTileStatsVisible = false
-    /// The user's choice for reactions, from ``preferences``; set with ``setReactionsPreference(_:)``.
-    public private(set) var reactionsPreference: ElementCallReactionsPreference
+    /// Whether received reactions rise as bubbles, from ``preferences``; set with
+    /// ``setShowsReactions(_:)`` (043 R6).
+    public private(set) var showsReactions: Bool
+    /// Whether received reactions play their sound, from ``preferences``; set with
+    /// ``setPlaysReactionSounds(_:)``. Kept while ``showsReactions`` is off, and ignored then (043 R7).
+    public private(set) var playsReactionSounds: Bool
+    /// The format the next join publishes its membership in, from ``preferences``; set with
+    /// ``setMembershipFormat(_:)``. A call in progress keeps the one it joined with (043 R14).
+    public private(set) var membershipFormat: MatrixRTCMembershipFormat
+    /// The codec the next join publishes video with, from ``preferences``; set with
+    /// ``setVideoCodec(_:)`` (043 R16a).
+    public private(set) var videoCodec: MatrixRTCVideoCodec
     /// How loud the call's sound effects play, from ``preferences``; set with
     /// ``setSoundEffectsVolume(_:)``.
     public private(set) var soundEffectsVolume: Float
@@ -155,6 +171,8 @@ public final class ElementCallController {
     /// process has no microphone usage string for.
     @ObservationIgnored var isAudioEnabled = true
     @ObservationIgnored private var interruptionsTask: Task<Void, Never>?
+    /// The format the join under way was made in, for what its failure says (043 R18).
+    @ObservationIgnored private var joiningFormat: MatrixRTCMembershipFormat?
     @ObservationIgnored private(set) var interruptionHoldTask: Task<Void, Never>?
     
     private var followedSignalling: MatrixRTCSignallingHealth = .reachable
@@ -287,7 +305,10 @@ public final class ElementCallController {
         self.system = system
         self.options = options
         self.preferences = preferences
-        reactionsPreference = preferences.reactions
+        showsReactions = preferences.showsReactions
+        playsReactionSounds = preferences.playsReactionSounds
+        membershipFormat = preferences.membershipFormat
+        videoCodec = preferences.videoCodec
         soundEffectsVolume = preferences.soundEffectsVolume
         self.style = style
         self.logger = logger
@@ -435,14 +456,48 @@ public final class ElementCallController {
         isMaximized = maximized
     }
     
+    /// What the session does with a received reaction, from the two switches: nothing without
+    /// bubbles, whatever the sound switch remembers (043 R7).
+    var reactionsMode: MatrixRTCReactionsMode {
+        guard showsReactions else { return .off }
+        return playsReactionSounds ? .withSound : .withoutSound
+    }
+    
     /// Kept for the next call too, and applied at once to this one: to the reactions that arrive
-    /// from now on, leaving those already showing or sounding to finish (037 R14, R15).
-    public func setReactionsPreference(_ preference: ElementCallReactionsPreference) {
-        guard preference != reactionsPreference else { return }
-        reactionsPreference = preference
-        preferences.reactions = preference
-        call?.reactionsMode = preference.mode
-        log(.info, "reactions \(preference.rawValue)")
+    /// from now on, leaving those already showing or sounding to finish (037 R15, 043 R8).
+    public func setShowsReactions(_ isOn: Bool) {
+        guard isOn != showsReactions else { return }
+        showsReactions = isOn
+        preferences.showsReactions = isOn
+        call?.reactionsMode = reactionsMode
+        log(.info, "reactions \(isOn ? "shown" : "hidden")")
+    }
+    
+    /// As ``setShowsReactions(_:)``. Refused while reactions are hidden: the switch is greyed then and
+    /// keeps the position the user left it in (043 R7).
+    public func setPlaysReactionSounds(_ isOn: Bool) {
+        guard showsReactions, isOn != playsReactionSounds else { return }
+        playsReactionSounds = isOn
+        preferences.playsReactionSounds = isOn
+        call?.reactionsMode = reactionsMode
+        log(.info, "reaction sounds \(isOn ? "on" : "off")")
+    }
+    
+    /// Kept for the next join, and nothing else: a call in progress keeps its format (043 R14).
+    /// Either format can be chosen; one the homeserver cannot carry fails that join (R18).
+    public func setMembershipFormat(_ format: MatrixRTCMembershipFormat) {
+        guard format != membershipFormat else { return }
+        membershipFormat = format
+        preferences.membershipFormat = format
+        log(.info, "membership format \(format.rawValue) from the next join")
+    }
+    
+    /// Kept for the next join; the call in progress keeps the codec it joined with (043 R16a).
+    public func setVideoCodec(_ codec: MatrixRTCVideoCodec) {
+        guard codec != videoCodec else { return }
+        videoCodec = codec
+        preferences.videoCodec = codec
+        log(.info, "video codec \(codec.rawValue) from the next join")
     }
     
     /// Kept for the next call too, and applied at once, to effects already playing as well (037 R22).
@@ -752,12 +807,15 @@ public final class ElementCallController {
                 log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
                 return
             }
-            fail("Media failed: \(error)")
+            failJoin(.other("Media failed: \(error)"))
             return
         }
         // Before anything else: from here on the session is handling the core's events.
         call.participantCapForJoinLeaveSounds = options.participantCapForJoinLeaveSounds
-        call.reactionsMode = reactionsPreference.mode
+        call.reactionsMode = reactionsMode
+        // Read here, once: a change mid-call waits for the next join (043 R16a). A codec this device
+        // no longer encodes is published as Auto, and left in the store (R15).
+        call.videoCodec = MatrixRTCClient.supportedVideoCodecs().contains(videoCodec) ? videoCodec : .auto
         guard !Task.isCancelled else {
             await abandon(rtcCall: rtcCall, call: call, roomID: room.roomID)
             return
@@ -796,9 +854,10 @@ public final class ElementCallController {
                           room: any ElementCallRoomContextProtocol) async -> MatrixRTCCall? {
         await claimSystemCall(for: callData, room: room)
         
-        // Room state unless the host asks otherwise: a join in the other formats fails in a room with
-        // no open MSC4143 slot, and nothing here opens one.
-        let format = options.membershipFormat
+        // The user's, from Developer options, and nobody else's (043 R13); Room state until changed.
+        // Read once: the call keeps it whatever the setting does meanwhile (R14).
+        let format = membershipFormat
+        joiningFormat = format
         log(.info, "joining with membership format \(format)")
         
         let rtcRoom: MatrixRTCRoom
@@ -809,7 +868,7 @@ public final class ElementCallController {
                 log(.info, "join of \(room.roomID) was cancelled, ignoring: \(error)")
                 return nil
             }
-            fail("Could not open the room: \(error)")
+            failJoin(.other("Could not open the room: \(error)"))
             return nil
         }
         self.rtcRoom = rtcRoom
@@ -828,10 +887,10 @@ public final class ElementCallController {
             fail(.joinTimedOut)
             return nil
         } catch MatrixRTCError.joinRefused(let errorCode, let reason) {
-            fail(.joinRefused, "Join refused: \(errorCode ?? "no code") \(reason)")
+            failJoin(.joinRefused, "Join refused: \(errorCode ?? "no code") \(reason)")
             return nil
         } catch {
-            fail("Join failed: \(error)")
+            failJoin(.other("Join failed: \(error)"))
             return nil
         }
         self.rtcCall = rtcCall
@@ -1064,6 +1123,38 @@ public final class ElementCallController {
         fail(.other(message), message)
     }
     
+    /// A failure on the way into the call. In the MSC format it may be the homeserver lacking what
+    /// MSC needs, so it says so (043 R18); never by retrying in Room state, which would split the
+    /// call (038 R45). A timeout is a slow homeserver, not a format, and stays what it is.
+    private func failJoin(_ failure: ElementCallFailure, _ message: String? = nil) {
+        let detail = message ?? {
+            if case .other(let text) = failure {
+                text
+            } else {
+                "\(failure)"
+            }
+        }()
+        guard joiningFormat == .msc, failure != .joinTimedOut else {
+            fail(failure, detail)
+            return
+        }
+        fail(.mscJoinFailed(detail), "MSC join failed: \(detail)")
+    }
+    
+    /// The failure a lost connection shows. In MSC, a homeserver without `get_token` is one that may
+    /// lack what MSC needs, so it reads as the format's failure and offers Room state (043 R18,
+    /// R18a). Matched by reason and format together: a Room state call whose transport names only an
+    /// SFU `url` asks the same endpoint, and there the format is not the cause.
+    static func failure(forLoss loss: MatrixRTCConnectionLossReason,
+                        message: String,
+                        format: MatrixRTCMembershipFormat?) -> ElementCallFailure {
+        if loss == .tokenEndpointUnsupported, format == .msc {
+            .mscJoinFailed("connection lost (\(loss)): \(message)")
+        } else {
+            .connectionLost(loss)
+        }
+    }
+    
     private func fail(_ failure: ElementCallFailure, _ message: String? = nil) {
         log(.error, message ?? "call failed: \(failure)")
         connection = .failed(failure)
@@ -1139,7 +1230,7 @@ public final class ElementCallController {
         
         if case .connectionClosed(let loss, let message) = reason {
             log(.error, "connection lost (\(loss)): \(message)")
-            connection = .failed(.connectionLost(loss))
+            connection = .failed(Self.failure(forLoss: loss, message: message, format: joiningFormat))
         } else if case .failed = connection {
             // Keep the failure visible until the screen is dismissed.
         } else {
@@ -1193,14 +1284,16 @@ public final class ElementCallController {
                          connection: ElementCallConnection,
                          connectedAt: Date? = nil,
                          call: MatrixRTCMediaSession? = nil,
-                         rtcCall: MatrixRTCCall? = nil) {
+                         rtcCall: MatrixRTCCall? = nil,
+                         joiningFormat: MatrixRTCMembershipFormat? = nil) {
         self.callData = callData
+        self.joiningFormat = joiningFormat
         self.room = room
         self.connection = connection
         self.connectedAt = connectedAt
         self.call = call
         self.rtcCall = rtcCall
-        call?.reactionsMode = reactionsPreference.mode
+        call?.reactionsMode = reactionsMode
         // The same seed `startCall` makes, so a preview of a connecting call draws the controls a
         // real one would: the camera reads as on for a video call from the moment it is joining,
         // which is what it will join with.

@@ -106,6 +106,22 @@ public nonisolated enum MatrixRTCMembershipFormat: String, Sendable, CaseIterabl
     case roomState
 }
 
+/// The codec video is published with (043 R15). What the device can encode is
+/// ``MatrixRTCClient/supportedVideoCodecs()``; a codec it cannot is published as ``auto``.
+public nonisolated enum MatrixRTCVideoCodec: String, Sendable, CaseIterable, Codable {
+    /// The transport's default, ``autoCodec``.
+    case auto
+    case vp8
+    case h264
+    case vp9
+    case av1
+    
+    /// What ``auto`` publishes: the core maps it to LiveKit's default, VP8
+    /// (`matrix-rtc-livekit/src/video_encoding.rs`, `video_publish_options`). The FFI documents it
+    /// but exposes no value, so it is stated here, once, and named in the picker (043 R15a).
+    public static let autoCodec: MatrixRTCVideoCodec = .vp8
+}
+
 public nonisolated enum MatrixRTCCallIntent: String, Sendable {
     case audio, video
 }
