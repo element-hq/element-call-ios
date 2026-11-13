@@ -41,9 +41,10 @@ public nonisolated enum ElementCallFailure: Equatable, Sendable {
     /// Anything else that stopped the call from starting: the room not opening, the microphone not
     /// publishing. Developer text, shown as it is, which is what every failure was before 034.
     case other(String)
-    /// A join in the MSC membership format failed other than by timing out. The homeserver may lack
-    /// what MSC needs, and the screen says so rather than guessing which piece (043 R18). The
-    /// developer text is logged, not shown.
+    /// A join in the MSC membership format failed other than by timing out, or its media connection
+    /// was lost because the homeserver has no MSC4195 `get_token`. The homeserver may lack what MSC
+    /// needs, and the screen says so rather than guessing which piece (043 R18). The developer text
+    /// is logged, not shown.
     case mscJoinFailed(String)
 }
 
@@ -1140,6 +1141,20 @@ public final class ElementCallController {
         fail(.mscJoinFailed(detail), "MSC join failed: \(detail)")
     }
     
+    /// The failure a lost connection shows. In MSC, a homeserver without `get_token` is one that may
+    /// lack what MSC needs, so it reads as the format's failure and offers Room state (043 R18,
+    /// R18a). Matched by reason and format together: a Room state call whose transport names only an
+    /// SFU `url` asks the same endpoint, and there the format is not the cause.
+    static func failure(forLoss loss: MatrixRTCConnectionLossReason,
+                        message: String,
+                        format: MatrixRTCMembershipFormat?) -> ElementCallFailure {
+        if loss == .tokenEndpointUnsupported, format == .msc {
+            .mscJoinFailed("connection lost (\(loss)): \(message)")
+        } else {
+            .connectionLost(loss)
+        }
+    }
+    
     private func fail(_ failure: ElementCallFailure, _ message: String? = nil) {
         log(.error, message ?? "call failed: \(failure)")
         connection = .failed(failure)
@@ -1215,7 +1230,7 @@ public final class ElementCallController {
         
         if case .connectionClosed(let loss, let message) = reason {
             log(.error, "connection lost (\(loss)): \(message)")
-            connection = .failed(.connectionLost(loss))
+            connection = .failed(Self.failure(forLoss: loss, message: message, format: joiningFormat))
         } else if case .failed = connection {
             // Keep the failure visible until the screen is dismissed.
         } else {
@@ -1269,8 +1284,10 @@ public final class ElementCallController {
                          connection: ElementCallConnection,
                          connectedAt: Date? = nil,
                          call: MatrixRTCMediaSession? = nil,
-                         rtcCall: MatrixRTCCall? = nil) {
+                         rtcCall: MatrixRTCCall? = nil,
+                         joiningFormat: MatrixRTCMembershipFormat? = nil) {
         self.callData = callData
+        self.joiningFormat = joiningFormat
         self.room = room
         self.connection = connection
         self.connectedAt = connectedAt

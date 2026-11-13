@@ -180,6 +180,41 @@ struct CallStatusTests {
         #expect(recorder.sawRestoreRequested)
     }
     
+    /// In MSC, a homeserver without `get_token` loses the media connection right after the join.
+    /// That may be the format, so the screen says so and offers Room state (043 R18, R18a).
+    @Test
+    func anMSCCallWithoutTheTokenEndpointSaysTheFormatMayBeTheCause() async throws {
+        let fixture = start(status: .connected(sinceMs: 1000, degraded: false), format: .msc)
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .connectionClosed(reason: .tokenEndpointUnsupported, message: "404")))
+        try await waitUntil {
+            if case .failed(.mscJoinFailed) = fixture.controller.connection {
+                true
+            } else {
+                false
+            }
+        }
+        // The screen's words and its Use Room state follow from the failure (CallSettingsTests).
+        guard case .failed(let failure) = fixture.controller.connection else { return }
+        #expect(failure.text == L10n.failureJoinMembershipFormat)
+    }
+    
+    /// A Room state call whose transport names only an SFU `url` asks the same endpoint. There the
+    /// format is not the cause, and the loss keeps its own words.
+    @Test
+    func aRoomStateCallWithoutTheTokenEndpointKeepsItsOwnWords() async throws {
+        let fixture = start(status: .connected(sinceMs: 1000, degraded: false), format: .roomState)
+        
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .connectionClosed(reason: .tokenEndpointUnsupported, message: "404")))
+        try await waitUntil { fixture.controller.connection == .failed(.connectionLost(.tokenEndpointUnsupported)) }
+    }
+    
+    /// In MSC, every other loss after the join is the media server's, not the format's (043 R18).
+    @Test(arguments: [MatrixRTCConnectionLossReason.budget, .refused, .neverConnected])
+    func otherLossesInMSCKeepTheirOwnWords(loss: MatrixRTCConnectionLossReason) {
+        #expect(ElementCallController.failure(forLoss: loss, message: "gone", format: .msc) == .connectionLost(loss))
+    }
+    
     /// Each cause has its own words, so both platforms can say the same thing for it (034 R27).
     @Test
     func everyFailureIsWordedOnItsOwn() {
@@ -245,7 +280,9 @@ struct CallStatusTests {
     /// One second of silence for each end sound, so a test knows exactly how long one lasts.
     private static let endSoundLength = Duration.seconds(1)
     
-    private func start(status: FfiCallStatus, clock: any Clock<Duration> = ContinuousClock()) -> Fixture {
+    private func start(status: FfiCallStatus,
+                       clock: any Clock<Duration> = ContinuousClock(),
+                       format: MatrixRTCMembershipFormat? = nil) -> Fixture {
         let system = ElementCallFakeSystem()
         let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
                                                system: system,
@@ -257,7 +294,7 @@ struct CallStatusTests {
         let silence = [Float](repeating: 0, count: 48000)
         let audio = CallAudio(soundEffects: CallSoundEffectRenderer(join: [], leave: [], raiseHand: [], declined: silence, timeout: silence))
         let call = MatrixRTCCall(rtcCall: rtcCall, audio: audio, clock: clock)
-        controller.setPreviewState(callData: starting, room: ElementCallFakeRoom(), connection: .joining, rtcCall: call)
+        controller.setPreviewState(callData: starting, room: ElementCallFakeRoom(), connection: .joining, rtcCall: call, joiningFormat: format)
         call.start()
         controller.follow(call, roomID: roomID)
         return Fixture(controller: controller, system: system, rtcCall: rtcCall, call: call)
