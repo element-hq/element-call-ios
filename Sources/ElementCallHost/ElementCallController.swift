@@ -1272,6 +1272,7 @@ public final class ElementCallController {
         isHoldingFailure = false
         callData = nil
         room = nil
+        joiningFormat = nil
         connection = .idle
     }
     
