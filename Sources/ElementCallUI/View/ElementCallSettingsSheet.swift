@@ -127,16 +127,19 @@ struct ElementCallSettingsRowTitle: View {
     var description: String?
     
     @Environment(\.elementCallStyle) private var style
+    /// From the row's `.disabled`: SwiftUI dims the switch, but not text given a colour of its own,
+    /// so a greyed row would otherwise read as live beside its dimmed switch (043 R7).
+    @Environment(\.isEnabled) private var isEnabled
     
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(style.theme.bodyLG)
-                .foregroundStyle(style.theme.textPrimary)
+                .foregroundStyle(isEnabled ? style.theme.textPrimary : style.theme.textDisabled)
             if let description {
                 Text(description)
                     .font(style.theme.bodySM)
-                    .foregroundStyle(style.theme.textSecondary)
+                    .foregroundStyle(isEnabled ? style.theme.textSecondary : style.theme.textDisabled)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

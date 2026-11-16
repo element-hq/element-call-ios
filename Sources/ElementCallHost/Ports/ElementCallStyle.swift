@@ -37,6 +37,8 @@ public nonisolated protocol ElementCallThemeProtocol: Sendable {
     @MainActor var textPrimary: Color { get }
     @MainActor var textSecondary: Color { get }
     @MainActor var textCriticalPrimary: Color { get }
+    /// A setting that can't be changed now, such as the reaction sound while reactions are hidden.
+    @MainActor var textDisabled: Color { get }
     
     // Borders
     @MainActor var borderSuccessSubtle: Color { get }
@@ -91,6 +93,12 @@ public extension ElementCallThemeProtocol {
     /// keeps compiling and draws the name tag's spinner as designed.
     var iconSecondary: Color {
         CompoundCoreColorTokens.gray900
+    }
+    
+    /// Compound's own, as ``iconSecondary`` is, so a host theme written before this existed keeps
+    /// compiling and greys a disabled setting as designed.
+    var textDisabled: Color {
+        CompoundCoreColorTokens.gray800
     }
     
     /// Element Call web's: the dark theme's translucent greys, since the call screen is always dark.

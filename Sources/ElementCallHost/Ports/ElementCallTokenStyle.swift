@@ -90,6 +90,10 @@ public nonisolated struct ElementCallTokenTheme: ElementCallThemeProtocol {
         colors.textCriticalPrimary
     }
     
+    public var textDisabled: Color {
+        colors.textDisabled
+    }
+    
     public var borderSuccessSubtle: Color {
         colors.borderSuccessSubtle
     }
