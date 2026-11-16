@@ -18,6 +18,12 @@ import Synchronization
 /// engine is running.
 final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
     private let state = Mutex(State())
+    /// What every publish throws, after it is recorded: a microphone that will not publish (044 C6).
+    private let publishError: (any Error)?
+    
+    init(publishError: (any Error)? = nil) {
+        self.publishError = publishError
+    }
     
     private struct State {
         var published: [FfiPublishOptions] = []
@@ -45,6 +51,9 @@ final class FakeMediaSession: MediaSessionProtocol, @unchecked Sendable {
     
     func publish(options: FfiPublishOptions) async throws -> FfiLocalTrack {
         state.withLock { $0.published.append(options) }
+        if let publishError {
+            throw publishError
+        }
         return FfiLocalTrack(noPointer: .init())
     }
     
