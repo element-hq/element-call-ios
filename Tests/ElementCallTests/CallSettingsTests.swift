@@ -112,13 +112,12 @@ struct CallSettingsTests {
     @Test
     func anMSCJoinThatFailsSaysTheFormatMayBeTheCause() async throws {
         let logger = ElementCallFakeLogger()
-        let system = ElementCallFakeSystem()
-        let controller = makeController(ElementCallFakePreferencesStore(membershipFormat: .msc), logger: logger, system: system)
+        let controller = makeController(ElementCallFakePreferencesStore(membershipFormat: .msc), logger: logger)
         let clock = MatrixRTCManualClock()
         controller.clock = clock
         
         controller.startCall(joiningCall, room: room)
-        try await waitForTheRoom(system)
+        try await waitForTheRoom(clock)
         #expect(logger.records.contains { $0.message.contains("joining with membership format msc") })
         clock.advance(by: MatrixRTCClient.seedingTimeout + .seconds(1))
         
@@ -137,13 +136,12 @@ struct CallSettingsTests {
     func aFormatChangedWhileJoiningWaitsForTheNextJoin() async throws {
         let logger = ElementCallFakeLogger()
         let store = ElementCallFakePreferencesStore(membershipFormat: .roomState)
-        let system = ElementCallFakeSystem()
-        let controller = makeController(store, logger: logger, system: system)
+        let controller = makeController(store, logger: logger)
         let clock = MatrixRTCManualClock()
         controller.clock = clock
         
         controller.startCall(joiningCall, room: room)
-        try await waitForTheRoom(system)
+        try await waitForTheRoom(clock)
         #expect(logger.records.contains { $0.message.contains("joining with membership format roomState") })
         controller.setMembershipFormat(.msc)
         clock.advance(by: MatrixRTCClient.seedingTimeout + .seconds(1))
@@ -223,10 +221,9 @@ struct CallSettingsTests {
     // MARK: - Support
     
     private func makeController(_ store: ElementCallFakePreferencesStore,
-                                logger: ElementCallFakeLogger? = nil,
-                                system: ElementCallFakeSystem = ElementCallFakeSystem()) -> ElementCallController {
+                                logger: ElementCallFakeLogger? = nil) -> ElementCallController {
         ElementCallController(backend: ElementCallFakeMatrixBackend(),
-                              system: system,
+                              system: ElementCallFakeSystem(),
                               options: ElementCallOptions(isDeveloperModeEnabled: true),
                               logger: logger,
                               preferences: store,
@@ -248,21 +245,15 @@ struct CallSettingsTests {
         }
     }
     
-    /// The system is asked to start the call just before the room is opened, and the format is
-    /// logged on the way, so from here the join is waiting for a room that never comes.
-    private func waitForTheRoom(_ system: ElementCallFakeSystem) async throws {
-        // Longer than the other waits: under the whole suite's load the claim took more than 5 s.
+    /// Until the room open's bound is asleep on the clock, so the join is waiting for a room that
+    /// never comes. The format was read and logged before the open began, and advancing now fires
+    /// the bound: advanced any earlier, the bound would sleep from the new time and never fire.
+    /// Waited for rather than slept past, since under the whole suite's load the join took more
+    /// than 5 s to get there.
+    private func waitForTheRoom(_ clock: MatrixRTCManualClock) async throws {
         try await waitUntil(for: .seconds(30)) {
-            system.requests.contains {
-                if case .start = $0 {
-                    true
-                } else {
-                    false
-                }
-            }
+            clock.sleeperDeadlines.contains(MatrixRTCClient.seedingTimeout)
         }
-        // The format is read on the main actor right after the system call is claimed.
-        try await Task.sleep(for: .milliseconds(100))
     }
     
     private func waitUntil(for timeout: Duration = .seconds(5), _ condition: () -> Bool) async throws {
