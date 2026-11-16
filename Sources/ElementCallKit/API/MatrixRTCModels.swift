@@ -666,6 +666,11 @@ public nonisolated enum MatrixRTCError: Error, Sendable {
     case joinTimedOut
     /// The homeserver refused the join for good; `errorCode` is its Matrix `errcode` when it gave one.
     case joinRefused(errorCode: String?, reason: String)
+    /// The homeserver advertises no LiveKit transport of the room's format, so there is no media
+    /// server to publish on. `transportType` is the format's, for the logs.
+    case noLiveKitTransport(transportType: String)
+    /// Our homeserver has no MSC4195 `get_token`, so no media token can be had.
+    case tokenEndpointUnsupported
     case ffi(String)
     case media(String)
 }
