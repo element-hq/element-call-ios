@@ -355,7 +355,17 @@ struct CallAnalyticsTests {
             connections.append("\(fixture.controller.connection)")
             scripted.report(.ended(.declined))
             try await fixture.waitUntil { fixture.controller.connection.isFinished }
-            try await Task.sleep(for: .milliseconds(50))
+            // The system hears of the end once the decline's sound has played out: wait for it,
+            // or a loaded run compares a finished call with one still ending.
+            try await fixture.waitUntil(for: .seconds(15)) {
+                fixture.system.requests.contains {
+                    if case .end = $0 {
+                        true
+                    } else {
+                        false
+                    }
+                }
+            }
             connections.append("\(fixture.controller.connection)")
             cancellable.cancel()
             if withAnalytics {

@@ -6,8 +6,9 @@
 //
 
 @testable import ElementCallHost
-import ElementCallKit
+@testable import ElementCallKit
 import Foundation
+import MatrixRtc
 import Testing
 
 /// The analytics' state machine alone, with no call: every sequence of the moments the controller
@@ -406,6 +407,19 @@ struct CallAnalyticsReporterTests {
     ])
     func eachJoinErrorHasItsCauseStageAndStep(error: MatrixRTCError, expected: ElementCallAnalyticsReporter.JoinFailure) {
         #expect(ElementCallAnalyticsReporter.JoinFailure.forJoinError(error) == expected)
+    }
+    
+    /// The Kit keeps each join error the core types, so the table above can name it (C7).
+    @Test(arguments: [
+        (MatrixRtcFfiError.JoinTimedOut, "joinTimedOut"),
+        (.JoinRefused(errcode: "M_FORBIDDEN", reason: "nope"), #"joinRefused(errorCode: Optional("M_FORBIDDEN"), reason: "nope")"#),
+        (.SlotClosed("closed"), #"slotClosed("closed")"#),
+        (.NoLiveKitTransport(transportType: "livekit"), #"noLiveKitTransport(transportType: "livekit")"#),
+        (.TokenEndpointUnsupported, "tokenEndpointUnsupported"),
+        (.Backend("down"), #"ffi("Backend(\"down\")")"#)
+    ])
+    func theKitKeepsEachJoinErrorTyped(error: MatrixRtcFfiError, expected: String) {
+        #expect(expected == "\(MatrixRTCRoom.joinError(for: error, roomID: "!room:example.org"))")
     }
     
     // MARK: - No receiver (R2)
