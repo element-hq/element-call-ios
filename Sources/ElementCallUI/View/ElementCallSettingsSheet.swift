@@ -193,8 +193,9 @@ struct ElementCallSettingsChoices<Value: Hashable>: View {
                         .foregroundStyle(style.theme.textPrimary)
                     Spacer(minLength: 0)
                     if value == selection {
-                        Image(systemName: "checkmark")
-                            .font(style.theme.bodyLGSemibold)
+                        // The host's glyph, through the icon port as every other one is: an SF
+                        // Symbol here would be the one icon a host that draws its own cannot brand.
+                        style.icons.icon(.check, size: .medium, relativeTo: .bodyLGSemibold)
                             .foregroundStyle(style.theme.iconAccentPrimary)
                             .accessibilityHidden(true)
                     }

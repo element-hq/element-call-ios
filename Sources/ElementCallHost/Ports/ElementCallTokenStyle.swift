@@ -156,6 +156,7 @@ public nonisolated struct ElementCallTokenIcons: ElementCallIconRenderingProtoco
         case .info: icons.infoSolid
         case .chevronRight: icons.chevronRight
         case .close: icons.close
+        case .check: icons.check
         case .error: icons.errorSolid
         case .spinner: icons.spinner
         case .keyOff: icons.keyOffSolid

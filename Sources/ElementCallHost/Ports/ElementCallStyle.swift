@@ -193,6 +193,8 @@ public nonisolated enum ElementCallIcon: Sendable, CaseIterable {
     case chevronRight
     /// A sheet's way out (037 R12a).
     case close
+    /// The chosen row of a settings choice, such as the format or the codec (043 R11, R15).
+    case check
     /// The failure screen.
     case error
     /// A tile whose media is not arriving; turned by the view.

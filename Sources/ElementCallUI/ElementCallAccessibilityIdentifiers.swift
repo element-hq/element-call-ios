@@ -135,6 +135,7 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
         case .info: interruptions
         case .chevronRight: "\(prefix).chevronRight"
         case .close: "\(prefix).close"
+        case .check: "\(prefix).check"
         case .error: "\(prefix).error"
         case .spinner: "\(prefix).spinner"
         case .keyOff: "\(prefix).keyOff"
