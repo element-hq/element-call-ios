@@ -298,7 +298,6 @@ public final class ElementCallController {
     /// The media session's events, read for the call's size (044 R26).
     private var eventsTask: Task<Void, Never>?
     private var signallingTask: Task<Void, Never>?
-    private var routeObserver: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     
     /// `backend` is the call's Matrix port, implemented by the host over its SDK client. This package
@@ -335,10 +334,15 @@ public final class ElementCallController {
         self.logger = logger
         pictureInPicture.logger = logger
         
-        routeObserver = NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] notification in
-            let reason = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init)
-            MainActor.assumeIsolated { self?.refreshAudioRoute(reason: reason) }
-        }
+        // In `cancellables`, so it goes with the controller: a host keeps one per account and drops
+        // it with the account, and the observer this replaced was never removed.
+        NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)
+            .map { ($0.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt).flatMap(AVAudioSession.RouteChangeReason.init) }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] reason in
+                self?.refreshAudioRoute(reason: reason)
+            }
+            .store(in: &cancellables)
         
         pictureInPicture.actions
             .sink { [weak self] action in
@@ -378,6 +382,16 @@ public final class ElementCallController {
     
     // MARK: - Lifecycle
     
+    /// Again at each call, not only in `init`: the store is the device's, and a host keeps a
+    /// controller per account, so another controller may have changed it since.
+    private func readPreferences() {
+        showsReactions = preferences.showsReactions
+        playsReactionSounds = preferences.playsReactionSounds
+        membershipFormat = preferences.membershipFormat
+        videoCodec = preferences.videoCodec
+        soundEffectsVolume = preferences.soundEffectsVolume
+    }
+    
     public func startCall(_ callData: ElementCallData, room: any ElementCallRoomContextProtocol) {
         guard !isInCall else {
             log(.warning, "already in a call, ignoring start for \(room.roomID)")
@@ -390,6 +404,7 @@ public final class ElementCallController {
         isHoldingFailure = false
         isEnding = false
         isCloseRequested = false
+        readPreferences()
         self.callData = callData
         self.room = room
         isMaximized = true

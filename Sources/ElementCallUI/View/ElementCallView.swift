@@ -31,6 +31,8 @@ struct ElementCallView: View {
     /// A single tap waiting out ``chromeTapDelay`` before it toggles anything. A second tap within
     /// that is the other half of a double tap, and cancels it.
     @State private var isChromeTapPending = false
+    /// This screen, to ``ElementCallIdleTimer``.
+    @State private var idleTimerScreen = UUID()
     /// The ringing avatar is what the screen is about, so a screen reader starts there (030 R22).
     @AccessibilityFocusState private var isRingingAvatarFocused: Bool
     let pictureInPictureSourceView: UIView
@@ -241,8 +243,8 @@ struct ElementCallView: View {
                   !tiles.contains(where: { $0.id == tileID }) else { return }
             setFullscreen(nil, byDeparture: true)
         }
-        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
-        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
+        .onAppear { ElementCallIdleTimer.shared.screenAppeared(idleTimerScreen) }
+        .onDisappear { ElementCallIdleTimer.shared.screenDisappeared(idleTimerScreen) }
     }
     
     /// The stage is gone while minimized, so nothing declares the window. A small head range plus

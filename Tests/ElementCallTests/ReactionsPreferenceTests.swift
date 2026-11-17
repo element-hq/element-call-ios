@@ -84,6 +84,29 @@ struct ReactionsPreferenceTests {
         #expect(!store.playsReactionSounds)
     }
     
+    /// A host keeps a controller per account over the one store, so a call reads what another
+    /// controller has written since this one was made.
+    @Test("A call starts from the preferences another controller changed")
+    func aCallReadsAnotherControllersChanges() {
+        let store = ElementCallFakePreferencesStore()
+        let other = controller(store)
+        let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
+                                               system: ElementCallFakeSystem(),
+                                               preferences: store,
+                                               // Fails at once, so nothing is joined.
+                                               permissions: ElementCallFakeMediaPermissions(microphone: .refused))
+        
+        other.setShowsReactions(false)
+        other.setSoundEffectsVolume(0.9)
+        other.setMembershipFormat(.msc)
+        #expect(controller.showsReactions)
+        
+        controller.startCall(.init(isAudioCall: true, isStartingCall: true), room: ElementCallFakeRoom())
+        #expect(!controller.showsReactions)
+        #expect(controller.soundEffectsVolume == 0.9)
+        #expect(controller.membershipFormat == .msc)
+    }
+    
     /// R7: greyed while reactions are hidden, and keeping its position, so it comes back as it was.
     @Test
     func theSoundSwitchIsHeldWhileReactionsAreHidden() {
