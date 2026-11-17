@@ -173,7 +173,9 @@ public final class ElementCallController {
     }
     
     /// Tests only: false keeps a scripted join off the audio session and engine, which a test
-    /// process has no microphone usage string for.
+    /// process has no microphone usage string for. Every session call is under it, the category
+    /// and the deactivation too: the session is the process's, and a test deactivating it under
+    /// another suite's running engine stalls the audio server until it aborts the whole run.
     @ObservationIgnored var isAudioEnabled = true
     @ObservationIgnored private var interruptionsTask: Task<Void, Never>?
     /// The format the join under way was made in, for what its failure says (043 R18).
@@ -877,10 +879,12 @@ public final class ElementCallController {
         // our own membership as "answered elsewhere" and would end the ringing call under us.
         // For an outgoing call this requests the start action; the system activates the audio session
         // either way and reports it back through the events publisher.
-        do {
-            try CallAudioSessionConfigurator.configure()
-        } catch {
-            log(.warning, "could not configure the audio session: \(error)")
+        if isAudioEnabled {
+            do {
+                try CallAudioSessionConfigurator.configure()
+            } catch {
+                log(.warning, "could not configure the audio session: \(error)")
+            }
         }
         await system.startCall(roomID: room.roomID, displayName: room.displayName, isVideo: !callData.isAudioCall)
     }
@@ -1336,7 +1340,7 @@ public final class ElementCallController {
         // Paired with the activation in `activateAudio` through the same predicate, so the two
         // cannot disagree about which platforms they apply to and leave the session up. Not under
         // a call started while the sound played out, which has the session now.
-        if CallAudioSessionConfigurator.isSelfActivating, !isInCall {
+        if isAudioEnabled, CallAudioSessionConfigurator.isSelfActivating, !isInCall {
             CallAudioSessionConfigurator.deactivate()
             // Only where we own the session. On device CallKit owns it and reports the
             // deactivation through `didDeactivate`; clearing the flag here instead would mean a
