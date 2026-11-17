@@ -123,6 +123,37 @@ struct CallStatusTests {
         try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .local) }
     }
     
+    /// Each hang-up used to start a teardown of its own, so the host heard `.ended`, and the system
+    /// the call's end, once per tap.
+    @Test("Hanging up twice ends the call once")
+    func hangingUpTwiceEndsTheCallOnce() async throws {
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
+        let recorder = Recorder(fixture.controller)
+        
+        fixture.controller.hangUp()
+        fixture.controller.hangUp()
+        try await waitUntil { fixture.system.requests.last == .end(roomID: roomID, reason: .local) }
+        try await Task.sleep(for: .milliseconds(50))
+        
+        #expect(recorder.endedCount == 1)
+        #expect(fixture.system.requests.filter(\.isEnd).count == 1)
+    }
+    
+    /// The core's end landing while our hang-up leaves joins it rather than ending the call again.
+    @Test("The core ending the call during a hang-up ends it once")
+    func theCoreEndingDuringAHangUpEndsItOnce() async throws {
+        let fixture = start(status: .calling(callee: callee, ring: .sending, media: .connecting))
+        let recorder = Recorder(fixture.controller)
+        
+        fixture.controller.hangUp()
+        fixture.rtcCall.statusSubscription.push(.ended(reason: .othersLeft))
+        try await waitUntil { fixture.system.requests.contains(where: \.isEnd) }
+        try await Task.sleep(for: .milliseconds(50))
+        
+        #expect(recorder.endedCount == 1)
+        #expect(fixture.system.requests.filter(\.isEnd).count == 1)
+    }
+    
     /// The system hears only a hang-up as ours; the other side's ends and the call's own failures
     /// are reported as what they were (030 R32).
     @Test
@@ -250,7 +281,11 @@ struct CallStatusTests {
         }
         
         var sawEnded: Bool {
-            actions.contains {
+            endedCount > 0
+        }
+        
+        var endedCount: Int {
+            actions.count {
                 if case .ended = $0 {
                     true
                 } else {
@@ -305,5 +340,15 @@ struct CallStatusTests {
             try await Task.sleep(for: .milliseconds(5))
         }
         try #require(condition())
+    }
+}
+
+private extension ElementCallFakeSystem.Request {
+    var isEnd: Bool {
+        if case .end = self {
+            true
+        } else {
+            false
+        }
     }
 }
