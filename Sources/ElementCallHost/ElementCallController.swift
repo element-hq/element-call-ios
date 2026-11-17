@@ -740,11 +740,21 @@ public final class ElementCallController {
         isInCall && output?.kind == .receiver
     }
     
-    /// Only on a change: the sensor's state is the device's, and other code may own it between
-    /// calls.
+    /// Whether this controller turned the sensor on, and so owes turning it off.
+    private var isMonitoringProximity = false
+    
+    /// The sensor's new state, or nil to leave it alone. Compared with what this controller set
+    /// rather than with the device: the sensor is shared, other code may own it between calls, and a
+    /// host keeps a controller per account, so an idle one reading the device turned the sensor off
+    /// under another's earpiece call on every route change.
+    static func proximityMonitoringChange(isMonitoring: Bool, isInCall: Bool, output: CallAudioOutput?) -> Bool? {
+        let isMonitored = isProximityMonitored(isInCall: isInCall, output: output)
+        return isMonitored != isMonitoring ? isMonitored : nil
+    }
+    
     private func updateProximityMonitoring() {
-        let isMonitored = Self.isProximityMonitored(isInCall: isInCall, output: audioOutput)
-        guard UIDevice.current.isProximityMonitoringEnabled != isMonitored else { return }
+        guard let isMonitored = Self.proximityMonitoringChange(isMonitoring: isMonitoringProximity, isInCall: isInCall, output: audioOutput) else { return }
+        isMonitoringProximity = isMonitored
         UIDevice.current.isProximityMonitoringEnabled = isMonitored
         log(.info, "proximity monitoring \(isMonitored ? "on" : "off")")
     }
