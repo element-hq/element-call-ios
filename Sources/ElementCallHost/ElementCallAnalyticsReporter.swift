@@ -26,7 +26,7 @@ final class ElementCallAnalyticsReporter {
     /// How a join that never connected stopped, for the controller's failure funnel. Required there,
     /// with no default, so every failure site classifies itself (R16).
     enum JoinFailure: Equatable {
-        case failed(Failure.Cause, Failure.Stage, Failure.Step, errcode: String? = nil)
+        case failed(Failure.Cause, Failure.Stage, Failure.Step, errorCode: String? = nil)
         /// Not a failure (R10).
         case permissionRefused
         
@@ -37,7 +37,7 @@ final class ElementCallAnalyticsReporter {
             case MatrixRTCError.joinTimedOut:
                 .failed(.joinTimedOut, .homeserver, .unknown)
             case MatrixRTCError.joinRefused(let errorCode, _):
-                .failed(.joinRefused, .homeserver, .unknown, errcode: errorCode)
+                .failed(.joinRefused, .homeserver, .unknown, errorCode: errorCode)
             case MatrixRTCError.slotClosed:
                 // The core's slot check sits in the membership send, before anything goes out.
                 .failed(.slotClosed, .homeserver, .membership)
@@ -138,30 +138,30 @@ final class ElementCallAnalyticsReporter {
     /// A failure the controller caught. Before connected it is a join failure: the outcome `failed`,
     /// then its `CallFailure` (C4). Every failure the controller catches today comes before
     /// connected, since connected waits for the microphone (C6).
-    func failed(_ cause: Failure.Cause, stage: Failure.Stage, step: Failure.Step, errcode: String? = nil) {
+    func failed(_ cause: Failure.Cause, stage: Failure.Stage, step: Failure.Step, errorCode: String? = nil) {
         guard let attempt else { return }
         if attempt.isConnected {
             // Not reached today; kept honest rather than reported as a join failure. The end that
             // follows is reported by whatever ends the call.
             track(.callFailure(attemptID: attempt.id, callKind: attempt.callKind,
-                               failure: Failure(cause: cause, phase: .inCall, errcode: errcode)))
+                               failure: Failure(cause: cause, phase: .inCall, errorCode: errorCode)))
             return
         }
         guard !attempt.isOutcomeReported else { return }
-        if cause == .joinRefused, let errcode, Failure.validErrcode(errcode) == nil {
+        if cause == .joinRefused, let errorCode, Failure.validErrorCode(errorCode) == nil {
             log(.warning, "the join's errcode is not a Matrix error code, reporting none")
         }
         outcome(.failed)
         track(.callFailure(attemptID: attempt.id, callKind: attempt.callKind,
-                           failure: Failure(cause: cause, phase: .joining(stage, step), errcode: errcode)))
+                           failure: Failure(cause: cause, phase: .joining(stage, step), errorCode: errorCode)))
         self.attempt = nil
     }
     
-    /// One of ``failed(_:stage:step:errcode:)`` or ``permissionRefused()``.
+    /// One of ``failed(_:stage:step:errorCode:)`` or ``permissionRefused()``.
     func joinFailed(_ failure: JoinFailure) {
         switch failure {
-        case .failed(let cause, let stage, let step, let errcode):
-            failed(cause, stage: stage, step: step, errcode: errcode)
+        case .failed(let cause, let stage, let step, let errorCode):
+            failed(cause, stage: stage, step: step, errorCode: errorCode)
         case .permissionRefused:
             permissionRefused()
         }
@@ -193,6 +193,12 @@ final class ElementCallAnalyticsReporter {
             outcome(.abandoned(endReason: Self.endReason(for: reason)))
             self.attempt = nil
         }
+    }
+    
+    /// Tests only: whether the attempt under way has published its microphone, which a test waits on
+    /// rather than on a fixed sleep.
+    var isMicrophonePublished: Bool {
+        attempt?.isMicrophonePublished == true
     }
     
     /// Tests only: the attempt's `participantsMax` so far, nil outside a connected attempt.

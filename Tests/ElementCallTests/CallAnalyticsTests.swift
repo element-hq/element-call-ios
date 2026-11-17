@@ -52,8 +52,9 @@ struct CallAnalyticsTests {
         let fixture = Fixture(isDirect: true)
         let scripted = fixture.scriptJoin(status: .calling(callee: Self.callee, ring: .sending, media: .connecting))
         fixture.start(voiceCall)
+        // The status was applied before the publish, so with the microphone up and the media not,
+        // nothing can be on its way.
         try await fixture.waitForThePublish()
-        try await Task.sleep(for: .milliseconds(50))
         #expect(fixture.outcomes.isEmpty)
         
         scripted.report(.calling(callee: Self.callee, ring: .ringing(sentAt: .now, lifetime: .seconds(60)), media: .connected(isDegraded: false)))
@@ -127,8 +128,8 @@ struct CallAnalyticsTests {
         let fixture = Fixture(isDirect: false, publishError: MatrixRTCError.media("no microphone"))
         let scripted = fixture.scriptJoin(status: connected)
         fixture.start(voiceCall)
-        try await fixture.waitUntil { fixture.session.published.count == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        // In the grace: the controller is asleep on the clock for its first 50 ms step.
+        try await fixture.waitUntil { fixture.clock.sleeperDeadlines.contains(.milliseconds(50)) }
         
         scripted.report(.ended(.connectionClosed(reason: .budget, message: Self.secret)))
         try await fixture.waitForOutcome()
@@ -147,11 +148,10 @@ struct CallAnalyticsTests {
     func participantsMaxFollowsTheCallsSizeFromConnected() async throws {
         let fixture = Fixture(isDirect: false)
         let scripted = fixture.scriptJoin(status: .connecting)
-        // Before connected: not counted.
-        fixture.player.session.push(event: .participantJoined(memberId: "@carol:example.org:C", userId: "@carol:example.org", participantCount: 5))
+        // A count before connected is ignored by the reporter, which its own tests pin: nothing
+        // here says when the controller's reader has handed one over, so it is not pushed here.
         fixture.start(voiceCall)
         try await fixture.waitForThePublish()
-        try await Task.sleep(for: .milliseconds(100))
         
         scripted.report(connected)
         try await fixture.waitForOutcome()
@@ -161,7 +161,6 @@ struct CallAnalyticsTests {
         // The events reach the reporter through the session's pump and the controller's reader; a
         // loaded run takes its time.
         try await fixture.waitUntil { fixture.controller.reporter.participantsMax == 3 }
-        try await Task.sleep(for: .milliseconds(50))
         try await fixture.hangUp()
         
         #expect(fixture.events.last?.properties["participantsMax"] == .int(3))
@@ -428,7 +427,6 @@ struct CallAnalyticsTests {
             connections.append("\(fixture.controller.connection)")
             scripted.report(.calling(callee: Self.callee, ring: .sending, media: .connected(isDegraded: false)))
             try await fixture.waitUntil { fixture.controller.connection == .calling(callee: Self.callee, ring: .sending) }
-            try await Task.sleep(for: .milliseconds(50))
             connections.append("\(fixture.controller.connection)")
             scripted.report(.ended(.declined))
             try await fixture.waitUntil { fixture.controller.connection.isFinished }
@@ -578,11 +576,10 @@ struct CallAnalyticsTests {
             try await waitUntil { controller.connection.isFinished }
         }
         
-        /// The scripted microphone publishes at once once the media is the controller's; a moment
-        /// later the join is past it.
+        /// Until the controller has told the reporter the microphone is published: the join is past
+        /// it then, however loaded the run.
         func waitForThePublish() async throws {
-            try await waitUntil { controller.call != nil }
-            try await Task.sleep(for: .milliseconds(100))
+            try await waitUntil { controller.reporter.isMicrophonePublished }
         }
         
         func waitForOutcome() async throws {

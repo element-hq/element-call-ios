@@ -99,8 +99,8 @@ public nonisolated enum ElementCallAnalyticsEvent: Sendable, Equatable {
             case .inCall:
                 properties["phase"] = .string("inCall")
             }
-            if let errcode = failure.errcode {
-                properties["errcode"] = .string(errcode)
+            if let errorCode = failure.errorCode {
+                properties["errcode"] = .string(errorCode)
             }
         case .callParticipationEnded(_, _, let endReason, let duration, let participantsMax):
             properties["endReason"] = .string(endReason.rawValue)
@@ -169,29 +169,29 @@ public nonisolated struct ElementCallAnalyticsFailure: Sendable, Equatable {
     public let cause: Cause
     public let phase: Phase
     /// `joinRefused` only, and only a value with the shape of a Matrix error code (R21).
-    public let errcode: String?
+    public let errorCode: String?
     
-    /// `errcode` is the homeserver's, unfiltered: it is kept only on `joinRefused`, and only when it
+    /// `errorCode` is the homeserver's, unfiltered: it is kept only on `joinRefused`, and only when it
     /// has the shape of a code.
-    package init(cause: Cause, phase: Phase, errcode: String? = nil) {
+    package init(cause: Cause, phase: Phase, errorCode: String? = nil) {
         self.cause = cause
         self.phase = phase
-        self.errcode = cause == .joinRefused ? errcode.flatMap(Self.validErrcode) : nil
+        self.errorCode = cause == .joinRefused ? errorCode.flatMap(Self.validErrorCode) : nil
     }
     
     /// R21: capital letters, digits, `_` and `.`, starting with a letter, at most 64 characters.
     /// The shape of `M_FORBIDDEN` and of a namespaced code; anything else is no code at all.
-    package static func validErrcode(_ errcode: String) -> String? {
-        guard (1...64).contains(errcode.utf8.count),
-              let first = errcode.utf8.first, (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(first),
-              errcode.utf8.allSatisfy({ byte in
+    package static func validErrorCode(_ errorCode: String) -> String? {
+        guard (1...64).contains(errorCode.utf8.count),
+              let first = errorCode.utf8.first, (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(first),
+              errorCode.utf8.allSatisfy({ byte in
                   (UInt8(ascii: "A")...UInt8(ascii: "Z")).contains(byte)
                       || (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte)
                       || byte == UInt8(ascii: "_") || byte == UInt8(ascii: ".")
               }) else {
             return nil
         }
-        return errcode
+        return errorCode
     }
 }
 

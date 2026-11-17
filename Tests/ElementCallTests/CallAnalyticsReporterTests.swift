@@ -352,9 +352,9 @@ struct CallAnalyticsReporterTests {
             (.callJoinOutcome(attemptID: id, callKind: .dm, outcome: .connected), common.union(["outcome"])),
             (.callJoinOutcome(attemptID: id, callKind: .dm, outcome: .abandoned(endReason: nil)), common.union(["outcome"])),
             (.callJoinOutcome(attemptID: id, callKind: .dm, outcome: .abandoned(endReason: .declined)), common.union(["outcome", "endReason"])),
-            (.callFailure(attemptID: id, callKind: .dm, failure: Failure(cause: .joinRefused, phase: .joining(.homeserver, .unknown), errcode: "M_FORBIDDEN")),
+            (.callFailure(attemptID: id, callKind: .dm, failure: Failure(cause: .joinRefused, phase: .joining(.homeserver, .unknown), errorCode: "M_FORBIDDEN")),
              common.union(["cause", "phase", "stage", "step", "errcode"])),
-            (.callFailure(attemptID: id, callKind: .dm, failure: Failure(cause: .joinTimedOut, phase: .joining(.homeserver, .unknown), errcode: "M_FORBIDDEN")),
+            (.callFailure(attemptID: id, callKind: .dm, failure: Failure(cause: .joinTimedOut, phase: .joining(.homeserver, .unknown), errorCode: "M_FORBIDDEN")),
              common.union(["cause", "phase", "stage", "step"])),
             (.callFailure(attemptID: id, callKind: .dm, failure: Failure(cause: .connectionLostBudget, phase: .inCall)),
              common.union(["cause", "phase"])),
@@ -389,31 +389,31 @@ struct CallAnalyticsReporterTests {
     // MARK: - errcode (R21, C9)
     
     @Test(arguments: ["M_FORBIDDEN", "M_LIMIT_EXCEEDED", "IO.ELEMENT.SOME_CODE", "A", String(repeating: "A", count: 64)])
-    func aWellFormedErrcodeIsReported(errcode: String) {
+    func aWellFormedErrorCodeIsReported(errorCode: String) {
         let fixture = Fixture()
         fixture.reporter.attempted(callKind: .group)
-        fixture.reporter.failed(.joinRefused, stage: .homeserver, step: .unknown, errcode: errcode)
-        #expect(fixture.analytics.events.last?.properties["errcode"] == .string(errcode))
+        fixture.reporter.failed(.joinRefused, stage: .homeserver, step: .unknown, errorCode: errorCode)
+        #expect(fixture.analytics.events.last?.properties["errcode"] == .string(errorCode))
     }
     
     @Test(arguments: ["m_forbidden", "_M_FORBIDDEN", "1M_FORBIDDEN", String(repeating: "A", count: 65),
                       "You are not allowed in this room", "", "M_FORBİDDEN", "M-FORBIDDEN"])
-    func anyOtherErrcodeIsReportedAsNone(errcode: String) {
+    func anyOtherErrorCodeIsReportedAsNone(errorCode: String) {
         let fixture = Fixture()
         fixture.reporter.attempted(callKind: .group)
-        fixture.reporter.failed(.joinRefused, stage: .homeserver, step: .unknown, errcode: errcode)
+        fixture.reporter.failed(.joinRefused, stage: .homeserver, step: .unknown, errorCode: errorCode)
         let failure = fixture.analytics.events.last
         #expect(failure?.name == "CallFailure")
         #expect(failure?.properties["errcode"] == nil)
-        #expect(failure?.failure?.errcode == nil)
+        #expect(failure?.failure?.errorCode == nil)
         #expect(fixture.logger.messages.contains { $0.contains("errcode") })
     }
     
     @Test
-    func anErrcodeIsOnlyOnJoinRefused() {
+    func anErrorCodeIsOnlyOnJoinRefused() {
         let fixture = Fixture()
         fixture.reporter.attempted(callKind: .group)
-        fixture.reporter.failed(.joinTimedOut, stage: .homeserver, step: .unknown, errcode: "M_FORBIDDEN")
+        fixture.reporter.failed(.joinTimedOut, stage: .homeserver, step: .unknown, errorCode: "M_FORBIDDEN")
         #expect(fixture.analytics.events.last?.properties["errcode"] == nil)
     }
     
@@ -421,7 +421,7 @@ struct CallAnalyticsReporterTests {
     
     @Test(arguments: [
         (MatrixRTCError.joinTimedOut, ElementCallAnalyticsReporter.JoinFailure.failed(.joinTimedOut, .homeserver, .unknown)),
-        (.joinRefused(errorCode: "M_FORBIDDEN", reason: "nope"), .failed(.joinRefused, .homeserver, .unknown, errcode: "M_FORBIDDEN")),
+        (.joinRefused(errorCode: "M_FORBIDDEN", reason: "nope"), .failed(.joinRefused, .homeserver, .unknown, errorCode: "M_FORBIDDEN")),
         (.joinRefused(errorCode: nil, reason: "nope"), .failed(.joinRefused, .homeserver, .unknown)),
         (.slotClosed("closed"), .failed(.slotClosed, .homeserver, .membership)),
         (.noLiveKitTransport(transportType: "livekit"), .failed(.noMediaServer, .homeserver, .transportDiscovery)),
