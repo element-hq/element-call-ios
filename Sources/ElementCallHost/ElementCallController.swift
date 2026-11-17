@@ -388,6 +388,8 @@ public final class ElementCallController {
         joiningIsDirect = room.isDirect
         reporter.attempted(callKind: joiningIsDirect ? .dm : .group)
         isHoldingFailure = false
+        isEnding = false
+        isCloseRequested = false
         self.callData = callData
         self.room = room
         isMaximized = true
@@ -446,7 +448,12 @@ public final class ElementCallController {
         } else {
             reporter.hungUp()
         }
-        Task { await endCall(.left) }
+        // The end under way would hold a failure's screen for the user to close, which this is.
+        if isEnding {
+            isCloseRequested = true
+            return
+        }
+        beginEnding(.left)
     }
     
     /// The app's own page in the system Settings, from the microphone's failure screen or the
@@ -1149,7 +1156,7 @@ public final class ElementCallController {
             }
         case .ended(let reason):
             // From a different task than the status reader: teardown cancels that task.
-            Task { await endCall(reason) }
+            beginEnding(reason)
         }
     }
     
@@ -1247,13 +1254,29 @@ public final class ElementCallController {
         reporter.joinFailed(reported)
         log(.error, message ?? "call failed: \(failure)")
         connection = .failed(failure)
-        Task { await endCall(.left) }
+        beginEnding(.left)
     }
     
     /// A failure has ended the call and its screen stays up to say why, until ``hangUp()`` closes
     /// it. Held here rather than left to the host because every host would otherwise dismiss on
     /// ``ElementCallControllerAction/ended`` as before, and the reason would flash and go.
     private var isHoldingFailure = false
+    
+    /// The call's end has started. A hang-up, a failure and the core's own end can each land while
+    /// it runs, and a second teardown sent `.ended` and the system's end twice, or ended the call a
+    /// host had started on the first `.ended`. Reset by ``startCall(_:room:)``, never by the end.
+    private var isEnding = false
+    
+    /// A hang-up landed while the call was ending: a failure then closes rather than being held.
+    private var isCloseRequested = false
+    
+    /// Starts the call's end, once per call. Synchronous, so two hang-ups in the same turn still end
+    /// the call once.
+    private func beginEnding(_ reason: MatrixRTCEndReason) {
+        guard room != nil, !isEnding else { return }
+        isEnding = true
+        Task { await endCall(reason) }
+    }
     
     /// Tears down what a join produced after the call was ended under it. Leaving is idempotent, so a
     /// call that already left costs nothing to leave again.
@@ -1336,7 +1359,7 @@ public final class ElementCallController {
         // plays to its end first (R25), and the system call ends with it, since ending that is
         // what takes the audio session away. A failure keeps it up instead, brought back from a
         // minimized call if need be, since the reason is on the call screen (034 R27).
-        if case .failed = connection {
+        if case .failed = connection, !isCloseRequested {
             isHoldingFailure = true
             if !isMaximized {
                 restore()
