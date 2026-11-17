@@ -182,7 +182,7 @@ public final class ElementCallController {
     /// and the analytics report the same value (044 R25, C10).
     @ObservationIgnored private var joiningIsDirect = false
     /// The call's analytics, one attempt at a time (044).
-    @ObservationIgnored private let reporter: ElementCallAnalyticsReporter
+    @ObservationIgnored let reporter: ElementCallAnalyticsReporter
     @ObservationIgnored private(set) var interruptionHoldTask: Task<Void, Never>?
     
     private var followedSignalling: MatrixRTCSignallingHealth = .reachable
@@ -436,7 +436,14 @@ public final class ElementCallController {
             actionsSubject.send(.ended)
             return
         }
-        reporter.hungUp()
+        // An end the core already reached wins over this hang-up (044 C8): a callee declining as the
+        // caller hangs up is a decline. It may not have reached the reporter yet: the status
+        // stream's reader, or the `endCall` task `apply` started, runs after this.
+        if let end = rtcCall?.reachedEnd {
+            reporter.ended(end)
+        } else {
+            reporter.hungUp()
+        }
         Task { await endCall(.left) }
     }
     

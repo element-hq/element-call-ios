@@ -239,6 +239,31 @@ struct CallAnalyticsReporterTests {
         #expect(events.last?.endReason == .connectionLost)
     }
     
+    // MARK: - The core's end over a racing hang-up (C8)
+    
+    /// Once the core's end is in, a hang-up adds nothing: the decline stays a decline.
+    @Test
+    func theCoresEndBeforeConnectedWinsOverAHangUp() {
+        let fixture = Fixture()
+        fixture.reporter.attempted(callKind: .dm)
+        fixture.reporter.mediaConnected(memberCount: 1)
+        fixture.reporter.ended(.declined)
+        fixture.reporter.hungUp()
+        
+        #expect(fixture.analytics.events.compactMap(\.outcome) == [.abandoned(endReason: .declined)])
+        #expect(fixture.analytics.events.count == 2)
+    }
+    
+    @Test
+    func theCoresEndAfterConnectedWinsOverAHangUp() {
+        let fixture = Fixture()
+        fixture.connect(callKind: .dm)
+        fixture.reporter.ended(.othersLeft)
+        fixture.reporter.hungUp()
+        
+        #expect(fixture.analytics.events.filter { $0.name == "CallParticipationEnded" }.map(\.endReason) == [.othersLeft])
+    }
+    
     // MARK: - Permission (R10)
     
     @Test

@@ -158,7 +158,10 @@ struct CallAnalyticsTests {
         fixture.player.session.push(event: .participantJoined(memberId: "@carol:example.org:C", userId: "@carol:example.org", participantCount: 2))
         fixture.player.session.push(event: .participantJoined(memberId: "@dan:example.org:D", userId: "@dan:example.org", participantCount: 3))
         fixture.player.session.push(event: .participantLeft(memberId: "@dan:example.org:D", participantCount: 2))
-        try await Task.sleep(for: .milliseconds(100))
+        // The events reach the reporter through the session's pump and the controller's reader; a
+        // loaded run takes its time.
+        try await fixture.waitUntil { fixture.controller.reporter.participantsMax == 3 }
+        try await Task.sleep(for: .milliseconds(50))
         try await fixture.hangUp()
         
         #expect(fixture.events.last?.properties["participantsMax"] == .int(3))
@@ -302,6 +305,80 @@ struct CallAnalyticsTests {
         
         #expect(fixture.events.last?.endReason == .othersLeft)
         #expect(seen.state == EndState(hasCall: true, hasSystemEnd: false))
+    }
+    
+    // MARK: - The core's end over a racing hang-up (C8)
+    
+    /// The callee declines as the caller hangs up: the core has the decline, and the status reader
+    /// has not delivered it, when `hangUp()` runs. The decline is what is reported.
+    @Test
+    func aDeclineTheCoreHasReachedWinsOverAHangUp() async throws {
+        let fixture = Fixture(isDirect: true)
+        let core = fixture.scriptJoin(core: FakeRTCCall(status: .calling(callee: Self.callee, ring: .sending, media: .connecting)))
+        fixture.start(voiceCall)
+        try await fixture.waitForThePublish()
+        #expect(fixture.outcomes.isEmpty)
+        
+        core.reach(.ended(reason: .declined))
+        fixture.controller.hangUp()
+        
+        #expect(fixture.outcomes == [.abandoned(endReason: .declined)])
+        try await fixture.waitUntil { fixture.controller.connection.isFinished }
+        #expect(fixture.names == ["CallJoinAttempted", "CallJoinOutcome"])
+    }
+    
+    /// After connected the same: the core's reason, not `left`.
+    @Test
+    func anEndTheCoreHasReachedInTheCallWinsOverAHangUp() async throws {
+        let fixture = Fixture(isDirect: true)
+        let core = fixture.scriptJoin(core: FakeRTCCall(status: .connected(sinceMs: 0, degraded: false)))
+        fixture.start(voiceCall)
+        try await fixture.waitForOutcome()
+        
+        core.reach(.ended(reason: .othersLeft))
+        fixture.controller.hangUp()
+        
+        #expect(fixture.events.last?.endReason == .othersLeft)
+        try await fixture.waitUntil { fixture.controller.connection.isFinished }
+        #expect(fixture.events.filter { $0.name == "CallParticipationEnded" }.count == 1)
+    }
+    
+    /// Nothing reached: the hang-up is ours, with no reason.
+    @Test
+    func aHangUpWithNoEndFromTheCoreIsOurs() async throws {
+        let fixture = Fixture(isDirect: true)
+        fixture.scriptJoin(core: FakeRTCCall(status: .calling(callee: Self.callee, ring: .sending, media: .connecting)))
+        fixture.start(voiceCall)
+        try await fixture.waitForThePublish()
+        
+        fixture.controller.hangUp()
+        
+        #expect(fixture.outcomes == [.abandoned(endReason: nil)])
+        try await fixture.waitUntil { fixture.controller.connection.isFinished }
+    }
+    
+    /// The two places the call keeps an end before the controller has it: its status, already
+    /// moved on while the controller's reader of ``MatrixRTCCall/statusUpdates`` waits to run, and
+    /// the core's own status, ahead of the subscription.
+    @Test
+    func theCallSaysWhichEndTheCoreHasReached() async throws {
+        let core = FakeRTCCall(status: .calling(callee: Self.callee, ring: .sending, media: .connecting))
+        let call = MatrixRTCCall(rtcCall: core)
+        call.start()
+        #expect(call.reachedEnd == nil)
+        
+        core.statusSubscription.push(.ended(reason: .unanswered))
+        for _ in 0..<1000 where call.status != .ended(.unanswered) {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(call.reachedEnd == .unanswered)
+        
+        let ahead = FakeRTCCall(status: .connected(sinceMs: 0, degraded: false))
+        let aheadCall = MatrixRTCCall(rtcCall: ahead)
+        ahead.reach(.ended(reason: .slotClosed))
+        #expect(aheadCall.status == .connected(since: Date(timeIntervalSince1970: 0), isDegraded: false))
+        #expect(aheadCall.reachedEnd == .slotClosed)
+        call.stop()
     }
     
     // MARK: - Nothing more (R14)
@@ -479,6 +556,17 @@ struct CallAnalyticsTests {
                 return (scripted.call, media)
             }
             return scripted
+        }
+        
+        /// A membership over `core`, which the test moves on directly, and the scenario player's media.
+        func scriptJoin(core: FakeRTCCall) -> FakeRTCCall {
+            let call = MatrixRTCCall(rtcCall: core)
+            let player = player
+            controller.scriptedJoin = {
+                await player.start()
+                return (call, player.call)
+            }
+            return core
         }
         
         func start(_ callData: ElementCallData) {

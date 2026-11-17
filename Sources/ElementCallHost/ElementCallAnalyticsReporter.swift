@@ -195,6 +195,11 @@ final class ElementCallAnalyticsReporter {
         }
     }
     
+    /// Tests only: the attempt's `participantsMax` so far, nil outside a connected attempt.
+    var participantsMax: Int? {
+        attempt?.isConnected == true ? attempt?.participantsMax : nil
+    }
+    
     // MARK: - Mapping
     
     static func cause(for loss: MatrixRTCConnectionLossReason) -> Failure.Cause {
