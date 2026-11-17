@@ -135,24 +135,39 @@ public final class MatrixRTCRoom {
                                                                               keepAliveTimeoutMs: Self.keepAliveTimeout.inMilliseconds,
                                                                               stickyDurationMs: nil, // The core owns the membership lifetime.
                                                                               encryptionConfig: nil)) // Follow whatever the slot prescribes.
-        } catch MatrixRtcFfiError.SlotClosed(let message) {
-            MatrixRTCLog.error("Join refused in \(roomID), the slot is closed: \(message)")
-            throw MatrixRTCError.slotClosed(message)
-        } catch MatrixRtcFfiError.JoinTimedOut {
-            MatrixRTCLog.error("Join timed out in \(roomID)")
-            throw MatrixRTCError.joinTimedOut
-        } catch MatrixRtcFfiError.JoinRefused(let errorCode, let reason) {
-            MatrixRTCLog.error("Join refused in \(roomID): \(errorCode ?? "no code") \(reason)")
-            throw MatrixRTCError.joinRefused(errorCode: errorCode, reason: reason)
         } catch {
-            MatrixRTCLog.error("Join failed in \(roomID): \(error)")
-            throw MatrixRTCError.ffi("\(error)")
+            throw Self.joinError(for: error, roomID: roomID)
         }
         let call = MatrixRTCCall(rtcCall: rtcCall)
         MatrixRTCLog.info("Joined \(roomID)/\(call.slotID) as \(call.localMemberID)")
         self.call = call
         call.start()
         return call
+    }
+    
+    /// The join's error as this package types it, logged as it goes. Each failure the core types is
+    /// kept typed, so the controller can classify it rather than read text (044 R16).
+    static func joinError(for error: any Error, roomID: String) -> MatrixRTCError {
+        switch error {
+        case MatrixRtcFfiError.SlotClosed(let message):
+            MatrixRTCLog.error("Join refused in \(roomID), the slot is closed: \(message)")
+            return .slotClosed(message)
+        case MatrixRtcFfiError.JoinTimedOut:
+            MatrixRTCLog.error("Join timed out in \(roomID)")
+            return .joinTimedOut
+        case MatrixRtcFfiError.JoinRefused(let errorCode, let reason):
+            MatrixRTCLog.error("Join refused in \(roomID): \(errorCode ?? "no code") \(reason)")
+            return .joinRefused(errorCode: errorCode, reason: reason)
+        case MatrixRtcFfiError.NoLiveKitTransport(let transportType):
+            MatrixRTCLog.error("Join failed in \(roomID), no LiveKit transport of type \(transportType)")
+            return .noLiveKitTransport(transportType: transportType)
+        case MatrixRtcFfiError.TokenEndpointUnsupported:
+            MatrixRTCLog.error("Join failed in \(roomID), the homeserver has no get_token")
+            return .tokenEndpointUnsupported
+        default:
+            MatrixRTCLog.error("Join failed in \(roomID): \(error)")
+            return .ffi("\(error)")
+        }
     }
     
     /// Leaves any call still joined here, then stops following the room: the core cancels its

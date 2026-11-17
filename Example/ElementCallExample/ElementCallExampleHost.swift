@@ -261,7 +261,8 @@ final class ElementCallExampleHost {
                                                        system: ElementCallExampleLabSystem(),
                                                        options: ElementCallOptions(isDeveloperModeEnabled: true),
                                                        logger: logger,
-                                                       preferences: preferences)
+                                                       preferences: preferences,
+                                                       analytics: ElementCallExampleLabAnalytics(logger: logger))
                 controller.actions
                     .sink { [weak self] action in self?.handle(action) }
                     .store(in: &cancellables)

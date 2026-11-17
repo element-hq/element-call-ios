@@ -11,7 +11,8 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+- **Call analytics (044).** `ElementCallController.init` takes `analytics:`, an `ElementCallAnalyticsProtocol`, defaulting to nil. Forward each `ElementCallAnalyticsEvent` under its `name` with its `properties` unchanged, only with the user's analytics consent, to the PostHog project Element Call reports to. Call `hangUp()` before discarding a controller with a call in it, logout included, or that call reports no end.
+- `MatrixRTCError` gains `noLiveKitTransport(transportType:)` and `tokenEndpointUnsupported`, which used to arrive as `.ffi`. An exhaustive `switch` over `MatrixRTCError` needs the two cases.
 
 ## 0.1.0-rc.16 - 2026-11-10
 
