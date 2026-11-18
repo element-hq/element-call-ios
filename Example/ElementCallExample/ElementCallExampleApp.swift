@@ -119,6 +119,21 @@ struct ElementCallExampleRootView: View {
                     .transition(.opacity)
             }
         }
+        .overlay {
+            if let progress = host.labProgress {
+                ElementCallExampleLabProgress(message: progress) { host.cancelLab() }
+            }
+        }
+        .alert("The lab call did not open",
+               isPresented: Binding(get: { host.labError != nil }, set: {
+                   if !$0 {
+                       host.labError = nil
+                   }
+               })) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(host.labError ?? "")
+        }
         // The shape of the space, as the stage decides it, so our own pattern turns when the stage does.
         .onGeometryChange(for: Bool.self) { $0.size.width > $0.size.height } action: { video.setLandscape($0) }
         // Presenting the call is the host's to animate, so the harness does what a host would: a
