@@ -92,6 +92,14 @@ final nonisolated class SDKLabSession: Sendable {
     /// Held so the sync keeps running for as long as the session lives.
     private let syncService: SyncService
     
+    /// The stock look with the members' own avatars, loaded through this session's client.
+    @MainActor
+    func makeStyle() -> ElementCallStyle {
+        ElementCallStyle(theme: ElementCallStyle.stock.theme,
+                         icons: ElementCallStyle.stock.icons,
+                         avatars: SDKLabAvatars(client: client))
+    }
+    
     private init(client: Client, backend: SDKMatrixBackend, room: Room, format: MatrixRTCMembershipFormat, syncService: SyncService) {
         self.client = client
         self.backend = backend

@@ -260,6 +260,7 @@ final class ElementCallExampleHost {
                 let controller = ElementCallController(backend: lab.backend,
                                                        system: ElementCallExampleLabSystem(),
                                                        options: ElementCallOptions(isDeveloperModeEnabled: true),
+                                                       style: lab.makeStyle(),
                                                        logger: logger,
                                                        preferences: preferences,
                                                        analytics: ElementCallExampleLabAnalytics(logger: logger))
@@ -274,11 +275,13 @@ final class ElementCallExampleHost {
                     }
                 }
                 self.notice = nil
+                // Joining the call the lab already has, quietly: starting one would ring the room.
+                // Before the screen's view model: it reads the controller's room once, as it is made,
+                // for the names and avatars, and made first it found none and showed user IDs.
+                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
                 session = Session(fixture: nil,
                                   presentation: .live(ElementCallScreenViewModel(controller: controller)),
                                   controller: controller)
-                // Joining the call the lab already has, quietly: starting one would ring the room.
-                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
             } catch {
                 self?.labAccount = SDKLabSession.Saved.load()?.userID
                 self?.labFormat = SDKLabSession.Saved.load()?.membershipFormat
