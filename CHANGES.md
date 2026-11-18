@@ -11,8 +11,29 @@ version will actually read it.
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.2.0 - 2026-11-18
+
 - **Call analytics (044).** `ElementCallController.init` takes `analytics:`, an `ElementCallAnalyticsProtocol`, defaulting to nil. Forward each `ElementCallAnalyticsEvent` under its `name` with its `properties` unchanged, only with the user's analytics consent, to the PostHog project Element Call reports to. Call `hangUp()` before discarding a controller with a call in it, logout included, or that call reports no end.
 - `MatrixRTCError` gains `noLiveKitTransport(transportType:)` and `tokenEndpointUnsupported`, which used to arrive as `.ffi`. An exhaustive `switch` over `MatrixRTCError` needs the two cases.
+
+
+
+### What's Changed
+
+✨ Features
+* A settings menu with Preferences and Developer options, choosing the membership format and video codec by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/102
+* Call analytics: the host receives join, outcome, failure and end events for each call. by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/103
+
+🐛 Bugfixes
+* Fix reaction sheet title alignement  by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/99
+* An idle call controller no longer turns the proximity sensor off by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/104
+* Hanging up a call that is already ending no longer ends it twice, or ends the next call" by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/105
+* Several call controllers in one app no longer undo each other's screen-awake state or miss each other's preference changes by @BillCarsonFr in https://github.com/element-hq/element-call-ios/pull/106
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-ios/compare/0.1.0-rc.16...0.2.0
 
 ## 0.1.0-rc.16 - 2026-11-10
 
