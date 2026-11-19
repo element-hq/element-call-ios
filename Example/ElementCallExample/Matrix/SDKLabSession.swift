@@ -23,6 +23,7 @@ final nonisolated class SDKLabSession: Sendable {
         case noSession
         case recoveryKeyMissing(String)
         case recoveryKeyRejected(String)
+        case unreachable(String)
         
         var errorDescription: String? {
             switch self {
@@ -32,6 +33,8 @@ final nonisolated class SDKLabSession: Sendable {
                 "\(user) has recovery set up but the code carries no recovery key; rescan once the lab page shows one (it is never reset from here)"
             case .recoveryKeyRejected(let reason):
                 "the code's recovery key does not open the account's secret storage (\(reason)); rerun `lab identities` on the laptop"
+            case .unreachable(let homeserver):
+                "\(homeserver) does not answer. If the laptop has changed network, its address has too: scan the account's code on the lab page again."
             }
         }
     }
@@ -92,6 +95,14 @@ final nonisolated class SDKLabSession: Sendable {
     /// Held so the sync keeps running for as long as the session lives.
     private let syncService: SyncService
     
+    /// The stock look with the members' own avatars, loaded through this session's client.
+    @MainActor
+    func makeStyle() -> ElementCallStyle {
+        ElementCallStyle(theme: ElementCallStyle.stock.theme,
+                         icons: ElementCallStyle.stock.icons,
+                         avatars: SDKLabAvatars(client: client))
+    }
+    
     private init(client: Client, backend: SDKMatrixBackend, room: Room, format: MatrixRTCMembershipFormat, syncService: SyncService) {
         self.client = client
         self.backend = backend
@@ -138,6 +149,7 @@ final nonisolated class SDKLabSession: Sendable {
     /// The kept session, for rejoining after a relaunch without a code.
     static func restoreSaved(logger: (any ElementCallLoggingProtocol)?) async throws -> SDKLabSession {
         guard let saved = Saved.load() else { throw Error.noSession }
+        try await checkReachable(saved)
         return try await restore(saved, roomID: saved.roomID, format: saved.membershipFormat, logger: logger)
     }
     
@@ -189,6 +201,18 @@ final nonisolated class SDKLabSession: Sendable {
         }
         let (syncService, room) = try await startSync(client: client, roomID: roomID)
         return try make(client: client, room: room, format: format, syncService: syncService, logger: logger)
+    }
+    
+    /// A rejoin goes to the address the session was made on, and the lab's is the laptop's, which
+    /// changes with the network. Restoring against a dead one waits on the SDK's own timeouts with
+    /// nothing to show for it, so the address is asked first, briefly. Any answer at all will do.
+    private static func checkReachable(_ saved: Saved) async throws {
+        guard let url = URL(string: saved.homeserverURL)?.appending(path: "_matrix/client/versions") else { return }
+        do {
+            _ = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 5))
+        } catch let error as URLError where [.timedOut, .cannotFindHost, .cannotConnectToHost, .networkConnectionLost, .notConnectedToInternet].contains(error.code) {
+            throw Error.unreachable(saved.homeserverURL)
+        }
     }
     
     /// Whether the server still knows the kept token: `whoami` answers for the same device. A

@@ -59,6 +59,11 @@ final class ElementCallExampleHost {
     /// The kept session's call format, shown on the Lab tab.
     private(set) var labFormat: MatrixRTCMembershipFormat? = SDKLabSession.Saved.load()?.membershipFormat
     private var labTask: Task<Void, Never>?
+    /// What a lab login or rejoin is doing, while it does it. The tab is covered meanwhile: a second
+    /// login started under the first would open a second client on the one store.
+    private(set) var labProgress: String?
+    /// Why the last lab login or rejoin failed, until it is dismissed.
+    var labError: String?
     /// The sync-state observer behind the connectivity report; cancelled with the call.
     private var labConnectivity: AnyCancellable?
     
@@ -187,7 +192,7 @@ final class ElementCallExampleHost {
     /// The session in hand is reused for the same account and room; otherwise it is stopped and
     /// `SDKLabSession.login` decides between the kept session and a new login.
     func open(_ join: ElementCallExampleLabJoin) {
-        startLab(notice: "Lab: logging in as \(join.user) on \(join.homeserver)…", certificateURL: join.certificateURL) { current, logger in
+        startLab(progress: "Logging in as \(join.user) on \(join.homeserver)…", certificateURL: join.certificateURL) { current, logger in
             if let current, current.isFor(homeserver: join.homeserver, user: join.user, roomID: join.roomID, format: join.format) {
                 return current
             }
@@ -205,7 +210,7 @@ final class ElementCallExampleHost {
     /// Back into the lab call with the kept session: no code, the same device.
     func rejoinLab() {
         let homeserver = SDKLabSession.Saved.load()?.homeserver
-        startLab(notice: "Lab: rejoining as \(labAccount ?? "")…",
+        startLab(progress: "Rejoining as \(labAccount ?? "the kept account")…",
                  certificateURL: homeserver.flatMap { ElementCallExampleLabJoin.certificateURL(homeserver: $0) }) { current, logger in
             if let current {
                 return current
@@ -231,7 +236,15 @@ final class ElementCallExampleHost {
         }
     }
     
-    private func startLab(notice: String,
+    /// Gives up on a lab login or rejoin. The SDK call under way may still finish, and is dropped:
+    /// the task checks for cancellation before it opens the call.
+    func cancelLab() {
+        labTask?.cancel()
+        labTask = nil
+        labProgress = nil
+    }
+    
+    private func startLab(progress: String,
                           certificateURL: URL?,
                           session makeSession: @escaping (SDKLabSession?, ElementCallExampleLabLogger) async throws -> SDKLabSession) {
         lastOpenedRow = nil
@@ -239,18 +252,21 @@ final class ElementCallExampleHost {
         isHarnessMinimized = false
         let current = lab
         endCall()
-        self.notice = notice
+        labError = nil
+        labProgress = progress
         labTask = Task { [weak self] in
             let logger = ElementCallExampleLabLogger()
             await ElementCallExampleLabTrust.install(from: certificateURL)
             do {
                 let lab = try await Self.retrying(logger: logger) { try await makeSession(current, logger) }
                 guard let self, !Task.isCancelled else { return }
+                labProgress = "Joining the call…"
                 self.lab = lab
                 labAccount = SDKLabSession.Saved.load()?.userID
                 labFormat = lab.format
                 let room = SDKLabRoomContext(room: lab.room)
                 await room.load()
+                guard !Task.isCancelled else { return }
                 // The format is a preference now, not an option (043 R13): the Lab, which chose the
                 // session's, writes it where the call reads it, as any host controlling it would.
                 let preferences = ElementCallUserDefaultsPreferencesStore()
@@ -260,6 +276,7 @@ final class ElementCallExampleHost {
                 let controller = ElementCallController(backend: lab.backend,
                                                        system: ElementCallExampleLabSystem(),
                                                        options: ElementCallOptions(isDeveloperModeEnabled: true),
+                                                       style: lab.makeStyle(),
                                                        logger: logger,
                                                        preferences: preferences,
                                                        analytics: ElementCallExampleLabAnalytics(logger: logger))
@@ -273,16 +290,20 @@ final class ElementCallExampleHost {
                         controller?.reportConnectivity(isOnline: isOnline)
                     }
                 }
-                self.notice = nil
+                labProgress = nil
+                // Joining the call the lab already has, quietly: starting one would ring the room.
+                // Before the screen's view model: it reads the controller's room once, as it is made,
+                // for the names and avatars, and made first it found none and showed user IDs.
+                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
                 session = Session(fixture: nil,
                                   presentation: .live(ElementCallScreenViewModel(controller: controller)),
                                   controller: controller)
-                // Joining the call the lab already has, quietly: starting one would ring the room.
-                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
             } catch {
-                self?.labAccount = SDKLabSession.Saved.load()?.userID
-                self?.labFormat = SDKLabSession.Saved.load()?.membershipFormat
-                self?.notice = "Lab: \(error.localizedDescription)"
+                guard let self, !Task.isCancelled else { return }
+                labAccount = SDKLabSession.Saved.load()?.userID
+                labFormat = SDKLabSession.Saved.load()?.membershipFormat
+                labProgress = nil
+                labError = error.localizedDescription
             }
         }
     }
@@ -305,6 +326,7 @@ final class ElementCallExampleHost {
         ringingTask = nil
         labTask?.cancel()
         labTask = nil
+        labProgress = nil
         labConnectivity?.cancel()
         labConnectivity = nil
         // `lab` stays: rejoining reuses it, and only logging out drops it.

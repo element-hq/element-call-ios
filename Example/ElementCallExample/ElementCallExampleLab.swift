@@ -67,7 +67,8 @@ enum ElementCallExampleLabTrust {
     static func install(from url: URL?) async {
         guard let url else { return }
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            // Briefly: an unreachable lab is said by the login after this, not by a minute's wait here.
+            let (data, _) = try await URLSession.shared.data(for: URLRequest(url: url, timeoutInterval: 5))
             let dir = URL.applicationSupportDirectory.appending(path: "lab-ca")
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let file = dir.appending(path: "lab-ca.pem")
@@ -205,6 +206,34 @@ struct ElementCallExampleLabTab: View {
                     ? "Scan an account's code on the lab page to log in and join its call."
                     : "A code for another account logs this one out first.")
             }
+        }
+    }
+}
+
+/// Over everything while a lab login or rejoin runs, so nothing else can be started under it,
+/// with what it is doing and a way out.
+struct ElementCallExampleLabProgress: View {
+    let message: String
+    let onCancel: () -> Void
+    
+    var body: some View {
+        ZStack {
+            // Hit-tested, which is the point: it takes the taps the tabs would otherwise get.
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+            VStack(spacing: 16) {
+                ProgressView()
+                    .controlSize(.large)
+                Text(message)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("example.lab.progress")
+                Button("Cancel", role: .cancel, action: onCancel)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("example.lab.cancel")
+            }
+            .padding(24)
+            .frame(maxWidth: 320)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
         }
     }
 }
