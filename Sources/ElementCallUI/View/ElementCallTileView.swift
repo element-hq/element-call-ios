@@ -124,6 +124,9 @@ struct ElementCallTileView: View, Equatable {
     
     /// The design's avatar on a grid tile.
     static let gridAvatarDiameter: CGFloat = 52
+    /// How far the avatar on a card sits above the card's centre: the design puts 28 pt over it
+    /// and 40 under it on a 120 pt card, which keeps it clear of the name tag below.
+    static let cardAvatarRaise: CGFloat = 6
     /// The design's avatar on a tile that fills the stage or a slot of its own: the spotlight, full
     /// screen and a one-to-one call. The ringing avatar is drawn at it too, so the change to the call
     /// at the pickup is one avatar handing over to an identical one (030 R21).
@@ -266,12 +269,18 @@ struct ElementCallTileView: View, Equatable {
                         // tile in it changes; without an explicit identity the renderer would stay
                         // attached to the previous tile's stream.
                         .id(tile.id)
+                        // Both sides of this branch start on the same avatar, the video view's as
+                        // its placeholder, so the swap is instant. The stage animates every change
+                        // to its tiles, and a cross-fade between two identical avatars dips through
+                        // half transparency: the avatar flickered as a camera came on.
+                        .transition(.identity)
                 }
             } else {
                 if appearance == .fullBleed {
                     ElementCallSoundWaves(isSpeaking: tile.isSpeaking, avatarDiameter: Self.largeAvatarDiameter)
                 }
                 avatar
+                    .transition(.identity)
                 if appearance == .fullBleed, tile.isMediaInterrupted {
                     // Under the avatar rather than in the corner where other nameless tiles carry
                     // it: this tile's corner is under the control bar and the home indicator
@@ -379,6 +388,9 @@ struct ElementCallTileView: View, Equatable {
                                     avatarURL: tile.avatarURL,
                                     size: .full)
             .scaledAvatar(to: diameter)
+            // An offset rather than padding, so a card growing into the spotlight animates the
+            // avatar back to the centre as one move with its scale.
+            .offset(y: appearance == .card && !isLarge ? -Self.cardAvatarRaise : 0)
     }
     
     private var cardChrome: some View {
