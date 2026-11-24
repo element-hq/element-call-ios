@@ -600,16 +600,14 @@ struct CallAnalyticsTests {
             let seen = EndRecorder()
             analytics.onTrack = { [controller, system] event in
                 guard event.name == "CallParticipationEnded" else { return }
-                MainActor.assumeIsolated {
-                    let hasSystemEnd = system.requests.contains {
-                        if case .end = $0 {
-                            true
-                        } else {
-                            false
-                        }
+                let hasSystemEnd = system.requests.contains {
+                    if case .end = $0 {
+                        true
+                    } else {
+                        false
                     }
-                    seen.state = EndState(hasCall: controller.rtcCall != nil, hasSystemEnd: hasSystemEnd)
                 }
+                seen.state = EndState(hasCall: controller.rtcCall != nil, hasSystemEnd: hasSystemEnd)
             }
             return seen
         }
