@@ -15,12 +15,12 @@ import Foundation
 /// ``ElementCallAnalyticsEvent/properties`` unchanged, so both platforms land in the same graphs,
 /// and only with the user's consent to analytics.
 ///
-/// Called on the main actor, synchronously, at the moment the event happens, and never later: an
-/// event with no receiver is dropped, not kept. The end of a call reaches it before the call is torn
-/// down, as long as the call is ended through the controller: call
-/// ``ElementCallController/hangUp()`` before discarding a controller with a call in it, on logout as
-/// anywhere else. A controller discarded mid-call reports no end.
-public nonisolated protocol ElementCallAnalyticsProtocol: Sendable {
+/// Called synchronously, at the moment the event happens, and never later: an event with no receiver
+/// is dropped, not kept. The end of a call reaches it before the call is torn down, as long as the
+/// call is ended through the controller: call ``ElementCallController/hangUp()`` before discarding a
+/// controller with a call in it, on logout as anywhere else. A controller discarded mid-call reports
+/// no end.
+public protocol ElementCallAnalyticsProtocol {
     func track(_ event: ElementCallAnalyticsEvent)
 }
 
