@@ -590,8 +590,7 @@ struct ElementCallStage: View {
                                    // obviously us; our mute state is on the control bar.
                                    isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height
                                        || placement.appearance == .fullBleed
-                                       || placement.appearance == .floating
-                                       || isLobbyPreview,
+                                       || placement.appearance == .floating,
                                    // Never for a composed tile: a paused one keeps its video view, and
                                    // with it the last frame, so scrolling it in shows a picture rather
                                    // than an avatar (R49). The call is what stops its stream meanwhile.

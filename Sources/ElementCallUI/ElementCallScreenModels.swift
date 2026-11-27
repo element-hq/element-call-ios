@@ -36,6 +36,9 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public internal(set) var stats: String?
     /// Whether this tile's media is arriving and can be shown (034 R29, R33, R34).
     public internal(set) var mediaState: ElementCallTileMediaState = .live
+    /// The name the avatar takes its initial from, when it is not ``displayName``: our own tile is
+    /// named "You", and its avatar is still ours, Alice's A rather than You's Y.
+    public internal(set) var avatarName: String?
     
     public var memberID: String {
         id.memberID

@@ -63,7 +63,7 @@ struct ElementCallView: View {
                     // giving up its frame. A frame that changes height makes the scroller clamp its
                     // offset unasked, and a margin is the one change UIKit applies without moving
                     // the content under a finger (R6).
-                    content(isLandscape: isLandscape)
+                    content(isLandscape: isLandscape, stageWidth: geometry.size.width)
                         // A fitted picture is centred on what it is given, so full screen gives
                         // it the screen: centred on the notch-shaped remainder instead, the
                         // letterbox above and below would not match. A small call's full-bleed
@@ -112,6 +112,14 @@ struct ElementCallView: View {
                                 .transition(.opacity)
                                 .zIndex(2)
                         }
+                    } else if isLandscape, let lobby = context.viewState.lobby {
+                        // Beside the preview rather than under it (Q5), as Android's lobby is.
+                        ElementCallLobbyPanel(context: context, lobby: lobby)
+                            .frame(width: ElementCallLobbyPanel.width(in: geometry.size.width))
+                            .padding(.top, topBarHeight + Self.topChromeSpacing)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                            .transition(.opacity)
+                            .zIndex(2)
                     } else {
                         ElementCallFloatingControls(context: context)
                             .chromeSlide(isVisible: isStageChromeVisible,
@@ -314,9 +322,17 @@ struct ElementCallView: View {
     ///
     /// The summary's space is kept whether or not it says anything, so the preview never moves (R41,
     /// R57).
-    private func lobbyInsets(isLandscape: Bool) -> ElementCallStageLayout.LobbyInsets {
+    ///
+    /// Held sideways, the summary, the bar and Join are a column beside the preview instead, which
+    /// keeps clear of the top bar only (Q5).
+    private func lobbyInsets(isLandscape: Bool, width: CGFloat) -> ElementCallStageLayout.LobbyInsets {
+        if isLandscape {
+            return .init(top: topBarHeight + Self.topChromeSpacing,
+                         bottom: ElementCallStageLayout.Metrics.spacing,
+                         trailing: ElementCallLobbyPanel.width(in: width))
+        }
         let summary = ElementCallLobbySummary.height + Self.topChromeSpacing
-        return .init(top: isLandscape ? topBarHeight + Self.topChromeSpacing + summary : summary,
+        return .init(top: summary,
                      bottom: ElementCallFloatingControls.lobbyClearance + ElementCallStageLayout.Metrics.spacing)
     }
     
@@ -467,7 +483,7 @@ struct ElementCallView: View {
                     .padding(.horizontal, 16)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .chromeSlide(isVisible: isVisible, by: -(topBarHeight + safeArea.top + Self.topChromeSpacing), reduceMotion: reduceMotion)
-                if let lobby = context.viewState.lobby {
+                if let lobby = context.viewState.lobby, !isLandscape {
                     ElementCallLobbySummary(lobby: lobby, isAudioCall: context.viewState.isAudioCall)
                         .padding(.horizontal, 16)
                 }
@@ -660,7 +676,7 @@ struct ElementCallView: View {
     static let topChromeSpacing: CGFloat = 12
     
     @ViewBuilder
-    private func content(isLandscape: Bool) -> some View {
+    private func content(isLandscape: Bool, stageWidth: CGFloat) -> some View {
         let state = context.viewState
         // The spinner means "no call yet". That used to be the same thing as "no tiles" and is not
         // any more: the model's ranked list is *empty* when you are the only person in the call, and
@@ -697,7 +713,7 @@ struct ElementCallView: View {
                              isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,
                              memberCount: state.lobby?.memberCount ?? state.memberCount,
-                             lobbyInsets: state.lobby.map { _ in lobbyInsets(isLandscape: isLandscape) },
+                             lobbyInsets: state.lobby.map { _ in lobbyInsets(isLandscape: isLandscape, width: stageWidth) },
                              isLobbyLoading: state.lobby?.isLoading ?? false,
                              isCameraRefused: state.lobby?.isCameraRefused ?? false,
                              pictureInPictureSourceView: pictureInPictureSourceView,

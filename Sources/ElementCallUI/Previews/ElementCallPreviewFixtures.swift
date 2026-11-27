@@ -160,12 +160,13 @@ public enum ElementCallPreviewFixtures {
                                        displayName: "You",
                                        avatarURL: nil,
                                        isLocal: true,
-                                       isMicrophoneMuted: false,
+                                       isMicrophoneMuted: isMicrophoneRefused,
                                        hasVideo: isCameraOn,
                                        isSpeaking: false,
                                        handPosition: nil,
                                        isHero: false,
-                                       stats: nil)]
+                                       stats: nil,
+                                       avatarName: "Alice")]
         let label: ElementCallLobbyJoinLabel? = if isLoading {
             nil
         } else if isCallEndedNoticeShown {

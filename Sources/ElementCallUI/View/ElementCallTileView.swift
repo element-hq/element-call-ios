@@ -424,7 +424,7 @@ struct ElementCallTileView: View, Equatable {
             diameter = min(diameter, max(Self.gridAvatarDiameter, size.height * 0.6))
         }
         return style.avatars.avatar(userID: tile.userID,
-                                    displayName: tile.displayName,
+                                    displayName: tile.avatarName ?? tile.displayName,
                                     avatarURL: tile.avatarURL,
                                     size: .full)
             .scaledAvatar(to: diameter)

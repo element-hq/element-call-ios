@@ -584,12 +584,14 @@ public final class ElementCallScreenViewModel {
                                displayName: L10n.you,
                                avatarURL: profile?.avatarURL,
                                isLocal: true,
-                               isMicrophoneMuted: controller.isMicrophoneMuted,
+                               // A refused microphone cannot be heard either (045 R27).
+                               isMicrophoneMuted: controller.isMicrophoneMuted || controller.isMicrophonePermissionRefused,
                                hasVideo: hasVideo,
                                isSpeaking: false,
                                handPosition: nil,
                                isHero: false,
-                               stats: nil)
+                               stats: nil,
+                               avatarName: profile?.displayName ?? userID)
     }
     
     /// What a tile's media is doing, by its two causes. A lost connection wins: it is why nothing
@@ -682,7 +684,9 @@ public final class ElementCallScreenViewModel {
                                    stats: stats(tile),
                                    mediaState: mediaState(connection: tile.connection,
                                                           unableToDecrypt: tile.unableToDecrypt,
-                                                          isMissingKeys: missingKeys.contains(tile.memberID)))
+                                                          isMissingKeys: missingKeys.contains(tile.memberID)),
+                                   // Named "You", drawn with our own initial.
+                                   avatarName: tile.isLocal ? (profile?.displayName ?? tile.userID) : nil)
                 // Our own mute and camera come from the call, not the tile: see `withLocalMedia`.
                 .withLocalMedia(isMicrophoneMuted: isLocalMicrophoneMuted, hasVideo: localHasVideo)
         }

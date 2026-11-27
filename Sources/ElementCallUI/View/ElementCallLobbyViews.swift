@@ -133,6 +133,30 @@ struct ElementCallLobbySummary: View {
     }
 }
 
+/// Held sideways, the lobby's summary, controls and Join as a column at the trailing edge, beside
+/// the preview: under it they left the preview a strip (Q5). Android's `CallLobbyPanel`, at the same
+/// width. At Join the call's own bar takes over along the bottom.
+struct ElementCallLobbyPanel: View {
+    @Bindable var context: ElementCallScreenContext
+    let lobby: ElementCallLobbyViewState
+    
+    static let maximumWidth: CGFloat = 320
+    
+    static func width(in screenWidth: CGFloat) -> CGFloat {
+        min(maximumWidth, screenWidth / 2)
+    }
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            ElementCallLobbySummary(lobby: lobby, isAudioCall: context.viewState.isAudioCall)
+            ElementCallControlsView(context: context, axis: .horizontal)
+            ElementCallLobbyJoinButton(lobby: lobby) { context.send(viewAction: .join) }
+        }
+        .padding(.horizontal, 16)
+        .frame(maxHeight: .infinity)
+    }
+}
+
 // MARK: - Previews
 
 /// The lobby's states on the whole screen, so the snapshots pin where each piece sits (Q5, Q8).

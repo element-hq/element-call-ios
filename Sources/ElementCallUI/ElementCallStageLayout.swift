@@ -204,6 +204,8 @@ struct ElementCallStageLayout: Equatable {
     struct LobbyInsets: Equatable {
         var top: CGFloat
         var bottom: CGFloat
+        /// Held sideways, the lobby's controls are a column at the trailing edge.
+        var trailing: CGFloat = 0
     }
     
     /// The widest the lobby's preview grows, so a large screen does not become a large face (R39,
@@ -297,8 +299,9 @@ struct ElementCallStageLayout: Equatable {
                       viewport: CGRect) -> ElementCallStageLayout {
         let top = insets.top
         let bottom = metrics.safeBottom - insets.bottom
-        let width = min(metrics.cardsWidth, lobbyMaximumWidth)
-        let frame = CGRect(x: metrics.cardsLeading + (metrics.cardsWidth - width) / 2,
+        let available = max(0, metrics.cardsWidth - insets.trailing)
+        let width = min(available, lobbyMaximumWidth)
+        let frame = CGRect(x: metrics.cardsLeading + (available - width) / 2,
                            y: top,
                            width: width,
                            height: max(0, bottom - top))
