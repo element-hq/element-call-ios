@@ -148,6 +148,17 @@ struct ElementCallStage: View {
     /// About the controls and the lobby's Join, as the design draws it.
     static let glowHeight: CGFloat = 280
     
+    /// Where the glow ends, in content coordinates: the content's end, or the screen's bottom edge
+    /// once a bounce has carried the end above it. Content that fits one screen keeps it on the
+    /// bottom edge whichever way it is pulled.
+    static func glowBottom(contentHeight: CGFloat, visibleTop: CGFloat, viewportHeight: CGFloat) -> CGFloat {
+        let visibleBottom = visibleTop + viewportHeight
+        if contentHeight <= viewportHeight {
+            return visibleBottom
+        }
+        return max(contentHeight, visibleBottom)
+    }
+    
     /// The theme's glow, faded into the canvas upwards.
     private var stageGlow: some View {
         Rectangle()
@@ -210,10 +221,15 @@ struct ElementCallStage: View {
                         .zIndex(-1)
                     // The design's glow, at the end of the content: always there in a stage that
                     // does not scroll, reached at the bottom of one that does. Behind every tile,
-                    // and as Android's `StageGlow`.
+                    // and as Android's `StageGlow`. Never above the screen's bottom edge, though:
+                    // carried with the content, the bounce past the end lifted it up the screen,
+                    // which Android's stretch overscroll never does.
                     stageGlow
                         .frame(width: metrics.area.width, height: Self.glowHeight)
-                        .offset(y: max(0, stage.contentHeight - Self.glowHeight))
+                        .offset(y: Self.glowBottom(contentHeight: stage.contentHeight,
+                                                   visibleTop: scrollOffset,
+                                                   viewportHeight: stage.viewport.height) - Self.glowHeight)
+                        .animation(nil, value: scrollOffset)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                         .zIndex(-2)

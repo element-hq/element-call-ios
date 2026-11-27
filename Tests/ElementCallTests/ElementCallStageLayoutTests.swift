@@ -550,3 +550,26 @@ struct ElementCallStageLayoutTests {
         #expect(top(fullscreen: true) == 0)
     }
 }
+
+/// The stage's glow sits at the end of the content and never rises above the screen's bottom edge.
+@Suite("Stage glow")
+@MainActor
+struct StageGlowTests {
+    @Test("A bounce past the end leaves the glow on the screen's bottom edge")
+    func aBouncePastTheEnd() {
+        // 2000 of content, 800 on screen: at the end the visible top is 1200; a bounce takes it to 1300.
+        #expect(ElementCallStage.glowBottom(contentHeight: 2000, visibleTop: 1200, viewportHeight: 800) == 2000)
+        #expect(ElementCallStage.glowBottom(contentHeight: 2000, visibleTop: 1300, viewportHeight: 800) == 2100)
+    }
+    
+    @Test("Scrolled up, the glow stays at the content's end, off screen")
+    func scrolledUp() {
+        #expect(ElementCallStage.glowBottom(contentHeight: 2000, visibleTop: 300, viewportHeight: 800) == 2000)
+    }
+    
+    @Test("Content that fits one screen keeps the glow on the bottom edge, pulled either way")
+    func contentThatFits() {
+        #expect(ElementCallStage.glowBottom(contentHeight: 800, visibleTop: -60, viewportHeight: 800) == 740)
+        #expect(ElementCallStage.glowBottom(contentHeight: 800, visibleTop: 40, viewportHeight: 800) == 840)
+    }
+}
