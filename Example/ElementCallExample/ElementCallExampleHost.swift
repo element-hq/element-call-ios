@@ -28,6 +28,8 @@ final class ElementCallExampleHost {
         /// A real view model over a fake controller carrying a scripted call: the shipping screen,
         /// with the rosters coming from a scenario file rather than a backend.
         case scripted(ElementCallScreenViewModel, ElementCallExampleScenarioPlayback)
+        /// A group call opened on the lobby, through the real controller (045).
+        case lobby(ElementCallScreenViewModel)
     }
     
     struct Session {
@@ -77,7 +79,7 @@ final class ElementCallExampleHost {
         guard let session else { return false }
         switch session.presentation {
         case .harness: return isHarnessMinimized
-        case .live, .scripted: return !session.controller.isMaximized
+        case .live, .scripted, .lobby: return !session.controller.isMaximized
         }
     }
     
@@ -159,6 +161,9 @@ final class ElementCallExampleHost {
         case .permissionProbe:
             openPermissionProbe(fixture: fixture)
             
+        case .lobby(let lobby):
+            openLobby(lobby, fixture: fixture)
+            
         case .connecting(let connection):
             let controller = makeController(connection: connection, room: ElementCallFakeRoom())
             // The real host contract, and the only place in this repository it is exercised: the
@@ -179,7 +184,7 @@ final class ElementCallExampleHost {
         guard let session else { return }
         switch session.presentation {
         case .harness: isHarnessMinimized = false
-        case .live, .scripted: session.controller.restore()
+        case .live, .scripted, .lobby: session.controller.restore()
         }
     }
     
@@ -505,6 +510,44 @@ final class ElementCallExampleHost {
                 await playback.start()
                 await playback.step()
             }
+        } catch {
+            notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
+        }
+    }
+    
+    /// fixtures.md's Lobby section: a group call opened on the lobby, the core played by a scripted
+    /// room and Join landing in a scripted call (045 C25).
+    private func openLobby(_ lobby: ElementCallExampleLobby, fixture: ElementCallExampleFixture) {
+        do {
+            let people = ["@alice:example.org": "Alice", "@bob:example.com": "Bob", "@carol:example.com": "Carol"]
+            let room = ElementCallFakeRoom(displayName: ElementCallExampleLobby.roomName,
+                                           isDirect: false,
+                                           memberProfiles: people.reduce(into: [:]) { profiles, person in
+                                               profiles[person.key] = ElementCallMemberProfile(userID: person.key, displayName: person.value, avatarURL: nil)
+                                           })
+            let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(lobby.joinScenario, name: fixture.rawValue),
+                                                                  localMemberID: ElementCallExampleOutage.localMemberID,
+                                                                  audioOf: scripted.call)
+            let controller = ElementCallController.lobbyProbe(permissions: ElementCallExampleRefusingPermissions(refusing: lobby.refused),
+                                                              openRoom: { _ in try await lobby.openRoom(roomID: room.roomID) },
+                                                              join: {
+                                                                  try await Task.sleep(for: lobby.joinTakes)
+                                                                  await playback.start()
+                                                                  while !playback.isFinished {
+                                                                      await playback.step()
+                                                                  }
+                                                                  return (scripted.call, playback.player.call)
+                                                              })
+            controller.actions
+                .sink { [weak self] action in self?.handle(action) }
+                .store(in: &cancellables)
+            // Before the screen's view model, which reads the controller's room once, as it is made,
+            // for the names and avatars.
+            controller.startCall(ElementCallData(intent: lobby.hostIntent, isStartingCall: true), room: room)
+            let viewModel = ElementCallScreenViewModel(controller: controller)
+            playback.attach(context: viewModel.context, controller: controller)
+            session = Session(fixture: fixture, presentation: .lobby(viewModel), controller: controller)
         } catch {
             notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
         }

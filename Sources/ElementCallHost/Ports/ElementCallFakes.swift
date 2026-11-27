@@ -349,6 +349,42 @@ public extension ElementCallController {
         return controller
     }
     
+    /// The example harness only (fixtures.md's Lobby section): a real controller whose lobby reads
+    /// the call from `openRoom` and whose Join joins through `join`, a scripted pair that captures
+    /// and sends nothing, so the lobby, its loading, its questions and its Join are the shipping
+    /// path (045). Start it with ``startCall(_:room:)`` in a room that is not a DM. The camera opens
+    /// no device: the harness draws its test pattern on our tile. The phone is the system's, so
+    /// another call stops the preview on a device as it would in a host (R48).
+    static func lobbyProbe(permissions: any ElementCallMediaPermissionsProtocol,
+                           openRoom: @escaping (MatrixRTCMembershipFormat) async throws -> any MatrixRTCRoomProtocol,
+                           join: @escaping () async throws -> (MatrixRTCCall, MatrixRTCMediaSession)) -> ElementCallController {
+        let controller = ElementCallController(backend: ElementCallFakeMatrixBackend(),
+                                               system: ElementCallFakeSystem(),
+                                               options: ElementCallOptions(isDeveloperModeEnabled: true),
+                                               style: .stock,
+                                               logger: nil,
+                                               preferences: ElementCallFakePreferencesStore(),
+                                               permissions: permissions)
+        controller.capturesCamera = false
+        controller.scriptedRoom = openRoom
+        controller.scriptedJoin = { [weak controller] in
+            let joined = try await join()
+            // No CallKit here to activate the audio session, as for `permissionProbe`. Only at
+            // Join: the lobby leaves the phone's audio alone (045 R45). After the join rather than
+            // at the tap: activating blocks the main thread, which CallKit's activation does not,
+            // and here it froze the preview's move into our tile.
+            do {
+                try CallAudioSessionConfigurator.configure()
+                try CallAudioSessionConfigurator.activate()
+                controller?.audioSessionDidActivate()
+            } catch {
+                controller?.errorMessage = "Could not activate the audio session: \(error)"
+            }
+            return joined
+        }
+        return controller
+    }
+    
     /// The example harness only (`permission_probe`): a real controller over the system's own
     /// permissions, so its dialogs appear and a refusal is handled as in a real call (042). Start it
     /// with ``startCall(_:room:)``: the gate, the system call and everything after the join are the

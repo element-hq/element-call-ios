@@ -76,7 +76,8 @@ final class TestPatternVideo: Sendable {
     }
     
     private static func size(for memberID: String, isLandscape: Bool) -> CGSize {
-        if memberID == ownMemberID {
+        // Our tile before the core reports it, from a lobby, has no member ID yet (045 C5).
+        if memberID == ownMemberID || memberID.isEmpty {
             return isLandscape ? landscape : portrait
         }
         return portraitMembers.contains(memberID.lowercased()) ? portrait : landscape

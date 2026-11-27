@@ -238,7 +238,8 @@ struct ElementCallStage: View {
                                                          fullscreenID: fullscreenID,
                                                          ownCorner: ownCorner,
                                                          ownVideoAspect: ownVideoAspect,
-                                                         metrics: metrics))
+                                                         metrics: metrics,
+                                                         lobbyInsets: lobbyInsets))
             }
             // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen, or
             // in a small call, where a scroller whose content is one screen would still bounce
@@ -529,6 +530,8 @@ struct ElementCallStage: View {
         let ownCorner: ElementCallOwnTileCorner
         let ownVideoAspect: CGFloat?
         let metrics: ElementCallStageLayout.Metrics
+        /// Join: the preview animates into our own tile, the same view moving (045 R24).
+        let lobbyInsets: ElementCallStageLayout.LobbyInsets?
     }
     
     /// What the stage is not showing, in the two ways the call tells apart: composed but off screen

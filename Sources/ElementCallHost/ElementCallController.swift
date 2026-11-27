@@ -1023,9 +1023,12 @@ public final class ElementCallController {
         // our own membership as "answered elsewhere" and would end the ringing call under us.
         // For an outgoing call this requests the start action; the system activates the audio session
         // either way and reports it back through the events publisher.
+        // Off the main thread: setting the category blocks for tens of milliseconds and more, and
+        // from a lobby this runs at the tap, while the preview is moving into our tile (045 R24).
+        // On the main thread the move rendered only its end. The session is safe from any thread.
         if isAudioEnabled {
             do {
-                try CallAudioSessionConfigurator.configure()
+                try await Task.detached(priority: .userInitiated) { try CallAudioSessionConfigurator.configure() }.value
             } catch {
                 log(.warning, "could not configure the audio session: \(error)")
             }

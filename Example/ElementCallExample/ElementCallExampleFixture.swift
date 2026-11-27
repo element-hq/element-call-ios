@@ -64,6 +64,17 @@ enum ElementCallExampleFixture: String, CaseIterable {
     case outageKeyUndeliveredThenDelivered = "outage.key.undelivered_then_delivered"
     case outageKeyMissing = "outage.key.missing"
     case permissionProbe = "permission_probe"
+    // fixtures.md's Lobby section (045 C25).
+    case lobbyEmpty = "lobby_empty"
+    case lobbyInProgress = "lobby_in_progress"
+    case lobbyCountChanges = "lobby_count_changes"
+    case lobbyJoin = "lobby_join"
+    case lobbyVoice = "lobby_voice"
+    case lobbyNoIntentVoiceCall = "lobby_no_intent_voice_call"
+    case lobbyMicRefused = "lobby_mic_refused"
+    case lobbyCameraRefused = "lobby_camera_refused"
+    case lobbyLoading = "lobby_loading"
+    case lobbyUnreadable = "lobby_unreadable"
     
     /// `-fixture <key>` opens a fixture and `-scenario <name>` a scenario file, mirroring Android's
     /// `--es fixture` and `--es scenario` so one recipe reads the same on both.
@@ -78,6 +89,7 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case ringing = "Ringing"
         case outages = "Outages"
         case permissions = "Permissions"
+        case lobby = "Lobby"
     }
     
     var category: Category {
@@ -87,6 +99,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .outageHomeserver30s, .outageHomeserverLapse, .outageOwnSFURecovers40s, .outageOwnSFUBudget, .outagePeerSFU1m,
              .outageKeyUndeliveredThenDelivered, .outageKeyMissing: .outages
         case .permissionProbe: .permissions
+        case .lobbyEmpty, .lobbyInProgress, .lobbyCountChanges, .lobbyJoin, .lobbyVoice, .lobbyNoIntentVoiceCall,
+             .lobbyMicRefused, .lobbyCameraRefused, .lobbyLoading, .lobbyUnreadable: .lobby
         default: .connected
         }
     }
@@ -133,6 +147,16 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .outageKeyUndeliveredThenDelivered: "Erin's key late, then delivered"
         case .outageKeyMissing: "Erin's key never arrives"
         case .permissionProbe: "Microphone and camera permissions"
+        case .lobbyEmpty: "Lobby, nobody in the call"
+        case .lobbyInProgress: "Lobby, call in progress"
+        case .lobbyCountChanges: "Lobby, people come and go"
+        case .lobbyJoin: "Lobby, then join"
+        case .lobbyVoice: "Lobby, voice call"
+        case .lobbyNoIntentVoiceCall: "Lobby, joining a voice call without choosing"
+        case .lobbyMicRefused: "Lobby, microphone refused"
+        case .lobbyCameraRefused: "Lobby, camera refused"
+        case .lobbyLoading: "Lobby, slow to read the call"
+        case .lobbyUnreadable: "Lobby, call cannot be read"
         }
     }
     
@@ -176,6 +200,16 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case .outageKeyUndeliveredThenDelivered: "From 5 s Erin's key is missing, until 12 s: her spinner, and no indicator."
         case .outageKeyMissing: "From 5 s Erin's key is missing: her spinner, the key-off icon from 15 s, and no indicator."
         case .permissionProbe: "A video call with Bob through the real controller, so the system's dialogs appear (042)."
+        case .lobbyEmpty: "Start group call; Join lands alone."
+        case .lobbyInProgress: "Three in the call: Join call and the count."
+        case .lobbyCountChanges: "Nobody, two at 5 s, nobody at 10 s: the label, then Join anyway and the notice. Loops."
+        case .lobbyJoin: "Two in the call; Join moves the preview into a small call of three."
+        case .lobbyVoice: "The host asks for voice: the camera starts off."
+        case .lobbyNoIntentVoiceCall: "No intent from the host; the two members agree on voice, so the camera starts off."
+        case .lobbyMicRefused: "The microphone answers refused: it looks unavailable, and Join explains."
+        case .lobbyCameraRefused: "The camera answers refused: it looks unavailable, its tap explains, Join joins."
+        case .lobbyLoading: "The call is read after 3 s: loading in the final frame until then."
+        case .lobbyUnreadable: "The room fails to open after 2 s: the failure screen."
         }
     }
     
@@ -217,6 +251,8 @@ enum ElementCallExampleFixture: String, CaseIterable {
         case reactions(ElementCallExampleReactions)
         /// A video call with Bob through the real controller and the system's permissions (042).
         case permissionProbe
+        /// A group call opened on the lobby, through the real controller (045).
+        case lobby(ElementCallExampleLobby)
     }
     
     /// Built from the same fixtures the snapshots use, so a failure here and a failure there are
@@ -338,6 +374,16 @@ enum ElementCallExampleFixture: String, CaseIterable {
             return .outage(.keyMissing)
         case .permissionProbe:
             return .permissionProbe
+        case .lobbyEmpty: return .lobby(.empty)
+        case .lobbyInProgress: return .lobby(.inProgress)
+        case .lobbyCountChanges: return .lobby(.countChanges)
+        case .lobbyJoin: return .lobby(.join)
+        case .lobbyVoice: return .lobby(.voice)
+        case .lobbyNoIntentVoiceCall: return .lobby(.noIntentVoiceCall)
+        case .lobbyMicRefused: return .lobby(.microphoneRefused)
+        case .lobbyCameraRefused: return .lobby(.cameraRefused)
+        case .lobbyLoading: return .lobby(.loading)
+        case .lobbyUnreadable: return .lobby(.unreadable)
         case .joining:
             return .connecting(.joining)
         case .connectingMedia:

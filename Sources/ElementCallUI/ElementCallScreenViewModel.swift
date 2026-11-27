@@ -255,6 +255,16 @@ public final class ElementCallScreenViewModel {
         context.viewState.canSwitchCamera = MatrixRTCMediaSession.canSwitchCamera
         // The device's encoders, which do not change under a running app (043 R15).
         context.viewState.videoCodecs = MatrixRTCClient.supportedVideoCodecs()
+        // What the first frame is, for the same reason: a screen presented on a lobby drew the call's
+        // joining state and its hang-up for the frames before refresh() ran (045 R59).
+        context.viewState.connection = controller.connection
+        context.viewState.isOpenedOnLobby = controller.isOpenedOnLobby
+        context.viewState.lobby = lobbyViewState()
+        context.viewState.isMicrophoneMuted = controller.isMicrophoneMuted
+        context.viewState.isCameraEnabled = controller.isCameraEnabled
+        if controller.call == nil {
+            context.viewState.tiles = provisionalOwnTile().map { [$0] } ?? []
+        }
         
         if let room {
             room.displayNamePublisher
