@@ -291,10 +291,12 @@ final class ElementCallExampleHost {
                     }
                 }
                 labProgress = nil
-                // Joining the call the lab already has, quietly: starting one would ring the room.
-                // Before the screen's view model: it reads the controller's room once, as it is made,
-                // for the names and avatars, and made first it found none and showed user IDs.
-                controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: false), room: room)
+                // Joining the call the lab already has, quietly: starting one would ring the room. On
+                // the lobby, as a host's group call opens, with no intent: a plain join lets the
+                // call's members decide (045 R17, R18). Before the screen's view model: it reads the
+                // controller's room once, as it is made, for the names and avatars, and made first
+                // it found none and showed user IDs.
+                controller.startCall(ElementCallData(intent: nil, isStartingCall: false), room: room)
                 session = Session(fixture: nil,
                                   presentation: .live(ElementCallScreenViewModel(controller: controller)),
                                   controller: controller)
@@ -497,7 +499,8 @@ final class ElementCallExampleHost {
             let viewModel = ElementCallScreenViewModel(controller: controller)
             playback.attach(context: viewModel.context, controller: controller)
             session = Session(fixture: fixture, presentation: .scripted(viewModel, playback), controller: controller)
-            controller.startCall(ElementCallData(isAudioCall: false, isStartingCall: true), room: room)
+            // 042's path, which the lobby leaves unchanged when it is skipped (045 R44).
+            controller.startCall(ElementCallData(intent: .video, isStartingCall: true, skipsLobby: true), room: room)
             ringingTask = Task {
                 await playback.start()
                 await playback.step()

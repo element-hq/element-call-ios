@@ -128,19 +128,9 @@ public final class MatrixRTCMediaSession {
         Task { @MainActor in self?.setAudioLevel(level, for: self?.localMemberID) }
     }
     
-    @ObservationIgnored private lazy var camera: CameraCapturer = {
-        let capturer = CameraCapturer { [weak self] frame in
-            guard let self else { return }
-            localVideo.offer(frame)
-            if let info = localVideoMeter.record(frame) {
-                Task { @MainActor in self.videoInfos[MatrixRTCStreamRef(memberID: self.localMemberID, kind: .camera)] = info }
-            }
-        }
-        capturer.onInterruption = { [weak self] interrupted in
-            Task { @MainActor in await self?.handleCameraInterruption(interrupted) }
-        }
-        return capturer
-    }()
+    /// The camera, which may already be running: a lobby's preview is handed to the session at Join
+    /// rather than restarted (045 R49). The session publishes a track and attaches it.
+    public let camera: MatrixRTCLocalCamera
     
     /// Lazy so the handler can capture `self`, the way the camera capturer above does.
     @ObservationIgnored private lazy var screenShare: ScreenShareCapturer = {
@@ -152,7 +142,9 @@ public final class MatrixRTCMediaSession {
     }()
     
     /// The self view: frames straight from the camera, mirrored for the front one.
-    public let localVideo = LocalVideoFanOut()
+    public var localVideo: LocalVideoFanOut {
+        camera.video
+    }
     
     private var microphoneTrack: FfiLocalTrack?
     private let localVideoMeter = VideoFrameMeter()
@@ -238,21 +230,23 @@ public final class MatrixRTCMediaSession {
     /// level flush and the stats poll. Injected so a scenario can walk through a linger in one
     /// step; the continuous clock everywhere a session makes the call.
     private let clock: any Clock<Duration>
-    /// Whether turning the camera on opens the device. Off for a scripted call: it has no track to
-    /// send frames into, and the example app that plays scenarios has no camera usage string, so
-    /// opening the device there is a privacy abort. The camera state still changes, so our tile
-    /// follows it and the harness draws its test pattern there.
-    private let capturesCamera: Bool
     /// Whether publishing the microphone starts its tap. Off for a scripted call, whose track has no
     /// Rust object to hand frames to; the mute state is still recorded (042's `permission_probe`).
     private let capturesMicrophone: Bool
     
     /// `audio` defaults to one of its own for a session with no call around it: the harness's and
     /// the tests'.
+    ///
+    /// `camera` is the attempt's, already running when a lobby previewed it. `capturesCamera` only
+    /// shapes the one made when none is given: off for a scripted call, which has no track to send
+    /// frames into, and whose example app has no camera usage string, so opening the device there
+    /// is a privacy abort. The camera state still changes, so our tile follows it and the harness
+    /// draws its test pattern there.
     init(localMemberID: String,
          mediaSession: any MediaSessionProtocol,
          audio: CallAudio = CallAudio(),
          clock: any Clock<Duration> = ContinuousClock(),
+         camera: MatrixRTCLocalCamera? = nil,
          capturesCamera: Bool = true,
          capturesMicrophone: Bool = true,
          reactionSpread: @escaping () -> Duration = { .milliseconds(Int.random(in: 0...500)) }) {
@@ -260,12 +254,23 @@ public final class MatrixRTCMediaSession {
         self.audio = audio
         self.mediaSession = mediaSession
         self.clock = clock
-        self.capturesCamera = capturesCamera
+        self.camera = camera ?? MatrixRTCLocalCamera(capturesCamera: capturesCamera)
         self.capturesMicrophone = capturesMicrophone
         self.reactionSpread = reactionSpread
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(participantCap: Self.defaultParticipantCapForJoinLeaveSounds)
         elapsed = stopwatch(clock)
         (events, eventsContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
+        isFrontCamera = self.camera.isFrontFacing
+        let meter = localVideoMeter
+        let memberID = localMemberID
+        self.camera.setFrameObserver { [weak self] frame in
+            if let info = meter.record(frame) {
+                Task { @MainActor in self?.videoInfos[MatrixRTCStreamRef(memberID: memberID, kind: .camera)] = info }
+            }
+        }
+        self.camera.setOnInterruption { [weak self] interrupted in
+            Task { @MainActor in await self?.handleCameraInterruption(interrupted) }
+        }
     }
     
     /// Starts the event pump **before** anything announces the call as connected (the stream has no
@@ -370,7 +375,7 @@ public final class MatrixRTCMediaSession {
                     // simulcast is not a quality setting: with one layer dynacast pauses the only
                     // encoding nobody's small tile asked for and no video leaves the device.
                     // The size is the one the frames will have, since the layers are derived from it.
-                    let size = capturesCamera ? camera.publishedSize : CameraCaptureFormat.fallbackOutput
+                    let size = camera.publishedSize
                     track = try await mediaSession.publish(options: FfiPublishOptions(kind: .camera,
                                                                                       audio: nil,
                                                                                       video: FfiVideoSourceConfig(width: UInt32(size.width),
@@ -383,17 +388,14 @@ public final class MatrixRTCMediaSession {
                 }
                 cameraTrack = track
             }
-            if capturesCamera {
-                camera.setInterfaceOrientation(currentInterfaceOrientation)
-                try camera.start(track: track)
-                isFrontCamera = camera.isFrontFacing
-            }
+            camera.setInterfaceOrientation(currentInterfaceOrientation)
+            // Attaches to a capture already running, from a lobby, without touching the device.
+            try camera.publish(to: track)
+            isFrontCamera = camera.isFrontFacing
             await setTransportMuted(.camera, muted: false)
         } else {
             await setTransportMuted(.camera, muted: true)
-            if capturesCamera {
-                camera.stop()
-            }
+            camera.stop()
         }
         isCameraEnabled = enabled
         MatrixRTCLog.info("Camera \(enabled ? "enabled" : "disabled") for \(localMemberID)")
@@ -406,11 +408,8 @@ public final class MatrixRTCMediaSession {
     }
     
     public func switchCamera() throws {
-        guard capturesCamera else {
-            isFrontCamera.toggle()
-            return
-        }
-        isFrontCamera = try camera.switchCamera()
+        try camera.switchCamera()
+        isFrontCamera = camera.isFrontFacing
     }
     
     /// Anyone (us included) has video worth showing.
@@ -491,7 +490,6 @@ public final class MatrixRTCMediaSession {
     }
     
     public func updateInterfaceOrientation(_ orientation: UIInterfaceOrientation) {
-        guard capturesCamera else { return }
         camera.setInterfaceOrientation(orientation)
     }
     
@@ -842,9 +840,7 @@ public final class MatrixRTCMediaSession {
         audioLevelFlush?.cancel()
         audioLevelFlush = nil
         microphone.stop()
-        if capturesCamera {
-            camera.stop()
-        }
+        camera.stop()
         await screenShare.stop()
         playbackSinks.values.forEach { $0.stop() }
         playbackSinks.removeAll()

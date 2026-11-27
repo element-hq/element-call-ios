@@ -116,14 +116,23 @@ struct ElementCallFloatingControls: View {
     /// How far up from the safe area it sits; the stage keeps the grid's end clear of it.
     static let edgePadding: CGFloat = 12
     static let clearance: CGFloat = ElementCallControlsView.thickness + edgePadding
+    /// Between the bar and the lobby's Join.
+    static let lobbySpacing: CGFloat = 8
+    /// In the lobby, Join is under the bar: what the preview keeps clear of, above the safe area.
+    static let lobbyClearance: CGFloat = clearance + lobbySpacing + ElementCallLobbyJoinButton.height
     
     private var isPickerShown: Bool {
         context.viewState.presentedSheet == .reactions
     }
     
     var body: some View {
-        VStack(spacing: 8) {
+        let lobby = context.viewState.lobby
+        VStack(spacing: Self.lobbySpacing) {
             Spacer()
+            if lobby?.isCallEndedNoticeShown == true {
+                ElementCallLobbyCallEndedNotice()
+                    .transition(.opacity)
+            }
             // Over the stage rather than in the clearance, so the tiles do not move when a hand
             // goes up. Not under the picker, whose scrim it would show through.
             if context.viewState.showsRaisedHandBanner, !isPickerShown {
@@ -131,9 +140,19 @@ struct ElementCallFloatingControls: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
             ElementCallControlsView(context: context, axis: .horizontal)
-                .padding(.bottom, Self.edgePadding)
+                .padding(.bottom, lobby == nil ? Self.edgePadding : 0)
+            if let lobby {
+                // Fades at the tap while the bar grows the call's buttons in place (045 R24).
+                ElementCallLobbyJoinButton(lobby: lobby) { context.send(viewAction: .join) }
+                    .frame(maxWidth: ElementCallStageLayout.lobbyMaximumWidth)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, Self.edgePadding)
+                    .transition(.opacity)
+            }
         }
         .animation(.easeInOut(duration: 0.25), value: context.viewState.showsRaisedHandBanner)
+        .animation(.easeInOut(duration: 0.25), value: lobby?.isCallEndedNoticeShown)
+        .animation(.easeInOut(duration: 0.3), value: lobby == nil)
     }
 }
 

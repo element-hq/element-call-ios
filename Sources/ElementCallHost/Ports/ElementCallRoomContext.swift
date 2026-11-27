@@ -6,6 +6,7 @@
 //
 
 import Combine
+import ElementCallKit
 import Foundation
 
 /// What we need to know about a member to put them on a tile.
@@ -32,6 +33,8 @@ public protocol ElementCallRoomContextProtocol: AnyObject {
     var displayName: String { get }
     var displayNamePublisher: AnyPublisher<String, Never> { get }
     
+    /// Settled when ``ElementCallController/startCall(_:room:)`` is called: it decides whether the
+    /// lobby shows, once, with no waiting for a later answer (045 R40).
     var isDirect: Bool { get }
     var isDirectPublisher: AnyPublisher<Bool, Never> { get }
     
@@ -43,15 +46,25 @@ public protocol ElementCallRoomContextProtocol: AnyObject {
 /// What a call was started for; fixed at start time. Whether the room is a direct chat and what it is
 /// called are read from the ``ElementCallRoomContextProtocol`` instead, because both can change mid-call.
 public nonisolated struct ElementCallData: Sendable, Equatable {
-    public let isAudioCall: Bool
+    /// Voice or video as the user chose it, or nil when they joined a call in progress without
+    /// choosing: the call's members' intent then applies, else video (045 R17, R18). Required with no
+    /// default, so every call site decides whether the user chose: passing the button that was
+    /// pressed on a plain join makes the members' intent never apply.
+    public let intent: MatrixRTCCallIntent?
     /// Whether the user chose to call, as opposed to answering a ring or joining a call in progress.
     /// It decides whether a direct chat rings, so it comes from what the user did, never from the
     /// room having no call yet: answering a ring just after the caller gave up finds no call, and
-    /// would ring them back rather than end (030 R33).
+    /// would ring them back rather than end (030 R33). A group call's lobby does not read it: there
+    /// the button the user taps, Start or Join, decides whether the room is notified (045 R21).
     public let isStartingCall: Bool
+    /// The host's own pre-call screen has already run, as CallKit's answer does: the call joins as
+    /// soon as it opens, with no lobby (045 R5). It cannot make the lobby show: a direct chat skips
+    /// it whatever this says (R3).
+    public let skipsLobby: Bool
     
-    public init(isAudioCall: Bool, isStartingCall: Bool) {
-        self.isAudioCall = isAudioCall
+    public init(intent: MatrixRTCCallIntent?, isStartingCall: Bool, skipsLobby: Bool = false) {
+        self.intent = intent
         self.isStartingCall = isStartingCall
+        self.skipsLobby = skipsLobby
     }
 }

@@ -102,7 +102,10 @@ public final class MatrixRTCCall {
     /// Returns once the engine is up, without waiting for our own media server, which the core
     /// connects as it would reconnect a lost one (034 C10). `isSFUFallbackEnabled`: see
     /// `ElementCallOptions.isSFUFallbackEnabled`.
-    public func connectMedia(isSFUFallbackEnabled: Bool = false) async throws -> MatrixRTCMediaSession {
+    ///
+    /// `camera` is the attempt's: a lobby's preview, running already, carries on into the call
+    /// rather than being restarted (045 R49). Without one the session makes its own, stopped.
+    public func connectMedia(isSFUFallbackEnabled: Bool = false, camera: MatrixRTCLocalCamera? = nil) async throws -> MatrixRTCMediaSession {
         if let mediaSession {
             return mediaSession
         }
@@ -117,7 +120,7 @@ public final class MatrixRTCCall {
             throw MatrixRTCError.media("\(error)")
         }
         
-        let mediaSession = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: ffiSession, audio: audio)
+        let mediaSession = MatrixRTCMediaSession(localMemberID: localMemberID, mediaSession: ffiSession, audio: audio, camera: camera)
         self.mediaSession = mediaSession
         await mediaSession.start()
         MatrixRTCLog.info("Media connected for \(roomID)/\(slotID) as \(localMemberID)")

@@ -51,6 +51,12 @@ struct ElementCallStage: View {
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
+    /// The lobby's chrome, while the stage is the lobby's preview (045); nil in a call.
+    var lobbyInsets: ElementCallStageLayout.LobbyInsets?
+    /// The lobby is reading the call (045 R59).
+    var isLobbyLoading = false
+    /// The camera is refused, which the preview says to a screen reader (045 R50).
+    var isCameraRefused = false
     let pictureInPictureSourceView: UIView
     let callProvider: () -> MatrixRTCMediaSession?
     /// How far down from the top the chrome drawn over the stage reaches; zero when nothing is kept
@@ -168,7 +174,8 @@ struct ElementCallStage: View {
                                                              ownCorner: ownCorner,
                                                              ownVideoAspect: ownVideoAspect,
                                                              floatingInsets: floatingInsets,
-                                                             isDirect: isDirect))
+                                                             isDirect: isDirect,
+                                                             lobbyInsets: lobbyInsets))
             let floating = stage.placements.first { $0.appearance == .floating }
             let floatingBounds = ElementCallSmallCallLayout.floatingBounds(metrics: metrics, insets: floatingInsets)
             ScrollView(.vertical) {
@@ -182,7 +189,7 @@ struct ElementCallStage: View {
                         .onTapGesture { onToggleChrome() }
                         .zIndex(-1)
                     fullscreenScrim(in: stage)
-                    ForEach(stage.placements) { placement in
+                    ForEach(stage.placements, id: \.tile.viewID) { placement in
                         tileView(for: placement, in: stage)
                     }
                     if let heroStack = stage.heroStack, let spotlight = stage.placements.first(where: \.isSpotlight) {
@@ -550,6 +557,8 @@ struct ElementCallStage: View {
         // in a small call: from three people ours is an inline card cropped to 4:3, and full screen
         // is the one place that shows all of what we send.
         let isOwnFloatingTile = placement.tile.isLocal && placement.appearance == .floating
+        // The preview answers no tap, double tap or pinch: only its flip button does (045 R36).
+        let isLobbyPreview = placement.appearance == .lobby
         return ElementCallTileView(tile: placement.tile,
                                    callProvider: callProvider,
                                    isSpotlight: placement.isSpotlight,
@@ -562,16 +571,19 @@ struct ElementCallStage: View {
                                    // obviously us; our mute state is on the control bar.
                                    isNameHidden: placement.isSpotlight && stage.viewport.width > stage.viewport.height
                                        || placement.appearance == .fullBleed
-                                       || placement.appearance == .floating,
+                                       || placement.appearance == .floating
+                                       || isLobbyPreview,
                                    // Never for a composed tile: a paused one keeps its video view, and
                                    // with it the last frame, so scrolling it in shows a picture rather
                                    // than an avatar (R49). The call is what stops its stream meanwhile.
                                    isVideoSuspended: false,
                                    contentFit: placement.contentFit,
-                                   allowsFullscreen: !isOwnFloatingTile,
+                                   allowsFullscreen: !isOwnFloatingTile && !isLobbyPreview,
                                    canSwitchCamera: canSwitchCamera,
                                    isFrontCamera: isFrontCamera,
                                    floatingCorner: placement.appearance == .floating ? ownCorner : nil,
+                                   isLoading: isLobbyPreview && isLobbyLoading,
+                                   isCameraRefused: isLobbyPreview && isCameraRefused,
                                    // The same animation as a drag's release, so a move asked for by
                                    // VoiceOver is the same move (019 R25).
                                    onMoveToCorner: { corner in withAnimation(animation) { onMoveOwnTile(corner) } },
@@ -580,7 +592,7 @@ struct ElementCallStage: View {
                                        ownVideoAspect = aspect
                                    },
                                    onToggleFullscreen: { onToggleFullscreen(placement.id) },
-                                   onToggleChrome: isOwnFloatingTile ? { } : onToggleChrome,
+                                   onToggleChrome: isOwnFloatingTile || isLobbyPreview ? { } : onToggleChrome,
                                    onAction: onAction)
             .equatable()
             .background {

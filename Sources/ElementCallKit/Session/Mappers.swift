@@ -129,6 +129,13 @@ nonisolated extension MatrixRTCCallIntent {
         case .video: self = .video
         }
     }
+    
+    var ffi: FfiCallIntent {
+        switch self {
+        case .audio: .audio
+        case .video: .video
+        }
+    }
 }
 
 nonisolated extension MatrixRTCConnectionLossReason {

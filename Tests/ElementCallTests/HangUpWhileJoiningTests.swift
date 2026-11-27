@@ -22,7 +22,7 @@ import Testing
 @Suite("Hanging up while joining")
 @MainActor
 struct HangUpWhileJoiningTests {
-    private let callData = ElementCallData(isAudioCall: true, isStartingCall: false)
+    private let callData = ElementCallData(intent: .audio, isStartingCall: false, skipsLobby: true)
     private let first = ElementCallFakeRoom(roomID: "!first:example.org")
     private let second = ElementCallFakeRoom(roomID: "!second:example.org")
     

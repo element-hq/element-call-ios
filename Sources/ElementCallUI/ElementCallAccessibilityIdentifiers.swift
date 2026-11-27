@@ -98,6 +98,17 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     /// The failure screen's Use Room state, for an MSC join that failed (043 R18a).
     public static let failureUseRoomState = "\(prefix).failureUseRoomState"
     
+    /// The lobby's leading button, which closes rather than minimizes (045 R20).
+    public static let lobbyClose = "\(prefix).lobby.close"
+    /// The lobby's Start or Join (045 R21).
+    public static let lobbyJoin = "\(prefix).lobby.join"
+    /// The lobby's preview, our own camera (045 R8).
+    public static let lobbyPreview = "\(prefix).lobby.preview"
+    /// The notice that the call has ended, in the lobby (045 R57).
+    public static let lobbyCallEnded = "\(prefix).lobby.callEnded"
+    /// Our own tile before the core has reported it, after a lobby (045 C5).
+    public static let ownTile = "\(prefix).tile.own"
+    
     /// A tile, identified by the member on it **and the stream it draws**.
     ///
     /// This is the break. A member publishing a camera and a screen share is two tiles now, so the
@@ -106,7 +117,8 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     /// share carries its stream after a slash. So nothing that worked stops working; there is simply
     /// more on screen than there was, which a rig counting tiles to count people will notice.
     public static func tile(_ id: MatrixRTCTileID) -> String {
-        switch id.kind {
+        guard id != .ownCamera else { return ownTile }
+        return switch id.kind {
         case .person: "\(prefix).tile.\(id.memberID)"
         default: "\(prefix).tile.\(id.memberID)/\(id.kind)"
         }

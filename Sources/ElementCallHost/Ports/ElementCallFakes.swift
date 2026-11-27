@@ -299,7 +299,7 @@ public extension ElementCallController {
                                                logger: nil,
                                                preferences: ElementCallFakePreferencesStore(),
                                                permissions: ElementCallFakeMediaPermissions())
-        controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: isAudioCall ? .audio : .video, isStartingCall: true),
                                    room: room,
                                    connection: connection,
                                    connectedAt: connectedAt,
@@ -325,7 +325,7 @@ public extension ElementCallController {
                                                logger: nil,
                                                preferences: ElementCallFakePreferencesStore(),
                                                permissions: ElementCallFakeMediaPermissions())
-        controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: isAudioCall ? .audio : .video, isStartingCall: true),
                                    room: room,
                                    connection: .joining,
                                    call: call,

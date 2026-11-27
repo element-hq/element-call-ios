@@ -284,7 +284,8 @@ struct ElementCallView: View {
     /// The top bar and the control bar, shown and hidden as one (017 R1). Until the stage is up
     /// there is nothing to look at, and hang up has to stay in reach (R13).
     private var isStageChromeVisible: Bool {
-        !isStageShown || context.stageChrome.isVisible
+        // Pinned in the lobby, as while ringing: its controls are the point (045 C17).
+        !isStageShown || context.viewState.lobby != nil || context.stageChrome.isVisible
     }
     
     /// One picture behind all the chrome: a one-to-one small call (019 R4).
@@ -307,6 +308,14 @@ struct ElementCallView: View {
         return .init(top: top, bottom: isVisible ? Self.controlsClearance : 0)
     }
     
+    /// What the lobby's preview keeps clear of: the top bar, which floats over the stage in landscape
+    /// and sits above it in portrait, and the bar and Join below it (045 C3). Here rather than in the
+    /// layout, so design can move the pieces (Q5, Q8).
+    private func lobbyInsets(isLandscape: Bool) -> ElementCallStageLayout.LobbyInsets {
+        .init(top: isLandscape ? topBarHeight + Self.topChromeSpacing : 0,
+              bottom: ElementCallFloatingControls.lobbyClearance + ElementCallStageLayout.Metrics.spacing)
+    }
+    
     /// Whether the top bar goes with the control bar: in landscape (017 R1), and in a one-to-one
     /// call, whose picture is the whole screen (019 R30). Elsewhere in portrait it stays (017 R30).
     private func isTopBarHideable(isLandscape: Bool) -> Bool {
@@ -314,9 +323,11 @@ struct ElementCallView: View {
     }
     
     /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
+    /// Our provisional tile, from a lobby, is drawn and still not the call on the stage: until the
+    /// call is, the chrome stays (014 R13, 045 C5).
     private var isStageShown: Bool {
         let state = context.viewState
-        return state.connection == .connected || !state.tiles.isEmpty
+        return state.connection == .connected || state.tiles.contains { $0.id != .ownCamera }
     }
     
     /// Assigned only on a change: the context is observed, and the scroll reports a direction many
@@ -479,16 +490,27 @@ struct ElementCallView: View {
     
     private var topBar: some View {
         HStack(spacing: 8) {
-            Button { context.send(viewAction: .minimize) } label: {
-                style.icons.icon(.collapse)
+            if context.viewState.lobby != nil {
+                // Close, which closes the call screen: a lobby is never minimised (045 R20, R33).
+                // Not the collapse glyph, which means minimise everywhere else on this screen.
+                Button { context.send(viewAction: .hangUp) } label: {
+                    style.icons.icon(.close)
+                }
+                .buttonStyle(ElementCallRoundButtonStyle())
+                .accessibilityLabel(L10n.actionClose)
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.lobbyClose)
+            } else {
+                Button { context.send(viewAction: .minimize) } label: {
+                    style.icons.icon(.collapse)
+                }
+                .buttonStyle(ElementCallRoundButtonStyle())
+                .accessibilityLabel(L10n.actionBack)
+                // The same omission as the one fixed for `.more` below, and for the same reason: the
+                // top bar does not go through `ElementCallControlsView.controlButton`, which is the
+                // only caller of `control(for:)`, so a constant that exists and is pinned by name in
+                // the identifier tests still reached no view and nothing could tap this button.
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimize)
             }
-            .buttonStyle(ElementCallRoundButtonStyle())
-            .accessibilityLabel(L10n.actionBack)
-            // The same omission as the one fixed for `.more` below, and for the same reason: the
-            // top bar does not go through `ElementCallControlsView.controlButton`, which is the
-            // only caller of `control(for:)`, so a constant that exists and is pinned by name in
-            // the identifier tests still reached no view and nothing could tap this button.
-            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimize)
             
             Spacer()
             
@@ -578,7 +600,12 @@ struct ElementCallView: View {
     @ViewBuilder
     private var statusLine: some View {
         switch context.viewState.connection {
+        case .lobby:
+            // Nothing: the lobby is not joining anything until Join (045 R6).
+            EmptyView()
         case .idle, .joining:
+            // From a lobby this is the joining state R23 asks for: our tile is already on the stage,
+            // so no spinner says it (Android's appendix, item 7).
             Text(L10n.joining).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connectingMedia:
             Text(L10n.connecting).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
@@ -661,7 +688,10 @@ struct ElementCallView: View {
                              canSwitchCamera: state.canSwitchCamera,
                              isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,
-                             memberCount: state.memberCount,
+                             memberCount: state.lobby?.memberCount ?? state.memberCount,
+                             lobbyInsets: state.lobby.map { _ in lobbyInsets(isLandscape: isLandscape) },
+                             isLobbyLoading: state.lobby?.isLoading ?? false,
+                             isCameraRefused: state.lobby?.isCameraRefused ?? false,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
                              topClearance: Self.topClearance(isLandscape: isLandscape,

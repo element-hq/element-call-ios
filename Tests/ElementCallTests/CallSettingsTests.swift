@@ -17,10 +17,10 @@ import Testing
 @MainActor
 struct CallSettingsTests {
     private let room = ElementCallFakeRoom(roomID: "!room:example.org")
-    private let videoCall = ElementCallData(isAudioCall: false, isStartingCall: true)
+    private let videoCall = ElementCallData(intent: .video, isStartingCall: true, skipsLobby: true)
     /// Joining, not starting: nothing rings, and nothing reaches the audio engine while the room
     /// never opens (see `HangUpWhileJoiningTests`).
-    private let joiningCall = ElementCallData(isAudioCall: true, isStartingCall: false)
+    private let joiningCall = ElementCallData(intent: .audio, isStartingCall: false, skipsLobby: true)
     
     // MARK: - The store (R13, R13a, R16)
     

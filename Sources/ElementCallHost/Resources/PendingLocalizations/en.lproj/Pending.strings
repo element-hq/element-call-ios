@@ -1,0 +1,11 @@
+/* The call lobby's strings (feature-hq 045, contract C26 and C30), used before they reach the
+   element-call Localazy project. Same keys and English as Android's temporary strings.xml. Once a
+   key is in mobile.json, delete it here and use L10n in place of L10nPending; see L10nPending.swift. */
+"element_call_a11y_camera_not_allowed" = "Camera not allowed";
+"element_call_a11y_lobby_camera" = "Your camera";
+"element_call_lobby_call_ended" = "The call has ended";
+"element_call_lobby_join" = "Join call";
+"element_call_lobby_join_anyway" = "Join anyway";
+"element_call_lobby_loading" = "Loading call";
+"element_call_lobby_microphone_description" = "Allow access to the microphone to join.";
+"element_call_lobby_start" = "Start group call";

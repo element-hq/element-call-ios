@@ -21,7 +21,7 @@ import Testing
 struct CallAnalyticsTests {
     private typealias Failure = ElementCallAnalyticsFailure
     
-    private let voiceCall = ElementCallData(isAudioCall: true, isStartingCall: true)
+    private let voiceCall = ElementCallData(intent: .audio, isStartingCall: true, skipsLobby: true)
     private let connected = MatrixRTCCallStatus.connected(since: .now, isDegraded: false)
     private static let callee = "@bob:example.org"
     private static let secret = "secret server text M_SECRET"

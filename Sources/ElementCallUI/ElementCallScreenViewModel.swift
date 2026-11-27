@@ -160,8 +160,9 @@ public final class ElementCallScreenContext {
                 context.viewState.videoCodec = codec
             case let .setSoundEffectsVolume(volume):
                 context.viewState.soundEffectsVolume = volume
-            case .playSoundEffectsVolumeSample, .openSettings:
-                // A fixture screen has no permissions of its own.
+            case .playSoundEffectsVolumeSample, .openSettings, .join:
+                // A fixture screen has no permissions of its own, and no lobby to join from: the
+                // lobby's fixtures run the real controller.
                 break
             case .minimize, .hangUp, .dismiss:
                 context.viewState.presentedSheet = nil
@@ -210,6 +211,17 @@ public final class ElementCallScreenViewModel {
     }
     
     /// Placed behind the spotlight tile so the system can start Picture in Picture from it.
+    /// Our camera's frames, in the lobby before there is a session and in the call after: one camera
+    /// for the attempt, so the same frames (045 R49).
+    public var ownVideo: LocalVideoFanOut? {
+        controller.localCamera?.video
+    }
+    
+    /// The screen's orientation, for the frames the camera tags, in the lobby as in the call.
+    public func updateInterfaceOrientation(_ orientation: UIInterfaceOrientation) {
+        controller.updateInterfaceOrientation(orientation)
+    }
+    
     public var pictureInPictureSourceView: UIView {
         controller.pictureInPictureSourceView
     }
@@ -271,6 +283,8 @@ public final class ElementCallScreenViewModel {
         switch viewAction {
         // Through the controller rather than the call, which does not exist yet while we are joining
         // -- and the controls are already on screen and tappable by then.
+        case .join:
+            controller.join()
         case .toggleMicrophone:
             controller.setMicrophoneMuted(!controller.isMicrophoneMuted)
         case .toggleCamera:
@@ -378,7 +392,7 @@ public final class ElementCallScreenViewModel {
     private func refresh() {
         var state = context.viewState
         state.connection = controller.connection
-        state.isAudioCall = controller.callData?.isAudioCall ?? false
+        state.isAudioCall = (controller.settledIntent ?? controller.callData?.intent) == .audio
         state.callee = if case .calling(let callee, _) = controller.connection {
             profiles[callee] ?? ElementCallMemberProfile(userID: callee, displayName: nil, avatarURL: nil)
         } else {
@@ -416,10 +430,20 @@ public final class ElementCallScreenViewModel {
         state.isOwnMediaReconnecting = (controller.call?.interruptions.ownMedia ?? .connected) != .connected
         // Above the guard as well: the server entry is the one that exists before media does.
         state.interruptions = controller.interruptions
+        state.isOpenedOnLobby = controller.isOpenedOnLobby
+        state.lobby = lobbyViewState()
         
         if let message = controller.errorMessage {
             context.alertInfo = ElementCallAlert(title: L10n.error, message: message)
             controller.errorMessage = nil
+        }
+        // The lobby's microphone or Join, tapped with the microphone refused: the lobby's own
+        // description under 042's title, and the app's settings, since iOS never asks again (045 R27).
+        if controller.isMicrophoneRefusalNoticePending {
+            context.alertInfo = ElementCallAlert(title: L10n.permissionMicrophoneTitle,
+                                                 message: L10nPending.lobbyMicrophoneDescription,
+                                                 action: .openSettings)
+            controller.isMicrophoneRefusalNoticePending = false
         }
         if controller.isCameraRefusalNoticePending {
             context.alertInfo = ElementCallAlert(title: L10n.permissionCameraTitle,
@@ -429,7 +453,10 @@ public final class ElementCallScreenViewModel {
         }
         
         guard let call = controller.call else {
-            state.tiles = []
+            // From the lobby on there is always our own tile, so the joining spinner is never drawn
+            // and the preview is the tile it becomes (045 C5, R49). A call opened without a lobby
+            // keeps its spinner until media is up, as before.
+            state.tiles = provisionalOwnTile().map { [$0] } ?? []
             state.reactions = []
             state.spotlightID = nil
             // So the next call on a reused view model starts its speaker afresh.
@@ -456,18 +483,25 @@ public final class ElementCallScreenViewModel {
         state.isFrontCamera = call.isFrontCamera
         state.isScreenSharing = call.isScreenSharing
         
+        // Our mute and camera through the controller, which reads the user's choice while the
+        // session is still being told it: the session reads the camera off until then, and our tile
+        // would drop its picture for that moment (045 C28).
         state.tiles = Self.tiles(roster: call.tiles,
                                  own: call.ownTile,
                                  profiles: profiles,
                                  youLabel: L10n.you,
-                                 isLocalMicrophoneMuted: call.isMicrophoneMuted,
-                                 localHasVideo: call.isCameraEnabled,
+                                 isLocalMicrophoneMuted: controller.isMicrophoneMuted,
+                                 localHasVideo: controller.isCameraEnabled,
                                  missingKeys: call.membersMissingKeys,
                                  // The flag is read before any stats, so that with the overlay down
                                  // none of them enters this method's observation access list.
                                  // `receiveStats` is rewritten every second whether anyone is looking
                                  // or not, so tracking it cost a full screen rebuild per second.
                                  stats: controller.isTileStatsVisible ? { Self.stats(for: $0, in: call) } : { _ in nil })
+        // Until the core reports our tile, a call opened on the lobby keeps the one it had there.
+        if call.ownTile == nil, let provisional = provisionalOwnTile() {
+            state.tiles.insert(provisional, at: 0)
+        }
         // Here rather than in the tile, which cannot tell a one-to-one call's floating tile from a
         // small call's, and which would miss the full-screen badge drawn by the screen (009 R33).
         state.tiles = ElementCallScreenViewState.showingHands(state.tiles)
@@ -496,6 +530,45 @@ public final class ElementCallScreenViewModel {
         controller.setSpotlightTile(pictureInPicture.id, isExact: pictureInPicture.isExact)
         
         publish(state)
+    }
+    
+    private func lobbyViewState() -> ElementCallLobbyViewState? {
+        guard controller.connection == .lobby, let phase = controller.lobbyPhase else { return nil }
+        return ElementCallLobbyViewState(phase: phase,
+                                         memberCount: controller.lobbyMemberCount,
+                                         joinLabel: controller.lobbyJoinLabel,
+                                         isCallEndedNoticeShown: controller.isCallEndedNoticeShown,
+                                         isMicrophoneRefused: controller.isMicrophonePermissionRefused,
+                                         isCameraRefused: controller.isCameraPermissionRefused)
+    }
+    
+    /// Our own tile before the core has reported it, for a call opened on the lobby only: built from
+    /// our profile and the lobby's choices (045 C5). Its video is the camera's, whose frames the tile
+    /// draws in every phase; in the lobby only while the camera is running, so a preview stopped in
+    /// the background or by another call shows our avatar rather than its last frame.
+    private func provisionalOwnTile() -> ElementCallTile? {
+        guard controller.isOpenedOnLobby else { return nil }
+        switch controller.connection {
+        case .lobby, .joining, .connectingMedia, .calling, .connected:
+            break
+        case .idle, .ended, .failed:
+            return nil
+        }
+        let userID = controller.ownUserID
+        let profile = profiles[userID]
+        let isCapturing = controller.localCamera?.isCapturing ?? false
+        let hasVideo = controller.isCameraEnabled && (controller.connection != .lobby || isCapturing)
+        return ElementCallTile(id: .ownCamera,
+                               userID: userID,
+                               displayName: L10n.you,
+                               avatarURL: profile?.avatarURL,
+                               isLocal: true,
+                               isMicrophoneMuted: controller.isMicrophoneMuted,
+                               hasVideo: hasVideo,
+                               isSpeaking: false,
+                               handPosition: nil,
+                               isHero: false,
+                               stats: nil)
     }
     
     /// What a tile's media is doing, by its two causes. A lost connection wins: it is why nothing

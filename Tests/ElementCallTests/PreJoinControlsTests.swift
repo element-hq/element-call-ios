@@ -44,7 +44,7 @@ struct PreJoinControlsTests {
                                                style: .stock,
                                                logger: nil,
                                                permissions: ElementCallFakeMediaPermissions())
-        controller.setPreviewState(callData: .init(isAudioCall: isAudioCall, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: isAudioCall ? .audio : .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .joining)
         return (controller, system)
@@ -91,26 +91,31 @@ struct PreJoinControlsTests {
         #expect(!isEnabled)
     }
     
-    /// Joining from a room's call button asks for video, because the button cannot know what is in
-    /// progress; the core does, and a voice call has to join with the camera off.
+    /// The camera follows the intent the room settles, before the join, with no intent from the
+    /// host: a voice call joins with the camera off (045 R17, C24).
     @Test
-    func aVoiceCallJoinsWithTheCameraOff() {
+    func theSettledIntentSeedsTheCamera() {
         let (controller, _) = makeJoiningController()
         #expect(controller.isCameraEnabled)
         
-        controller.adoptIntent(.audio)
+        controller.settledIntent = .audio
+        controller.seedCameraFromSettledIntent()
         
         #expect(!controller.isCameraEnabled)
     }
     
-    /// The control: a video call keeps the camera the join asked for.
+    /// A choice the user made while the intent was being settled is kept, not overwritten (C24).
     @Test
-    func aVideoCallJoinsWithTheCameraOn() {
+    func theSettledIntentKeepsTheUsersChoice() async throws {
         let (controller, _) = makeJoiningController()
+        let disabled = deferFulfillment(values { controller.isCameraEnabled }) { !$0 }
+        controller.setCameraEnabled(false)
+        _ = try await disabled.fulfill()
         
-        controller.adoptIntent(.video)
+        controller.settledIntent = .video
+        controller.seedCameraFromSettledIntent()
         
-        #expect(controller.isCameraEnabled)
+        #expect(!controller.isCameraEnabled)
     }
     
     /// What the controller reads the intent from: the core's, as the join settled it.

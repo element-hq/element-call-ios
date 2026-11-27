@@ -54,7 +54,7 @@ struct InterruptionHoldTests {
                                                permissions: ElementCallFakeMediaPermissions())
         let clock = MatrixRTCManualClock()
         controller.clock = clock
-        controller.setPreviewState(callData: ElementCallData(isAudioCall: false, isStartingCall: true),
+        controller.setPreviewState(callData: ElementCallData(intent: .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .connected)
         controller.followSignalling()
