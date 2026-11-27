@@ -96,3 +96,33 @@ struct ElementCallLobbyCallEndedNotice: View {
             }
     }
 }
+
+// MARK: - Previews
+
+/// The lobby's states on the whole screen, so the snapshots pin where each piece sits (Q5, Q8).
+struct ElementCallLobby_Previews: PreviewProvider, TestablePreview {
+    typealias Fixtures = ElementCallPreviewFixtures
+    
+    static func screen(_ state: ElementCallScreenViewState) -> some View {
+        ElementCallView(context: .preview(state: state),
+                        pictureInPictureSourceView: UIView(),
+                        callProvider: Fixtures.noCall)
+    }
+    
+    static var previews: some View {
+        screen(Fixtures.lobby(isLoading: true))
+            .previewDisplayName("Loading")
+        screen(Fixtures.lobby(memberCount: 0))
+            .previewDisplayName("Nobody in the call")
+        screen(Fixtures.lobby(memberCount: 3))
+            .previewDisplayName("Call in progress")
+        screen(Fixtures.lobby(memberCount: 3, isCameraEnabled: false))
+            .previewDisplayName("Camera off")
+        screen(Fixtures.lobby(memberCount: 0, isCallEndedNoticeShown: true))
+            .previewDisplayName("Call ended")
+        screen(Fixtures.lobby(isMicrophoneRefused: true))
+            .previewDisplayName("Microphone refused")
+        screen(Fixtures.lobby(isCameraRefused: true))
+            .previewDisplayName("Camera refused")
+    }
+}

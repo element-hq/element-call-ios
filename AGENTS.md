@@ -385,6 +385,10 @@ it: `L10n` is generated from the download, never written.
 - **Whole sentences, never assembled.** "Move to" plus a corner's name is English word order;
   `moveLabel(to:)` has a key per corner.
 - Only languages with a translation are downloaded: Localazy converts nothing for the rest.
+- **A string not yet in Localazy goes in `L10nPending`**, a hand-written table in
+  `Resources/PendingLocalizations`, outside the download's reach. Once the key is in `mobile.json`,
+  switch the call site to `L10n` and delete the pending key. Never add one to `Localizable.strings`:
+  the next download drops it.
 
 ## The call's Matrix backend
 
