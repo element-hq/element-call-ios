@@ -114,6 +114,12 @@ struct ElementCallStage: View {
     /// layout gives it a grid tile's z position straight away, and it shrank under the spotlight
     /// and the neighbours it was returning to.
     @State private var raisedTileID: MatrixRTCTileID?
+    /// Our tile is moving from the lobby's preview to its place in the call, above the tiles arriving
+    /// around it: under them, it slid beneath the call and surfaced at the end (045 R24). By view
+    /// identity, since its member ID is minted during the move.
+    @State private var isOwnTileLeavingLobby = false
+    /// Comfortably past the stage's spring, which settles in under half a second.
+    private static let lobbyMoveDuration: Duration = .milliseconds(800)
     @State private var scrollPhase: ScrollPhase = .idle
     /// Where the last reported scroll direction was measured from, in the scroller's raw offset.
     @State private var scrollDirectionOrigin: CGFloat?
@@ -334,6 +340,16 @@ struct ElementCallStage: View {
                 withAnimation(animation) {
                     scrollPosition.scrollTo(y: min(max(0, request.offset), stage.maxScrollOffset))
                 }
+            }
+            .onChange(of: lobbyInsets == nil) { _, hasLeftLobby in
+                if hasLeftLobby {
+                    isOwnTileLeavingLobby = true
+                }
+            }
+            .task(id: isOwnTileLeavingLobby) {
+                guard isOwnTileLeavingLobby else { return }
+                try? await Task.sleep(for: Self.lobbyMoveDuration)
+                isOwnTileLeavingLobby = false
             }
             .onChange(of: fullscreenID != nil) { _, isFullscreen in
                 guard isFullscreen else { return }
@@ -617,7 +633,9 @@ struct ElementCallStage: View {
             // slide with the inset already.
             .offset(y: pin == 0 ? gridSlide : 0)
             .offset(placement.appearance == .floating ? leadingRelative(ownTileDrag) : .zero)
-            .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
+            .zIndex(placement.id == raisedTileID || isOwnTileLeavingLobby && placement.tile.viewID == .ownCamera
+                ? ElementCallStageLayout.fullscreenZIndex
+                : placement.zIndex)
             .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
     }
     
