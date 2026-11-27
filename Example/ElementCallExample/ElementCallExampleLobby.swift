@@ -29,9 +29,6 @@ struct ElementCallExampleLobby {
     var refused: ElementCallMediaDevice?
     /// The remote roster Join lands in, as a scenario writes it.
     var joinRoster = "CAROLv BOBv"
-    /// How long the join takes after the tap, which is when the core reports our tile (R49): a
-    /// real one takes seconds, and the preview's move plays out before it lands.
-    var joinTakes: Duration = .seconds(2)
     
     static let roomName = "Lobby"
     

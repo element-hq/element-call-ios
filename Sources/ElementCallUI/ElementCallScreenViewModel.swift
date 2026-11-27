@@ -400,6 +400,11 @@ public final class ElementCallScreenViewModel {
     }
     
     private func refresh() {
+        // A closed lobby stays as it was while the host takes the screen down: redrawn as an ended
+        // call, it flashed "Call ended" and a spinner over a call that never existed (045 R20).
+        if case .ended = controller.connection, context.viewState.lobby != nil {
+            return
+        }
         var state = context.viewState
         state.connection = controller.connection
         state.isAudioCall = (controller.settledIntent ?? controller.callData?.intent) == .audio
@@ -443,24 +448,7 @@ public final class ElementCallScreenViewModel {
         state.isOpenedOnLobby = controller.isOpenedOnLobby
         state.lobby = lobbyViewState()
         
-        if let message = controller.errorMessage {
-            context.alertInfo = ElementCallAlert(title: L10n.error, message: message)
-            controller.errorMessage = nil
-        }
-        // The lobby's microphone or Join, tapped with the microphone refused: the lobby's own
-        // description under 042's title, and the app's settings, since iOS never asks again (045 R27).
-        if controller.isMicrophoneRefusalNoticePending {
-            context.alertInfo = ElementCallAlert(title: L10n.permissionMicrophoneTitle,
-                                                 message: L10nPending.lobbyMicrophoneDescription,
-                                                 action: .openSettings)
-            controller.isMicrophoneRefusalNoticePending = false
-        }
-        if controller.isCameraRefusalNoticePending {
-            context.alertInfo = ElementCallAlert(title: L10n.permissionCameraTitle,
-                                                 message: L10n.permissionCameraDescription,
-                                                 action: .openSettings)
-            controller.isCameraRefusalNoticePending = false
-        }
+        presentPendingNotices()
         
         guard let call = controller.call else {
             // From the lobby on there is always our own tile, so the joining spinner is never drawn
@@ -540,6 +528,29 @@ public final class ElementCallScreenViewModel {
         controller.setSpotlightTile(pictureInPicture.id, isExact: pictureInPicture.isExact)
         
         publish(state)
+    }
+    
+    /// What the controller has asked the screen to say once: an error, or why the microphone or the
+    /// camera is refused (042 R11, 045 R27).
+    private func presentPendingNotices() {
+        if let message = controller.errorMessage {
+            context.alertInfo = ElementCallAlert(title: L10n.error, message: message)
+            controller.errorMessage = nil
+        }
+        // The lobby's microphone or Join, tapped with the microphone refused: the lobby's own
+        // description under 042's title, and the app's settings, since iOS never asks again (045 R27).
+        if controller.isMicrophoneRefusalNoticePending {
+            context.alertInfo = ElementCallAlert(title: L10n.permissionMicrophoneTitle,
+                                                 message: L10nPending.lobbyMicrophoneDescription,
+                                                 action: .openSettings)
+            controller.isMicrophoneRefusalNoticePending = false
+        }
+        if controller.isCameraRefusalNoticePending {
+            context.alertInfo = ElementCallAlert(title: L10n.permissionCameraTitle,
+                                                 message: L10n.permissionCameraDescription,
+                                                 action: .openSettings)
+            controller.isCameraRefusalNoticePending = false
+        }
     }
     
     private func lobbyViewState() -> ElementCallLobbyViewState? {

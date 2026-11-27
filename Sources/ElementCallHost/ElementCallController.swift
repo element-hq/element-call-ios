@@ -978,7 +978,7 @@ public final class ElementCallController {
         // what the user left the camera at is what joins (045 C6, R15).
         follow(rtcCall, roomID: room.roomID)
         // From the join rather than from media: the ring goes out now, and its ringback with it.
-        activateAudio()
+        await activateAudio()
         
         let call: MatrixRTCMediaSession
         do {
@@ -1203,11 +1203,14 @@ public final class ElementCallController {
     /// host's system-call port is inert because CallKit is unavailable. Runtime rather than `#if`,
     /// because an iOS-on-Mac binary is indistinguishable from an iOS one at compile time. On a
     /// device the system usually activated the session while we were still joining.
-    private func activateAudio() {
+    ///
+    /// Off the main thread, as CallKit's activation is: activating blocks, and from a lobby this runs
+    /// while the preview is moving into our tile (045 R24).
+    private func activateAudio() async {
         guard isAudioEnabled else { return }
         if CallAudioSessionConfigurator.isSelfActivating {
             do {
-                try CallAudioSessionConfigurator.activate()
+                try await Task.detached(priority: .userInitiated) { try CallAudioSessionConfigurator.activate() }.value
                 isAudioSessionActive = true
             } catch {
                 log(.error, "could not activate the audio session: \(error)")

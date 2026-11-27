@@ -370,12 +370,14 @@ public extension ElementCallController {
         controller.scriptedJoin = { [weak controller] in
             let joined = try await join()
             // No CallKit here to activate the audio session, as for `permissionProbe`. Only at
-            // Join: the lobby leaves the phone's audio alone (045 R45). After the join rather than
-            // at the tap: activating blocks the main thread, which CallKit's activation does not,
-            // and here it froze the preview's move into our tile.
+            // Join: the lobby leaves the phone's audio alone (045 R45). Off the main thread, as
+            // CallKit's activation is: activating blocks, and at the tap it froze the preview's move
+            // into our tile.
             do {
-                try CallAudioSessionConfigurator.configure()
-                try CallAudioSessionConfigurator.activate()
+                try await Task.detached(priority: .userInitiated) {
+                    try CallAudioSessionConfigurator.configure()
+                    try CallAudioSessionConfigurator.activate()
+                }.value
                 controller?.audioSessionDidActivate()
             } catch {
                 controller?.errorMessage = "Could not activate the audio session: \(error)"

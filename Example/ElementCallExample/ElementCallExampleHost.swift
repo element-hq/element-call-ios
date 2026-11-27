@@ -528,12 +528,13 @@ final class ElementCallExampleHost {
             let scenario = try MatrixRTCScenario.parse(lobby.joinScenario, name: fixture.rawValue)
             // The scripted call and its session are made at Join, not here: each brings an audio
             // engine, and a lobby has none until Join (045 R45). Made at open, the harness stopped
-            // a podcast the moment the lobby showed, which a real lobby does not do.
+            // a podcast the moment the lobby showed, which a real lobby does not do. The join lands
+            // at once with the members the lobby counted, as Android's sample does: holding the
+            // whole join back showed an empty call for those who had just been told two were in it.
             weak var screen: ElementCallScreenViewModel?
             let controller = ElementCallController.lobbyProbe(permissions: ElementCallExampleRefusingPermissions(refusing: lobby.refused),
                                                               openRoom: { _ in try await lobby.openRoom(roomID: room.roomID) },
                                                               join: { [weak self] in
-                                                                  try await Task.sleep(for: lobby.joinTakes)
                                                                   let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
                                                                   let playback = ElementCallExampleScenarioPlayback(scenario: scenario,
                                                                                                                     localMemberID: ElementCallExampleOutage.localMemberID,
