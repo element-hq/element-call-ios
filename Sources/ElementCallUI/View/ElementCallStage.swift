@@ -145,6 +145,20 @@ struct ElementCallStage: View {
     
     private static let animation: Animation = .spring(duration: 0.45, bounce: 0.15)
     
+    /// About the controls and the lobby's Join, as the design draws it.
+    static let glowHeight: CGFloat = 280
+    
+    /// The theme's glow, faded into the canvas upwards.
+    private var stageGlow: some View {
+        Rectangle()
+            .fill(style.theme.stageGlow)
+            .overlay {
+                LinearGradient(colors: [style.theme.bgCanvasDefault, style.theme.bgCanvasDefault.opacity(0)],
+                               startPoint: .top,
+                               endPoint: .bottom)
+            }
+    }
+    
     private var animation: Animation? {
         // With reduce motion on, tiles change place without sliding (R41). That also stops the
         // fit blend on a promotion, which is the intended outcome.
@@ -194,6 +208,15 @@ struct ElementCallStage: View {
                         .contentShape(Rectangle())
                         .onTapGesture { onToggleChrome() }
                         .zIndex(-1)
+                    // The design's glow, at the end of the content: always there in a stage that
+                    // does not scroll, reached at the bottom of one that does. Behind every tile,
+                    // and as Android's `StageGlow`.
+                    stageGlow
+                        .frame(width: metrics.area.width, height: Self.glowHeight)
+                        .offset(y: max(0, stage.contentHeight - Self.glowHeight))
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .zIndex(-2)
                     fullscreenScrim(in: stage)
                     ForEach(stage.placements, id: \.tile.viewID) { placement in
                         tileView(for: placement, in: stage)

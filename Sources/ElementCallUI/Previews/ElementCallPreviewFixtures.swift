@@ -38,7 +38,9 @@ public enum ElementCallPreviewFixtures {
                                handPosition: handPosition,
                                isHero: isHero,
                                stats: stats,
-                               mediaState: mediaState)
+                               mediaState: mediaState,
+                               // As the screen names ours: "You", with our own initial.
+                               avatarName: isLocal ? name : nil)
     }
     
     /// A member's screen, which is a tile of its own beside their camera rather than a state of it.

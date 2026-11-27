@@ -65,6 +65,9 @@ public nonisolated protocol ElementCallThemeProtocol: Sendable {
     @MainActor var soundWaveFills: [Color] { get }
     /// The edge of each wave.
     @MainActor var soundWaveEdge: Color { get }
+    /// The glow at the end of the stage, under the controls, across its width; the stage fades it
+    /// into ``bgCanvasDefault`` upwards.
+    @MainActor var stageGlow: AnyShapeStyle { get }
 }
 
 @MainActor
@@ -77,6 +80,15 @@ public extension ElementCallThemeProtocol {
     
     func raisedHandBorder(in size: CGSize) -> [AnyShapeStyle] {
         ElementCallBorderGradient.raisedHand.layers(in: size)
+    }
+    
+    /// The design's teal to blue, Android's same values, so a host theme written before this existed
+    /// keeps compiling and draws the glow as designed.
+    var stageGlow: AnyShapeStyle {
+        AnyShapeStyle(LinearGradient(colors: [Color(red: 0x0D / 255, green: 0xBD / 255, blue: 0xA8 / 255).opacity(0.6),
+                                              Color(red: 0x0D / 255, green: 0x5C / 255, blue: 0xBD / 255).opacity(0.6)],
+                                     startPoint: .leading,
+                                     endPoint: .trailing))
     }
     
     /// Compound's sizes as system text styles, as the token theme draws every font, so a host theme
