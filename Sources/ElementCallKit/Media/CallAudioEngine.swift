@@ -217,8 +217,25 @@ final nonisolated class CallAudioEngine: @unchecked Sendable {
             }
             soundEffectBlock = nil
             inputReceiver = nil
+            releaseVoiceProcessing()
             MatrixRTCLog.info("Audio engine shut down")
         }
+    }
+    
+    /// A stopped engine still owns its voice-processing I/O unit for as long as it lives, and the
+    /// next call's engine cannot enable its own while it does: `setVoiceProcessingEnabled` raises an
+    /// Objective-C exception and the app dies. On an iPhone the second call of a run did exactly
+    /// that whenever the first call's objects outlived its end. Given up here, at the end of the
+    /// call, so nothing depends on when the engine is finally released.
+    private func releaseVoiceProcessing() {
+        dispatchPrecondition(condition: .onQueue(queue))
+        guard isVoiceProcessingConfigured else { return }
+        do {
+            try engine.inputNode.setVoiceProcessingEnabled(false)
+        } catch {
+            MatrixRTCLog.warning("Could not turn voice processing off: \(error)")
+        }
+        isVoiceProcessingConfigured = false
     }
     
     // MARK: - Private

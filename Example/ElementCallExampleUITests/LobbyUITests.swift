@@ -104,4 +104,30 @@ final class LobbyUITests: XCTestCase {
         XCTAssertTrue(join.exists, "The lobby stays open.")
         XCTAssertFalse(app.buttons["elementCall.hangUp"].exists, "Nothing joined.")
     }
+    
+    /// A second join in one run of the app: the first call's audio has to be gone before the second
+    /// one's starts. On an iPhone the second Join crashed the app.
+    func testJoiningTwiceInOneRun() {
+        open("lobby_join")
+        for attempt in 1...2 {
+            if attempt > 1 {
+                // Hanging up comes back to the catalogue at the row last opened.
+                let row = app.buttons["example.fixture.lobby_join"]
+                XCTAssertTrue(row.waitForExistence(timeout: 10), "Attempt \(attempt): the catalogue should show lobby_join.")
+                row.tap()
+            }
+            XCTAssertTrue(join.waitForExistence(timeout: 10))
+            let loaded = NSPredicate(format: "label != %@", "Loading call")
+            expectation(for: loaded, evaluatedWith: join)
+            waitForExpectations(timeout: 10)
+            join.tap()
+            let hangUp = app.buttons["elementCall.hangUp"]
+            XCTAssertTrue(hangUp.waitForExistence(timeout: 10), "Attempt \(attempt): Join should land in the call.")
+            // Long enough for the call's audio to start, which is where the second attempt died.
+            sleep(3)
+            XCTAssertEqual(app.state, .runningForeground, "Attempt \(attempt): the app should still be running.")
+            hangUp.tap()
+            XCTAssertTrue(hangUp.waitForNonExistence(timeout: 10))
+        }
+    }
 }
