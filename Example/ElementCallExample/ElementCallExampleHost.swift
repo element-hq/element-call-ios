@@ -525,14 +525,22 @@ final class ElementCallExampleHost {
                                            memberProfiles: people.reduce(into: [:]) { profiles, person in
                                                profiles[person.key] = ElementCallMemberProfile(userID: person.key, displayName: person.value, avatarURL: nil)
                                            })
-            let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
-            let playback = try ElementCallExampleScenarioPlayback(scenario: MatrixRTCScenario.parse(lobby.joinScenario, name: fixture.rawValue),
-                                                                  localMemberID: ElementCallExampleOutage.localMemberID,
-                                                                  audioOf: scripted.call)
+            let scenario = try MatrixRTCScenario.parse(lobby.joinScenario, name: fixture.rawValue)
+            // The scripted call and its session are made at Join, not here: each brings an audio
+            // engine, and a lobby has none until Join (045 R45). Made at open, the harness stopped
+            // a podcast the moment the lobby showed, which a real lobby does not do.
+            weak var screen: ElementCallScreenViewModel?
             let controller = ElementCallController.lobbyProbe(permissions: ElementCallExampleRefusingPermissions(refusing: lobby.refused),
                                                               openRoom: { _ in try await lobby.openRoom(roomID: room.roomID) },
-                                                              join: {
+                                                              join: { [weak self] in
                                                                   try await Task.sleep(for: lobby.joinTakes)
+                                                                  let scripted = MatrixRTCScriptedCall(roomID: room.roomID, status: .connected(since: .now, isDegraded: false))
+                                                                  let playback = ElementCallExampleScenarioPlayback(scenario: scenario,
+                                                                                                                    localMemberID: ElementCallExampleOutage.localMemberID,
+                                                                                                                    audioOf: scripted.call)
+                                                                  if let screen, let controller = self?.session?.controller {
+                                                                      playback.attach(context: screen.context, controller: controller)
+                                                                  }
                                                                   await playback.start()
                                                                   while !playback.isFinished {
                                                                       await playback.step()
@@ -546,7 +554,7 @@ final class ElementCallExampleHost {
             // for the names and avatars.
             controller.startCall(ElementCallData(intent: lobby.hostIntent, isStartingCall: true), room: room)
             let viewModel = ElementCallScreenViewModel(controller: controller)
-            playback.attach(context: viewModel.context, controller: controller)
+            screen = viewModel
             session = Session(fixture: fixture, presentation: .lobby(viewModel), controller: controller)
         } catch {
             notice = "Fixture \(fixture.rawValue) failed to load: \(error)"
