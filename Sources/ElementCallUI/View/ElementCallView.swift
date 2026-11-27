@@ -311,9 +311,13 @@ struct ElementCallView: View {
     /// What the lobby's preview keeps clear of: the top bar, which floats over the stage in landscape
     /// and sits above it in portrait, and the bar and Join below it (045 C3). Here rather than in the
     /// layout, so design can move the pieces (Q5, Q8).
+    ///
+    /// The summary's space is kept whether or not it says anything, so the preview never moves (R41,
+    /// R57).
     private func lobbyInsets(isLandscape: Bool) -> ElementCallStageLayout.LobbyInsets {
-        .init(top: isLandscape ? topBarHeight + Self.topChromeSpacing : 0,
-              bottom: ElementCallFloatingControls.lobbyClearance + ElementCallStageLayout.Metrics.spacing)
+        let summary = ElementCallLobbySummary.height + Self.topChromeSpacing
+        return .init(top: isLandscape ? topBarHeight + Self.topChromeSpacing + summary : summary,
+                     bottom: ElementCallFloatingControls.lobbyClearance + ElementCallStageLayout.Metrics.spacing)
     }
     
     /// Whether the top bar goes with the control bar: in landscape (017 R1), and in a one-to-one
@@ -463,6 +467,10 @@ struct ElementCallView: View {
                     .padding(.horizontal, 16)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .chromeSlide(isVisible: isVisible, by: -(topBarHeight + safeArea.top + Self.topChromeSpacing), reduceMotion: reduceMotion)
+                if let lobby = context.viewState.lobby {
+                    ElementCallLobbySummary(lobby: lobby, isAudioCall: context.viewState.isAudioCall)
+                        .padding(.horizontal, 16)
+                }
                 if isSharing {
                     screenShareBanner
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bannerHeight = $0 }

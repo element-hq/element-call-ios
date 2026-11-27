@@ -417,7 +417,12 @@ struct ElementCallTileView: View, Equatable {
     /// moves as one picture whatever the host draws in it, and is the design's size whatever size the
     /// host draws it at.
     private var avatar: some View {
-        let diameter = isLarge ? Self.largeAvatarDiameter : Self.gridAvatarDiameter
+        var diameter = isLarge ? Self.largeAvatarDiameter : Self.gridAvatarDiameter
+        // The lobby's preview can be short, held sideways under its summary: the avatar keeps inside
+        // it rather than spilling over the chrome (045 R9).
+        if appearance == .lobby, size.height > 0 {
+            diameter = min(diameter, max(Self.gridAvatarDiameter, size.height * 0.6))
+        }
         return style.avatars.avatar(userID: tile.userID,
                                     displayName: tile.displayName,
                                     avatarURL: tile.avatarURL,
@@ -431,8 +436,7 @@ struct ElementCallTileView: View, Equatable {
     private var cardChrome: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                // The spotlight's count, and the lobby's, with the same indicator (045 R41).
-                if isSpotlight || appearance == .lobby, memberCount > 0 {
+                if isSpotlight, memberCount > 0 {
                     badge {
                         style.icons.icon(.userProfile, size: .xSmall, relativeTo: .bodySM)
                         Text("\(memberCount)")

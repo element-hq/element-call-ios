@@ -104,6 +104,8 @@ public nonisolated enum ElementCallAccessibilityIdentifiers {
     public static let lobbyJoin = "\(prefix).lobby.join"
     /// The lobby's preview, our own camera (045 R8).
     public static let lobbyPreview = "\(prefix).lobby.preview"
+    /// The lobby's summary of the call in progress and its count (045 R41).
+    public static let lobbySummary = "\(prefix).lobby.summary"
     /// The notice that the call has ended, in the lobby (045 R57).
     public static let lobbyCallEnded = "\(prefix).lobby.callEnded"
     /// Our own tile before the core has reported it, after a lobby (045 C5).

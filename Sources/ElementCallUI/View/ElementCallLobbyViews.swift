@@ -77,23 +77,59 @@ struct ElementCallLobbyJoinButton: View {
     }
 }
 
-/// R57's notice: the call emptied after the lobby had shown somebody in it. Over the preview's lower
-/// part rather than on the Join line, so the bar and Join never move when it comes (Android's
-/// appendix, item 8). Announced as it appears, without moving focus (R58).
-struct ElementCallLobbyCallEndedNotice: View {
+/// Under the top bar, in a space the lobby always keeps so the preview never moves: while somebody
+/// is in the call, that it is in progress and how many (R41); once it has emptied, that it has ended
+/// (R57). Empty while loading and while nobody is in the call. The same piece, in the same place, as
+/// Android's `CallLobbySummary`; where it sits is design's (Q8).
+struct ElementCallLobbySummary: View {
     @Environment(\.elementCallStyle) private var style
+    let lobby: ElementCallLobbyViewState
+    let isAudioCall: Bool
+    
+    static let height: CGFloat = 48
     
     var body: some View {
-        Text(L10nPending.lobbyCallEnded)
-            .font(style.theme.bodySMSemibold)
-            .foregroundStyle(style.theme.textPrimary)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(style.theme.bgCanvasDefaultLevel.opacity(0.9), in: Capsule())
-            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.lobbyCallEnded)
-            .onAppear {
-                AccessibilityNotification.Announcement(L10nPending.lobbyCallEnded).post()
+        Group {
+            if lobby.isCallEndedNoticeShown {
+                // Said as it appears, without moving focus off what the user is on (R58).
+                Text(L10nPending.lobbyCallEnded)
+                    .font(style.theme.bodyLGSemibold)
+                    .foregroundStyle(style.theme.textPrimary)
+                    .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.lobbyCallEnded)
+                    .onAppear {
+                        AccessibilityNotification.Announcement(L10nPending.lobbyCallEnded).post()
+                    }
+            } else if let count = lobby.shownMemberCount {
+                VStack(spacing: 6) {
+                    HStack(spacing: 8) {
+                        style.icons.icon(isAudioCall ? .voiceCall : .videoCall, size: .small, relativeTo: .bodyLGSemibold)
+                            .foregroundStyle(style.theme.iconSecondary)
+                            .accessibilityHidden(true)
+                        Text(L10nPending.lobbyCallInProgress)
+                            .font(style.theme.bodyLGSemibold)
+                            .foregroundStyle(style.theme.textPrimary)
+                    }
+                    // The core counts the call and does not say who is in it before Join (R43), so
+                    // a number and no faces. Spoken as a sentence.
+                    HStack(spacing: 6) {
+                        style.icons.icon(.userProfile, size: .xSmall, relativeTo: .bodySM)
+                            .foregroundStyle(style.theme.iconSecondary)
+                        Text("\(count)")
+                            .font(style.theme.bodySMSemibold)
+                            .foregroundStyle(style.theme.textPrimary)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(L10nPending.lobbyMemberCount(count))
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.lobbySummary)
             }
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity)
+        .frame(height: Self.height)
+        .animation(.easeInOut(duration: 0.25), value: lobby.isCallEndedNoticeShown)
+        .animation(.easeInOut(duration: 0.25), value: lobby.shownMemberCount == nil)
     }
 }
 

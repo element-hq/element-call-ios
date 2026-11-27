@@ -4,6 +4,7 @@
 "element_call_a11y_camera_not_allowed" = "Camera not allowed";
 "element_call_a11y_lobby_camera" = "Your camera";
 "element_call_lobby_call_ended" = "The call has ended";
+"element_call_lobby_call_in_progress" = "Group call in progress…";
 "element_call_lobby_join" = "Join call";
 "element_call_lobby_join_anyway" = "Join anyway";
 "element_call_lobby_loading" = "Loading call";

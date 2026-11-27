@@ -37,6 +37,11 @@ package nonisolated enum L10nPending {
         ElementCallLocalization.string(table, "element_call_lobby_call_ended")
     }
     
+    /// Group call in progress…
+    package static var lobbyCallInProgress: String {
+        ElementCallLocalization.string(table, "element_call_lobby_call_in_progress")
+    }
+    
     /// Join call
     package static var lobbyJoin: String {
         ElementCallLocalization.string(table, "element_call_lobby_join")

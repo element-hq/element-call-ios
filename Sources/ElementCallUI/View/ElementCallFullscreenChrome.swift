@@ -129,10 +129,6 @@ struct ElementCallFloatingControls: View {
         let lobby = context.viewState.lobby
         VStack(spacing: Self.lobbySpacing) {
             Spacer()
-            if lobby?.isCallEndedNoticeShown == true {
-                ElementCallLobbyCallEndedNotice()
-                    .transition(.opacity)
-            }
             // Over the stage rather than in the clearance, so the tiles do not move when a hand
             // goes up. Not under the picker, whose scrim it would show through.
             if context.viewState.showsRaisedHandBanner, !isPickerShown {
@@ -151,7 +147,6 @@ struct ElementCallFloatingControls: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: context.viewState.showsRaisedHandBanner)
-        .animation(.easeInOut(duration: 0.25), value: lobby?.isCallEndedNoticeShown)
         .animation(.easeInOut(duration: 0.3), value: lobby == nil)
     }
 }
