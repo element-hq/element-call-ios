@@ -51,6 +51,12 @@ struct ElementCallStage: View {
     /// A harness asking for an offset; honoured once per request, clamped like a user's scroll.
     var scrollRequest: ElementCallScrollRequest?
     let memberCount: Int
+    /// The lobby's chrome, while the stage is the lobby's preview (045); nil in a call.
+    var lobbyInsets: ElementCallStageLayout.LobbyInsets?
+    /// The lobby is reading the call (045 R59).
+    var isLobbyLoading = false
+    /// The camera is refused, which the preview says to a screen reader (045 R50).
+    var isCameraRefused = false
     let pictureInPictureSourceView: UIView
     let callProvider: () -> MatrixRTCMediaSession?
     /// How far down from the top the chrome drawn over the stage reaches; zero when nothing is kept
@@ -108,6 +114,12 @@ struct ElementCallStage: View {
     /// layout gives it a grid tile's z position straight away, and it shrank under the spotlight
     /// and the neighbours it was returning to.
     @State private var raisedTileID: MatrixRTCTileID?
+    /// Our tile is moving from the lobby's preview to its place in the call, above the tiles arriving
+    /// around it: under them, it slid beneath the call and surfaced at the end (045 R24). By view
+    /// identity, since its member ID is minted during the move.
+    @State private var isOwnTileLeavingLobby = false
+    /// Comfortably past the stage's spring, which settles in under half a second.
+    private static let lobbyMoveDuration: Duration = .milliseconds(800)
     @State private var scrollPhase: ScrollPhase = .idle
     /// Where the last reported scroll direction was measured from, in the scroller's raw offset.
     @State private var scrollDirectionOrigin: CGFloat?
@@ -132,6 +144,31 @@ struct ElementCallStage: View {
     private static let arrival: AnyTransition = .scale(scale: 0.85).combined(with: .opacity)
     
     private static let animation: Animation = .spring(duration: 0.45, bounce: 0.15)
+    
+    /// About the controls and the lobby's Join, as the design draws it.
+    static let glowHeight: CGFloat = 280
+    
+    /// Where the glow ends, in content coordinates: the content's end, or the screen's bottom edge
+    /// once a bounce has carried the end above it. Content that fits one screen keeps it on the
+    /// bottom edge whichever way it is pulled.
+    static func glowBottom(contentHeight: CGFloat, visibleTop: CGFloat, viewportHeight: CGFloat) -> CGFloat {
+        let visibleBottom = visibleTop + viewportHeight
+        if contentHeight <= viewportHeight {
+            return visibleBottom
+        }
+        return max(contentHeight, visibleBottom)
+    }
+    
+    /// The theme's glow, faded into the canvas upwards.
+    private var stageGlow: some View {
+        Rectangle()
+            .fill(style.theme.stageGlow)
+            .overlay {
+                LinearGradient(colors: [style.theme.bgCanvasDefault, style.theme.bgCanvasDefault.opacity(0)],
+                               startPoint: .top,
+                               endPoint: .bottom)
+            }
+    }
     
     private var animation: Animation? {
         // With reduce motion on, tiles change place without sliding (R41). That also stops the
@@ -168,7 +205,8 @@ struct ElementCallStage: View {
                                                              ownCorner: ownCorner,
                                                              ownVideoAspect: ownVideoAspect,
                                                              floatingInsets: floatingInsets,
-                                                             isDirect: isDirect))
+                                                             isDirect: isDirect,
+                                                             lobbyInsets: lobbyInsets))
             let floating = stage.placements.first { $0.appearance == .floating }
             let floatingBounds = ElementCallSmallCallLayout.floatingBounds(metrics: metrics, insets: floatingInsets)
             ScrollView(.vertical) {
@@ -181,8 +219,22 @@ struct ElementCallStage: View {
                         .contentShape(Rectangle())
                         .onTapGesture { onToggleChrome() }
                         .zIndex(-1)
+                    // The design's glow, at the end of the content: always there in a stage that
+                    // does not scroll, reached at the bottom of one that does. Behind every tile,
+                    // and as Android's `StageGlow`. Never above the screen's bottom edge, though:
+                    // carried with the content, the bounce past the end lifted it up the screen,
+                    // which Android's stretch overscroll never does.
+                    stageGlow
+                        .frame(width: metrics.area.width, height: Self.glowHeight)
+                        .offset(y: Self.glowBottom(contentHeight: stage.contentHeight,
+                                                   visibleTop: scrollOffset,
+                                                   viewportHeight: stage.viewport.height) - Self.glowHeight)
+                        .animation(nil, value: scrollOffset)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                        .zIndex(-2)
                     fullscreenScrim(in: stage)
-                    ForEach(stage.placements) { placement in
+                    ForEach(stage.placements, id: \.tile.viewID) { placement in
                         tileView(for: placement, in: stage)
                     }
                     if let heroStack = stage.heroStack, let spotlight = stage.placements.first(where: \.isSpotlight) {
@@ -231,7 +283,8 @@ struct ElementCallStage: View {
                                                          fullscreenID: fullscreenID,
                                                          ownCorner: ownCorner,
                                                          ownVideoAspect: ownVideoAspect,
-                                                         metrics: metrics))
+                                                         metrics: metrics,
+                                                         lobbyInsets: lobbyInsets))
             }
             // No snapping, no dots (R26); nothing moves the offset while a tile fills the screen, or
             // in a small call, where a scroller whose content is one screen would still bounce
@@ -326,6 +379,16 @@ struct ElementCallStage: View {
                 withAnimation(animation) {
                     scrollPosition.scrollTo(y: min(max(0, request.offset), stage.maxScrollOffset))
                 }
+            }
+            .onChange(of: lobbyInsets == nil) { _, hasLeftLobby in
+                if hasLeftLobby {
+                    isOwnTileLeavingLobby = true
+                }
+            }
+            .task(id: isOwnTileLeavingLobby) {
+                guard isOwnTileLeavingLobby else { return }
+                try? await Task.sleep(for: Self.lobbyMoveDuration)
+                isOwnTileLeavingLobby = false
             }
             .onChange(of: fullscreenID != nil) { _, isFullscreen in
                 guard isFullscreen else { return }
@@ -522,6 +585,8 @@ struct ElementCallStage: View {
         let ownCorner: ElementCallOwnTileCorner
         let ownVideoAspect: CGFloat?
         let metrics: ElementCallStageLayout.Metrics
+        /// Join: the preview animates into our own tile, the same view moving (045 R24).
+        let lobbyInsets: ElementCallStageLayout.LobbyInsets?
     }
     
     /// What the stage is not showing, in the two ways the call tells apart: composed but off screen
@@ -550,6 +615,8 @@ struct ElementCallStage: View {
         // in a small call: from three people ours is an inline card cropped to 4:3, and full screen
         // is the one place that shows all of what we send.
         let isOwnFloatingTile = placement.tile.isLocal && placement.appearance == .floating
+        // The preview answers no tap, double tap or pinch: only its flip button does (045 R36).
+        let isLobbyPreview = placement.appearance == .lobby
         return ElementCallTileView(tile: placement.tile,
                                    callProvider: callProvider,
                                    isSpotlight: placement.isSpotlight,
@@ -568,10 +635,12 @@ struct ElementCallStage: View {
                                    // than an avatar (R49). The call is what stops its stream meanwhile.
                                    isVideoSuspended: false,
                                    contentFit: placement.contentFit,
-                                   allowsFullscreen: !isOwnFloatingTile,
+                                   allowsFullscreen: !isOwnFloatingTile && !isLobbyPreview,
                                    canSwitchCamera: canSwitchCamera,
                                    isFrontCamera: isFrontCamera,
                                    floatingCorner: placement.appearance == .floating ? ownCorner : nil,
+                                   isLoading: isLobbyPreview && isLobbyLoading,
+                                   isCameraRefused: isLobbyPreview && isCameraRefused,
                                    // The same animation as a drag's release, so a move asked for by
                                    // VoiceOver is the same move (019 R25).
                                    onMoveToCorner: { corner in withAnimation(animation) { onMoveOwnTile(corner) } },
@@ -580,7 +649,7 @@ struct ElementCallStage: View {
                                        ownVideoAspect = aspect
                                    },
                                    onToggleFullscreen: { onToggleFullscreen(placement.id) },
-                                   onToggleChrome: isOwnFloatingTile ? { } : onToggleChrome,
+                                   onToggleChrome: isOwnFloatingTile || isLobbyPreview ? { } : onToggleChrome,
                                    onAction: onAction)
             .equatable()
             .background {
@@ -602,7 +671,9 @@ struct ElementCallStage: View {
             // slide with the inset already.
             .offset(y: pin == 0 ? gridSlide : 0)
             .offset(placement.appearance == .floating ? leadingRelative(ownTileDrag) : .zero)
-            .zIndex(placement.id == raisedTileID ? ElementCallStageLayout.fullscreenZIndex : placement.zIndex)
+            .zIndex(placement.id == raisedTileID || isOwnTileLeavingLobby && placement.tile.viewID == .ownCamera
+                ? ElementCallStageLayout.fullscreenZIndex
+                : placement.zIndex)
             .transition(.asymmetric(insertion: knownTileIDs.contains(placement.id) ? .identity : Self.arrival, removal: Self.arrival))
     }
     

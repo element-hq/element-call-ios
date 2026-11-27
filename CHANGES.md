@@ -11,7 +11,12 @@ version will actually read it.
 
 ## Unreleased
 
-_Nothing yet._
+- **Call lobby (045).** A call in a room that is not a direct chat opens on a lobby before joining.
+  - `ElementCallData(isAudioCall:isStartingCall:)` is removed. Use `ElementCallData(intent:isStartingCall:skipsLobby:)`: pass `.audio` or `.video` only when the user chose, and `nil` when they join a call in progress without choosing.
+  - Pass `skipsLobby: true` when your own pre-call screen already ran, as when answering from CallKit.
+  - `ElementCallConnection` gains `.lobby`, which `isInCall` counts. An exhaustive `switch` needs the case.
+  - `isDirect` on your room context must be settled when you call `startCall`: it decides whether the lobby shows.
+  - If you let the call screen be dismissed interactively, call `hangUp()` on dismissal.
 
 ## 0.2.0 - 2026-11-18
 

@@ -107,8 +107,23 @@ public final class MatrixRTCClient {
     }
 }
 
+/// What a lobby reads from a room before anything is joined, and what it shuts (045 R42, R17).
+/// ``MatrixRTCRoom`` over the core; ``MatrixRTCScriptedRoom`` in the harness and the tests, where
+/// there is no homeserver to seed one.
+@MainActor
+public protocol MatrixRTCRoomProtocol: AnyObject, Sendable {
+    var roomID: String { get }
+    /// The intent a join into the slot would settle on: `requested`, else the one its members agree
+    /// on, else video (045 R17). The core's order, never re-implemented here.
+    func callIntent(requested: MatrixRTCCallIntent?, applicationSlotID: String?) async throws -> MatrixRTCCallIntent
+    /// The slot's joined members counted, without joining: the current count, then every change.
+    /// Ends when the room is shut down, or if the core refuses the subscription.
+    func memberCountUpdates(applicationSlotID: String?) -> AsyncStream<Int>
+    func shutdown() async
+}
+
 /// One room, subscribed and ready. Joining a call happens here; observing the room is the core's.
-public final class MatrixRTCRoom {
+public final class MatrixRTCRoom: MatrixRTCRoomProtocol {
     public let roomID: String
     /// What a join tells the homeserver to keep us in the call for without hearing from us. The core
     /// restarts it on its own schedule.
@@ -123,9 +138,59 @@ public final class MatrixRTCRoom {
         self.rtcRoom = rtcRoom
     }
     
+    /// The full id of a call slot, which the core's room reads take: `m.call#` and the application's
+    /// slot, or `room` for the room-wide call, the one a join naming no slot joins. The core exports
+    /// no helper to build it, so it is spelled here and nowhere else (045 C8). Element Call writes
+    /// the room-wide slot `m.call#ROOM`; the core lowers that as it reads, so the lower-case form is
+    /// the one to pass, and the upper-case one is never matched on.
+    public static func slotID(applicationSlotID: String?) -> String {
+        "m.call#" + (applicationSlotID ?? "room")
+    }
+    
+    public func callIntent(requested: MatrixRTCCallIntent?, applicationSlotID: String? = nil) async throws -> MatrixRTCCallIntent {
+        guard !isShutDown else { throw MatrixRTCError.ffi("\(roomID) is shut down") }
+        let slotID = Self.slotID(applicationSlotID: applicationSlotID)
+        do {
+            let intent = try await MatrixRTCCallIntent(rtcRoom.callIntent(slotId: slotID, requested: requested?.ffi))
+            MatrixRTCLog.info("\(roomID)/\(slotID) settles on \(intent) (requested \(requested.map { "\($0)" } ?? "none"))")
+            return intent
+        } catch {
+            MatrixRTCLog.error("Reading the intent of \(roomID)/\(slotID) failed: \(error)")
+            throw MatrixRTCError.ffi("\(error)")
+        }
+    }
+    
+    /// The count is the slot's membership snapshots counted, the same list the joined call's count
+    /// is taken from, and drawn as reported (045 R43): this device's own leftover membership
+    /// included, which the core counts before a join.
+    public func memberCountUpdates(applicationSlotID: String? = nil) -> AsyncStream<Int> {
+        let (updates, continuation) = AsyncStream<Int>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        let rtcRoom = rtcRoom
+        let roomID = roomID
+        let slotID = Self.slotID(applicationSlotID: applicationSlotID)
+        // The bindings' `next()` ignores cancellation, so a cancelled reader parks until the next
+        // change, or the room's shutdown, and leaves then.
+        let reader = Task {
+            do {
+                let subscription = try await rtcRoom.subscribeMembershipSnapshots(slotId: slotID)
+                while let snapshot = await subscription.next(), !Task.isCancelled {
+                    continuation.yield(snapshot.count)
+                }
+            } catch {
+                MatrixRTCLog.error("Following the members of \(roomID)/\(slotID) failed: \(error)")
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in reader.cancel() }
+        return updates
+    }
+    
     /// Joins the room's call. No slot is named: the core joins the room-wide one, and picks the
     /// transport from what the homeserver advertises, failing the join when it advertises none.
-    public func joinCall(kind: MatrixRTCCallKind) async throws -> MatrixRTCCall {
+    ///
+    /// `intent` is the one already settled, passed on every join, notifying or not, so the core does
+    /// not resolve it again and our membership states it (045 C6). Nil leaves it to the core.
+    public func joinCall(kind: MatrixRTCCallKind, intent: MatrixRTCCallIntent? = nil) async throws -> MatrixRTCCall {
         guard !isShutDown else { throw MatrixRTCError.ffi("\(roomID) is shut down") }
         let rtcCall: RtcCall
         do {
@@ -134,7 +199,8 @@ public final class MatrixRTCRoom {
                                                                               kind: kind.ffi,
                                                                               keepAliveTimeoutMs: Self.keepAliveTimeout.inMilliseconds,
                                                                               stickyDurationMs: nil, // The core owns the membership lifetime.
-                                                                              encryptionConfig: nil)) // Follow whatever the slot prescribes.
+                                                                              encryptionConfig: nil, // Follow whatever the slot prescribes.
+                                                                              intent: intent?.ffi))
         } catch {
             throw Self.joinError(for: error, roomID: roomID)
         }

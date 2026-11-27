@@ -46,6 +46,13 @@ extension PreviewTests {
         }
     }
 
+    @Test("ElementCallLobby")
+    func elementCallLobby() async throws {
+        for (index, preview) in ElementCallLobby_Previews._allPreviews.enumerated() {
+            try await assertSnapshots(matching: preview, step: index)
+        }
+    }
+
     @Test("ElementCallMoreSheet")
     func elementCallMoreSheet() async throws {
         for (index, preview) in ElementCallMoreSheet_Previews._allPreviews.enumerated() {

@@ -181,6 +181,11 @@ struct ElementCallExampleRootView: View {
             // The shipping view, not the harness one: a connecting state is the one thing a real
             // view model can render without a joined call, so there is no reason to fake it.
             ElementCallScreen(viewModel: viewModel)
+        case .lobby(let viewModel):
+            // The shipping view over the real controller's lobby, whose camera opens no device here:
+            // our tile draws the test pattern, through the lobby and into the call (045 C25).
+            ElementCallScreen(viewModel: viewModel)
+                .environment(\.elementCallPreviewVideo, video.source)
         case .scripted(let viewModel, let playback):
             // The shipping view over a scripted call: tiles marked with video draw the test
             // pattern, because the scripted session has no pictures of its own.

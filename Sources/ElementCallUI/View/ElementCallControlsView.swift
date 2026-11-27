@@ -55,32 +55,59 @@ struct ElementCallControlsView: View {
             .elementCallGlass(in: Capsule(), fallback: style.theme.bgCanvasDefaultLevel.opacity(0.9))
     }
     
+    /// One list across the lobby and the call, so the microphone and the camera keep their identity
+    /// at Join while the call's own buttons grow in beside them (045 R24, C3). The lobby has those
+    /// two and nothing else (R10, R11): the output, the slot and hang-up are the call's.
     private var buttons: some View {
         layout {
-            controlButton(icon: context.viewState.isMicrophoneMuted ? .micOff : .micOn,
-                          isActive: !context.viewState.isMicrophoneMuted,
-                          label: context.viewState.isMicrophoneMuted ? L10n.a11yUnmuteMicrophone : L10n.a11yMuteMicrophone) {
-                context.send(viewAction: .toggleMicrophone)
+            microphoneButton
+            cameraButton
+            if context.viewState.lobby == nil {
+                audioRouteButton
+                if let slot = context.viewState.barSlot {
+                    slotButton(slot)
+                }
+                Button {
+                    context.send(viewAction: .hangUp)
+                } label: {
+                    style.icons.icon(.endCall)
+                        .foregroundStyle(.white)
+                        .frame(width: Self.buttonSize, height: Self.buttonSize)
+                        .background(style.theme.bgCriticalPrimary, in: Circle())
+                }
+                .accessibilityLabel(L10n.a11yHangUp)
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.hangUp)
             }
-            controlButton(icon: context.viewState.isCameraEnabled ? .videoCall : .videoCallOff,
-                          isActive: context.viewState.isCameraEnabled,
-                          label: context.viewState.isCameraEnabled ? L10n.a11yTurnCameraOff : L10n.a11yTurnCameraOn) {
-                context.send(viewAction: .toggleCamera)
-            }
-            audioRouteButton
-            if let slot = context.viewState.barSlot {
-                slotButton(slot)
-            }
-            Button {
-                context.send(viewAction: .hangUp)
-            } label: {
-                style.icons.icon(.endCall)
-                    .foregroundStyle(.white)
-                    .frame(width: Self.buttonSize, height: Self.buttonSize)
-                    .background(style.theme.bgCriticalPrimary, in: Circle())
-            }
-            .accessibilityLabel(L10n.a11yHangUp)
-            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.hangUp)
+        }
+    }
+    
+    /// In the lobby a refused microphone looks unavailable and still takes the tap, which says why
+    /// (045 R27): disabled, it would leave the user nowhere to tap to find out. Disabled while the
+    /// lobby loads (R59).
+    private var microphoneButton: some View {
+        let state = context.viewState
+        let isRefused = state.lobby?.isMicrophoneRefused ?? false
+        let isOn = !state.isMicrophoneMuted && !isRefused
+        return controlButton(icon: isOn ? .micOn : .micOff,
+                             isActive: isOn,
+                             isEnabled: !(state.lobby?.isLoading ?? false),
+                             looksUnavailable: isRefused,
+                             label: isOn ? L10n.a11yMuteMicrophone : L10n.a11yUnmuteMicrophone) {
+            context.send(viewAction: .toggleMicrophone)
+        }
+    }
+    
+    /// As the microphone, for a refused camera: its tap behaves as in a call (045 R28, 042 C5).
+    private var cameraButton: some View {
+        let state = context.viewState
+        let isRefused = state.lobby?.isCameraRefused ?? false
+        let isOn = state.isCameraEnabled && !isRefused
+        return controlButton(icon: isOn ? .videoCall : .videoCallOff,
+                             isActive: isOn,
+                             isEnabled: !(state.lobby?.isLoading ?? false),
+                             looksUnavailable: isRefused,
+                             label: isOn ? L10n.a11yTurnCameraOff : L10n.a11yTurnCameraOn) {
+            context.send(viewAction: .toggleCamera)
         }
     }
     
@@ -229,17 +256,21 @@ struct ElementCallControlsView: View {
     /// the design uses for mic off, camera off, sharing and any audio output but the earpiece.
     /// Disabled only by an interruption (034 R15), and said so to a screen reader rather than
     /// left to a dimmed glyph.
+    ///
+    /// `looksUnavailable` draws a control as disabled while it still takes its tap: the lobby's
+    /// refused microphone and camera, whose tap explains (045 R27, R28).
     private func controlButton(icon: ElementCallIcon,
                                isActive: Bool,
                                isEnabled: Bool = true,
+                               looksUnavailable: Bool = false,
                                label: String,
                                action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            controlCircle(icon: icon, isActive: isActive, isEnabled: isEnabled)
+            controlCircle(icon: icon, isActive: isActive, isEnabled: isEnabled && !looksUnavailable)
         }
         .disabled(!isEnabled)
         .accessibilityLabel(label)
-        .accessibilityValue(isEnabled ? "" : L10n.a11yUnavailable)
+        .accessibilityValue(isEnabled && !looksUnavailable ? "" : L10n.a11yUnavailable)
         .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.control(for: icon))
     }
     

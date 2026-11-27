@@ -19,18 +19,30 @@ import Testing
 @Suite("Call status")
 @MainActor
 struct CallStatusTests {
-    private let starting = ElementCallData(isAudioCall: false, isStartingCall: true)
+    private let starting = ElementCallData(intent: .video, isStartingCall: true, skipsLobby: true)
     
     @Test
     func onlyStartingADirectCallRings() {
-        let startingAudio = ElementCallData(isAudioCall: true, isStartingCall: true)
-        let joining = ElementCallData(isAudioCall: false, isStartingCall: false)
-        
-        #expect(ElementCallController.kind(for: starting, isDirect: true) == .direct(ring: .video))
-        #expect(ElementCallController.kind(for: startingAudio, isDirect: true) == .direct(ring: .audio))
-        #expect(ElementCallController.kind(for: joining, isDirect: true) == .direct(ring: nil))
-        #expect(ElementCallController.kind(for: starting, isDirect: false) == .group(notify: .video))
-        #expect(ElementCallController.kind(for: joining, isDirect: false) == .group(notify: nil))
+        func kind(starting: Bool, _ intent: MatrixRTCCallIntent, direct: Bool) -> MatrixRTCCallKind {
+            ElementCallController.kind(isStartingCall: starting, lobbyLabel: nil, intent: intent, isDirect: direct)
+        }
+        #expect(kind(starting: true, .video, direct: true) == .direct(ring: .video))
+        #expect(kind(starting: true, .audio, direct: true) == .direct(ring: .audio))
+        #expect(kind(starting: false, .video, direct: true) == .direct(ring: nil))
+        #expect(kind(starting: true, .video, direct: false) == .group(notify: .video))
+        #expect(kind(starting: false, .video, direct: false) == .group(notify: nil))
+    }
+    
+    /// From a lobby, the label the user tapped decides, never the host's `isStartingCall`, which was
+    /// fixed before the lobby showed who is in the call (045 R21, R57, C9).
+    @Test
+    func aLobbyNotifiesFromTheLabelTapped() {
+        func kind(starting: Bool, _ label: ElementCallLobbyJoinLabel) -> MatrixRTCCallKind {
+            ElementCallController.kind(isStartingCall: starting, lobbyLabel: label, intent: .audio, isDirect: false)
+        }
+        #expect(kind(starting: false, .start) == .group(notify: .audio))
+        #expect(kind(starting: true, .join) == .group(notify: nil))
+        #expect(kind(starting: true, .joinAnyway) == .group(notify: nil))
     }
     
     @Test

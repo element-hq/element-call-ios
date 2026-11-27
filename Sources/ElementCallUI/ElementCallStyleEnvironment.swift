@@ -35,7 +35,18 @@ public nonisolated struct ElementCallPreviewVideo: Sendable {
     }
 }
 
+/// Where our own tile takes its frames: the attempt's camera, which runs before there is a media
+/// session to ask (045 R49). Read when the tile appears.
+public nonisolated struct ElementCallOwnVideo: Sendable {
+    public let fanOut: @MainActor @Sendable () -> LocalVideoFanOut?
+    
+    public init(fanOut: @escaping @MainActor @Sendable () -> LocalVideoFanOut?) {
+        self.fanOut = fanOut
+    }
+}
+
 public extension EnvironmentValues {
+    @Entry var elementCallOwnVideo: ElementCallOwnVideo?
     @Entry var elementCallPreviewVideo: ElementCallPreviewVideo?
     /// Whether the floating controls use liquid glass where the system has it. On by default and
     /// in every shipping build; the snapshot harness turns it off, because an offscreen render of

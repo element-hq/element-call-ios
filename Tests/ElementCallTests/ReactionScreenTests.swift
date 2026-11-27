@@ -109,7 +109,7 @@ struct ReactionScreenTests {
         let screen = try await Screen()
         screen.viewModel.context.send(viewAction: .present(.preferences))
         
-        screen.controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+        screen.controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                           room: screen.room, connection: .ended(.left))
         try await waitUntil { screen.viewModel.context.viewState.presentedSheet == nil }
     }
@@ -170,7 +170,7 @@ struct ReactionScreenTests {
                                                system: ElementCallFakeSystem(),
                                                preferences: preferences,
                                                permissions: ElementCallFakeMediaPermissions())
-            controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+            controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                        room: room, connection: .connected, call: session)
             viewModel = ElementCallScreenViewModel(controller: controller)
             let session = session

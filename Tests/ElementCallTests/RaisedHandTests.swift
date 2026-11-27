@@ -58,7 +58,7 @@ struct RaisedHandControlTests {
     private func makeController() -> (ElementCallController, FakeRTCCall) {
         let rtcCall = FakeRTCCall()
         let controller = ElementCallController.fake(connection: .connected)
-        controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .connected,
                                    rtcCall: MatrixRTCCall(rtcCall: rtcCall))

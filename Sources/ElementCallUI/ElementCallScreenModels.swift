@@ -36,6 +36,9 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     public internal(set) var stats: String?
     /// Whether this tile's media is arriving and can be shown (034 R29, R33, R34).
     public internal(set) var mediaState: ElementCallTileMediaState = .live
+    /// The name the avatar takes its initial from, when it is not ``displayName``: our own tile is
+    /// named "You", and its avatar is still ours, Alice's A rather than You's Y.
+    public internal(set) var avatarName: String?
     
     public var memberID: String {
         id.memberID
@@ -43,6 +46,15 @@ public nonisolated struct ElementCallTile: Identifiable, Equatable, Sendable {
     
     public var kind: MatrixRTCTileKind {
         id.kind
+    }
+    
+    /// What the stage and the tile key their views by. Our own camera tile has one identity from the
+    /// lobby on, whatever our member ID is and whenever the core first reports it: keyed by member
+    /// ID it would be dropped and re-added as the ID is minted and again as the core reports it, a
+    /// remounted renderer and a black frame each time (045 C5, R49). There is one at a time; our
+    /// screen share is never a tile on our side.
+    public var viewID: MatrixRTCTileID {
+        isLocal && kind == .person ? .ownCamera : id
     }
     
     public var isScreenShare: Bool {
@@ -159,6 +171,11 @@ public nonisolated struct ElementCallScreenViewState: Equatable, Sendable {
     /// What the service interruptions list shows, at most one entry per kind; empty when nothing is
     /// interrupted, which is when the indicator goes (034 R35).
     public var interruptions: [ElementCallInterruption] = []
+    /// The lobby, while the call is in it (045); nil otherwise.
+    public var lobby: ElementCallLobbyViewState?
+    /// The call opened on a lobby, which it still did after Join: our tile was on the stage from the
+    /// start, so the joining state is said under the room's name rather than by a spinner (045 C5).
+    public var isOpenedOnLobby = false
     
     public var isRinging: Bool {
         if case .calling = connection {
@@ -386,7 +403,59 @@ public nonisolated enum ElementCallSheet: Sendable, Hashable, Identifiable {
     }
 }
 
+public nonisolated extension MatrixRTCTileID {
+    /// Our own camera tile, before the core has reported it and as a view identity after (045 C5).
+    static let ownCamera = MatrixRTCTileID(memberID: "", kind: .person)
+}
+
+/// What the lobby shows besides our tile and the controls (045).
+public nonisolated struct ElementCallLobbyViewState: Equatable, Sendable {
+    public var phase: ElementCallLobbyPhase
+    /// The core's count, as reported; nil while loading (R43, R59).
+    public var memberCount: Int?
+    /// Nil while loading: nothing is guessed (R59).
+    public var joinLabel: ElementCallLobbyJoinLabel?
+    /// The call emptied after the lobby had shown somebody in it (R57).
+    public var isCallEndedNoticeShown = false
+    /// The microphone is refused: its control looks unavailable, and Join, which looks as always,
+    /// explains rather than joins (R27).
+    public var isMicrophoneRefused = false
+    /// The camera is refused: its control looks unavailable (R28).
+    public var isCameraRefused = false
+    
+    public init(phase: ElementCallLobbyPhase,
+                memberCount: Int? = nil,
+                joinLabel: ElementCallLobbyJoinLabel? = nil,
+                isCallEndedNoticeShown: Bool = false,
+                isMicrophoneRefused: Bool = false,
+                isCameraRefused: Bool = false) {
+        self.phase = phase
+        self.memberCount = memberCount
+        self.joinLabel = joinLabel
+        self.isCallEndedNoticeShown = isCallEndedNoticeShown
+        self.isMicrophoneRefused = isMicrophoneRefused
+        self.isCameraRefused = isCameraRefused
+    }
+    
+    public var isLoading: Bool {
+        phase == .loading
+    }
+    
+    /// Whether a tap on Join joins; the button looks the same either way (R27).
+    public var canJoin: Bool {
+        !isLoading && !isMicrophoneRefused
+    }
+    
+    /// Shown with the spotlight's indicator, only when somebody is in the call (R41).
+    public var shownMemberCount: Int? {
+        guard let memberCount, memberCount > 0 else { return nil }
+        return memberCount
+    }
+}
+
 public nonisolated enum ElementCallScreenViewAction: Sendable {
+    /// The lobby's Start or Join (045 R22).
+    case join
     case toggleMicrophone
     case toggleCamera
     case switchCamera

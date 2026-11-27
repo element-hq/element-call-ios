@@ -46,8 +46,10 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
     
     private static let pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
     
-    /// The size the camera that ``start(track:)`` opens will send, for the publish that precedes it:
-    /// the layers are derived from it, so it has to be what the frames really are.
+    /// The size the camera that ``startCapture()`` opens will send, for the publish that precedes
+    /// it: the layers are derived from it, so it has to be what the frames really are. The same
+    /// function picks the format the capture runs at, so a track attached to a capture already
+    /// running, as a lobby's preview is at Join, matches it (045 R49).
     var publishedSize: CameraCaptureFormat.Size {
         Self.camera(front: isFrontFacing).flatMap(Self.captureFormat)?.1.output ?? CameraCaptureFormat.fallbackOutput
     }
@@ -125,10 +127,28 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         state.withLock { $0.isFrontFacing }
     }
     
-    func start(track: FfiLocalTrack) throws {
+    /// Whether the device is open. A capture with no track still feeds the self view: that is a
+    /// lobby's preview, before anything is published (045 R8).
+    var isCapturing: Bool {
+        state.withLock { $0.session != nil }
+    }
+    
+    /// Opens the device, unless it is open already: a second start would build a second session,
+    /// which is the restart R49 rules out.
+    func startCapture() throws {
+        guard !isCapturing else { return }
+        try configureSession(front: isFrontFacing)
+    }
+    
+    /// Sends the frames from here on to `track` as well as to the self view, without touching the
+    /// device: the camera a lobby opened carries on into the call (045 R49).
+    func attach(track: FfiLocalTrack) {
         state.withLock { $0.track = track }
-        let front = isFrontFacing
-        try configureSession(front: front)
+    }
+    
+    /// The self view keeps its frames; only the published track stops receiving them.
+    func detach() {
+        state.withLock { $0.track = nil }
     }
     
     /// Stops on the capture queue (never blocking the caller); the session is kept alive by the
@@ -210,6 +230,10 @@ final nonisolated class CameraCapturer: NSObject, AVCaptureVideoDataOutputSample
         output.setSampleBufferDelegate(self, queue: queue)
         
         let session = AVCaptureSession()
+        // There is no audio input, so the session should leave the audio alone anyway; this makes a
+        // lobby's preview not depend on that, since the lobby must not take the phone's audio
+        // (045 R45, R47).
+        session.automaticallyConfiguresApplicationAudioSession = false
         session.beginConfiguration()
         guard session.canAddInput(input), session.canAddOutput(output) else {
             session.commitConfiguration()

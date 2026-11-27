@@ -38,7 +38,9 @@ public enum ElementCallPreviewFixtures {
                                handPosition: handPosition,
                                isHero: isHero,
                                stats: stats,
-                               mediaState: mediaState)
+                               mediaState: mediaState,
+                               // As the screen names ours: "You", with our own initial.
+                               avatarName: isLocal ? name : nil)
     }
     
     /// A member's screen, which is a tile of its own beside their camera rather than a state of it.
@@ -136,6 +138,50 @@ public enum ElementCallPreviewFixtures {
         state.callee = ElementCallMemberProfile(userID: bob.userID, displayName: "Bob", avatarURL: nil)
         state.isAudioCall = isAudioCall
         state.isCameraEnabled = !isAudioCall
+        return state
+    }
+    
+    /// A group call's lobby (045): our tile alone in the preview's frame, the label from the count
+    /// as the controller derives it. No call object exists, so a camera that is on draws our avatar
+    /// here as everywhere in the previews.
+    public static func lobby(isLoading: Bool = false,
+                             memberCount: Int = 2,
+                             isCallEndedNoticeShown: Bool = false,
+                             isCameraEnabled: Bool = true,
+                             isMicrophoneRefused: Bool = false,
+                             isCameraRefused: Bool = false) -> ElementCallScreenViewState {
+        var state = ElementCallScreenViewState(roomName: "Product | Lobby")
+        state.connection = .lobby
+        state.isOpenedOnLobby = true
+        state.isDeveloperModeEnabled = true
+        state.canSwitchCamera = true
+        let isCameraOn = isCameraEnabled && !isCameraRefused && !isLoading
+        state.isCameraEnabled = isCameraOn
+        state.tiles = [ElementCallTile(id: .ownCamera,
+                                       userID: alice.userID,
+                                       displayName: "You",
+                                       avatarURL: nil,
+                                       isLocal: true,
+                                       isMicrophoneMuted: isMicrophoneRefused,
+                                       hasVideo: isCameraOn,
+                                       isSpeaking: false,
+                                       handPosition: nil,
+                                       isHero: false,
+                                       stats: nil,
+                                       avatarName: "Alice")]
+        let label: ElementCallLobbyJoinLabel? = if isLoading {
+            nil
+        } else if isCallEndedNoticeShown {
+            .joinAnyway
+        } else {
+            memberCount > 0 ? .join : .start
+        }
+        state.lobby = ElementCallLobbyViewState(phase: isLoading ? .loading : .ready,
+                                                memberCount: isLoading ? nil : memberCount,
+                                                joinLabel: label,
+                                                isCallEndedNoticeShown: isCallEndedNoticeShown,
+                                                isMicrophoneRefused: isMicrophoneRefused,
+                                                isCameraRefused: isCameraRefused)
         return state
     }
     

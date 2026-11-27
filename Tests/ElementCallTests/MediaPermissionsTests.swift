@@ -21,8 +21,8 @@ import Testing
 @MainActor
 struct MediaPermissionsTests {
     private let room = ElementCallFakeRoom(roomID: "!room:example.org")
-    private let videoCall = ElementCallData(isAudioCall: false, isStartingCall: true)
-    private let voiceCall = ElementCallData(isAudioCall: true, isStartingCall: true)
+    private let videoCall = ElementCallData(intent: .video, isStartingCall: true, skipsLobby: true)
+    private let voiceCall = ElementCallData(intent: .audio, isStartingCall: true, skipsLobby: true)
     
     // MARK: - The microphone
     

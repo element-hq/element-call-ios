@@ -20,7 +20,7 @@ struct ReactionSendingTests {
     private func makeScreen() -> (ElementCallScreenViewModel, ElementCallController, FakeRTCCall) {
         let rtcCall = FakeRTCCall()
         let controller = ElementCallController.fake(connection: .connected)
-        controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .connected,
                                    rtcCall: MatrixRTCCall(rtcCall: rtcCall))
@@ -80,7 +80,7 @@ struct ReactionSendingTests {
         let (viewModel, controller, _) = makeScreen()
         viewModel.context.send(viewAction: .present(.reactions))
         
-        controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(), connection: .ended(.left))
         try await waitUntil { viewModel.context.viewState.presentedSheet == nil }
     }

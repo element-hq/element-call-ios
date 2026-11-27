@@ -101,7 +101,7 @@ struct ReactionsPreferenceTests {
         other.setMembershipFormat(.msc)
         #expect(controller.showsReactions)
         
-        controller.startCall(.init(isAudioCall: true, isStartingCall: true), room: ElementCallFakeRoom())
+        controller.startCall(.init(intent: .audio, isStartingCall: true, skipsLobby: true), room: ElementCallFakeRoom())
         #expect(!controller.showsReactions)
         #expect(controller.soundEffectsVolume == 0.9)
         #expect(controller.membershipFormat == .msc)
@@ -129,7 +129,7 @@ struct ReactionsPreferenceTests {
                                             clock: clock,
                                             capturesCamera: false)
         let controller = controller(ElementCallFakePreferencesStore(playsReactionSounds: false))
-        controller.setPreviewState(callData: .init(isAudioCall: false, isStartingCall: true),
+        controller.setPreviewState(callData: .init(intent: .video, isStartingCall: true, skipsLobby: true),
                                    room: ElementCallFakeRoom(),
                                    connection: .connected,
                                    call: session)

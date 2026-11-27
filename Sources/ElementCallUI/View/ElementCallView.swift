@@ -63,7 +63,7 @@ struct ElementCallView: View {
                     // giving up its frame. A frame that changes height makes the scroller clamp its
                     // offset unasked, and a margin is the one change UIKit applies without moving
                     // the content under a finger (R6).
-                    content(isLandscape: isLandscape)
+                    content(isLandscape: isLandscape, stageWidth: geometry.size.width)
                         // A fitted picture is centred on what it is given, so full screen gives
                         // it the screen: centred on the notch-shaped remainder instead, the
                         // letterbox above and below would not match. A small call's full-bleed
@@ -112,6 +112,14 @@ struct ElementCallView: View {
                                 .transition(.opacity)
                                 .zIndex(2)
                         }
+                    } else if isLandscape, let lobby = context.viewState.lobby {
+                        // Beside the preview rather than under it (Q5), as Android's lobby is.
+                        ElementCallLobbyPanel(context: context, lobby: lobby)
+                            .frame(width: ElementCallLobbyPanel.width(in: geometry.size.width))
+                            .padding(.top, topBarHeight + Self.topChromeSpacing)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                            .transition(.opacity)
+                            .zIndex(2)
                     } else {
                         ElementCallFloatingControls(context: context)
                             .chromeSlide(isVisible: isStageChromeVisible,
@@ -284,7 +292,8 @@ struct ElementCallView: View {
     /// The top bar and the control bar, shown and hidden as one (017 R1). Until the stage is up
     /// there is nothing to look at, and hang up has to stay in reach (R13).
     private var isStageChromeVisible: Bool {
-        !isStageShown || context.stageChrome.isVisible
+        // Pinned in the lobby, as while ringing: its controls are the point (045 C17).
+        !isStageShown || context.viewState.lobby != nil || context.stageChrome.isVisible
     }
     
     /// One picture behind all the chrome: a one-to-one small call (019 R4).
@@ -307,6 +316,26 @@ struct ElementCallView: View {
         return .init(top: top, bottom: isVisible ? Self.controlsClearance : 0)
     }
     
+    /// What the lobby's preview keeps clear of: the top bar, which floats over the stage in landscape
+    /// and sits above it in portrait, and the bar and Join below it (045 C3). Here rather than in the
+    /// layout, so design can move the pieces (Q5, Q8).
+    ///
+    /// The summary's space is kept whether or not it says anything, so the preview never moves (R41,
+    /// R57).
+    ///
+    /// Held sideways, the summary, the bar and Join are a column beside the preview instead, which
+    /// keeps clear of the top bar only (Q5).
+    private func lobbyInsets(isLandscape: Bool, width: CGFloat) -> ElementCallStageLayout.LobbyInsets {
+        if isLandscape {
+            return .init(top: topBarHeight + Self.topChromeSpacing,
+                         bottom: ElementCallStageLayout.Metrics.spacing,
+                         trailing: ElementCallLobbyPanel.width(in: width))
+        }
+        let summary = ElementCallLobbySummary.height + Self.topChromeSpacing
+        return .init(top: summary,
+                     bottom: ElementCallFloatingControls.lobbyClearance + ElementCallStageLayout.Metrics.spacing)
+    }
+    
     /// Whether the top bar goes with the control bar: in landscape (017 R1), and in a one-to-one
     /// call, whose picture is the whole screen (019 R30). Elsewhere in portrait it stays (017 R30).
     private func isTopBarHideable(isLandscape: Bool) -> Bool {
@@ -314,9 +343,11 @@ struct ElementCallView: View {
     }
     
     /// Whether the stage is what the screen shows, rather than the spinner of a call not yet joined.
+    /// Our provisional tile, from a lobby, is drawn and still not the call on the stage: until the
+    /// call is, the chrome stays (014 R13, 045 C5).
     private var isStageShown: Bool {
         let state = context.viewState
-        return state.connection == .connected || !state.tiles.isEmpty
+        return state.connection == .connected || state.tiles.contains { $0.id != .ownCamera }
     }
     
     /// Assigned only on a change: the context is observed, and the scroll reports a direction many
@@ -452,6 +483,10 @@ struct ElementCallView: View {
                     .padding(.horizontal, 16)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
                     .chromeSlide(isVisible: isVisible, by: -(topBarHeight + safeArea.top + Self.topChromeSpacing), reduceMotion: reduceMotion)
+                if let lobby = context.viewState.lobby, !isLandscape {
+                    ElementCallLobbySummary(lobby: lobby, isAudioCall: context.viewState.isAudioCall)
+                        .padding(.horizontal, 16)
+                }
                 if isSharing {
                     screenShareBanner
                         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bannerHeight = $0 }
@@ -479,16 +514,27 @@ struct ElementCallView: View {
     
     private var topBar: some View {
         HStack(spacing: 8) {
-            Button { context.send(viewAction: .minimize) } label: {
-                style.icons.icon(.collapse)
+            if context.viewState.lobby != nil {
+                // Close, which closes the call screen: a lobby is never minimised (045 R20, R33).
+                // Not the collapse glyph, which means minimise everywhere else on this screen.
+                Button { context.send(viewAction: .hangUp) } label: {
+                    style.icons.icon(.close)
+                }
+                .buttonStyle(ElementCallRoundButtonStyle())
+                .accessibilityLabel(L10n.actionClose)
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.lobbyClose)
+            } else {
+                Button { context.send(viewAction: .minimize) } label: {
+                    style.icons.icon(.collapse)
+                }
+                .buttonStyle(ElementCallRoundButtonStyle())
+                .accessibilityLabel(L10n.actionBack)
+                // The same omission as the one fixed for `.more` below, and for the same reason: the
+                // top bar does not go through `ElementCallControlsView.controlButton`, which is the
+                // only caller of `control(for:)`, so a constant that exists and is pinned by name in
+                // the identifier tests still reached no view and nothing could tap this button.
+                .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimize)
             }
-            .buttonStyle(ElementCallRoundButtonStyle())
-            .accessibilityLabel(L10n.actionBack)
-            // The same omission as the one fixed for `.more` below, and for the same reason: the
-            // top bar does not go through `ElementCallControlsView.controlButton`, which is the
-            // only caller of `control(for:)`, so a constant that exists and is pinned by name in
-            // the identifier tests still reached no view and nothing could tap this button.
-            .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.minimize)
             
             Spacer()
             
@@ -578,7 +624,12 @@ struct ElementCallView: View {
     @ViewBuilder
     private var statusLine: some View {
         switch context.viewState.connection {
+        case .lobby:
+            // Nothing: the lobby is not joining anything until Join (045 R6).
+            EmptyView()
         case .idle, .joining:
+            // From a lobby this is the joining state R23 asks for: our tile is already on the stage,
+            // so no spinner says it (Android's appendix, item 7).
             Text(L10n.joining).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
         case .connectingMedia:
             Text(L10n.connecting).font(style.theme.bodySM).foregroundStyle(style.theme.textSecondary)
@@ -625,7 +676,7 @@ struct ElementCallView: View {
     static let topChromeSpacing: CGFloat = 12
     
     @ViewBuilder
-    private func content(isLandscape: Bool) -> some View {
+    private func content(isLandscape: Bool, stageWidth: CGFloat) -> some View {
         let state = context.viewState
         // The spinner means "no call yet". That used to be the same thing as "no tiles" and is not
         // any more: the model's ranked list is *empty* when you are the only person in the call, and
@@ -661,7 +712,10 @@ struct ElementCallView: View {
                              canSwitchCamera: state.canSwitchCamera,
                              isFrontCamera: state.isFrontCamera,
                              scrollRequest: context.scrollRequest,
-                             memberCount: state.memberCount,
+                             memberCount: state.lobby?.memberCount ?? state.memberCount,
+                             lobbyInsets: state.lobby.map { _ in lobbyInsets(isLandscape: isLandscape, width: stageWidth) },
+                             isLobbyLoading: state.lobby?.isLoading ?? false,
+                             isCameraRefused: state.lobby?.isCameraRefused ?? false,
                              pictureInPictureSourceView: pictureInPictureSourceView,
                              callProvider: callProvider,
                              topClearance: Self.topClearance(isLandscape: isLandscape,

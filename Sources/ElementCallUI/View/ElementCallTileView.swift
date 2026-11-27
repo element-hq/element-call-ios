@@ -31,6 +31,9 @@ enum ElementCallTileAppearance {
     case fullBleed
     /// Our own tile floating over a small call (019 R2): a smaller card.
     case floating
+    /// Our own tile as the lobby's preview (045): rounded, with no name, the call's count in its
+    /// corner, and no gesture but the flip button's (R36).
+    case lobby
 }
 
 /// One participant: video (or the avatar when the camera is off), name and mic badge, the flip
@@ -70,6 +73,10 @@ struct ElementCallTileView: View, Equatable {
     /// The corner our own tile floats in, or nil when it is not floating. Spoken in its label, and
     /// the corners it is not in are offered as actions (019 R25, R26).
     var floatingCorner: ElementCallOwnTileCorner?
+    /// The lobby is reading the call: the preview says so over our avatar (045 R59).
+    var isLoading = false
+    /// The camera is refused, which the lobby's preview says to a screen reader (045 R50).
+    var isCameraRefused = false
     /// A screen reader asked to move our floating tile: a drag does not exist for VoiceOver (R25).
     var onMoveToCorner: (ElementCallOwnTileCorner) -> Void = { _ in }
     /// The picture's upright width over height once a frame lands, for a layout that takes its
@@ -113,6 +120,8 @@ struct ElementCallTileView: View, Equatable {
             && lhs.canSwitchCamera == rhs.canSwitchCamera
             && lhs.isFrontCamera == rhs.isFrontCamera
             && lhs.floatingCorner == rhs.floatingCorner
+            && lhs.isLoading == rhs.isLoading
+            && lhs.isCameraRefused == rhs.isCameraRefused
     }
     
     /// How far a camera picture in the spotlight is fitted rather than filled (003 R16): it fills
@@ -135,13 +144,13 @@ struct ElementCallTileView: View, Equatable {
     private var cornerRadius: CGFloat {
         switch appearance {
         case .fullscreen, .spotlight, .fullBleed: 0
-        case .card: 16
+        case .card, .lobby: 16
         case .floating: 12
         }
     }
     
     private var isLarge: Bool {
-        isSpotlight || appearance == .fullscreen || appearance == .fullBleed
+        isSpotlight || appearance == .fullscreen || appearance == .fullBleed || appearance == .lobby
     }
     
     var body: some View {
@@ -153,7 +162,7 @@ struct ElementCallTileView: View, Equatable {
             picture
             
             switch appearance {
-            case .card, .spotlight, .fullBleed, .floating:
+            case .card, .spotlight, .fullBleed, .floating, .lobby:
                 cardChrome
             case .fullscreen:
                 // Drawn by the screen instead, where the controls' clearance is known.
@@ -182,7 +191,8 @@ struct ElementCallTileView: View, Equatable {
         // The name is still spoken when it is not drawn. Our own tile says more, since it shows
         // neither name nor microphone: whether our camera is on, and where it floats (019 R26).
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityIdentifier(ElementCallAccessibilityIdentifiers.tile(tile.id))
+        .accessibilityValue(accessibilityValue)
+        .accessibilityIdentifier(appearance == .lobby ? ElementCallAccessibilityIdentifiers.lobbyPreview : ElementCallAccessibilityIdentifiers.tile(tile.id))
         // A double tap is how VoiceOver activates anything at all, so the gesture is invisible to
         // it: without this the feature does not exist for anyone using it.
         .accessibilityActions {
@@ -198,11 +208,29 @@ struct ElementCallTileView: View, Equatable {
     }
     
     private var accessibilityLabel: Text {
+        // The preview, not a person's tile: our camera, and whether it is on (045 R50).
+        if appearance == .lobby {
+            return Text(L10nPending.a11yLobbyCamera)
+        }
         if tile.isLocal {
             return Text(Self.ownLabel(name: tile.displayName, hasVideo: tile.hasVideo, corner: floatingCorner))
         }
         guard isNameHidden else { return Text("") }
         return Text(tile.isScreenShare ? L10n.sharedScreenName(tile.displayName) : tile.displayName)
+    }
+    
+    private var accessibilityValue: Text {
+        guard appearance == .lobby else { return Text("") }
+        return Text(Self.lobbyCameraValue(hasVideo: tile.hasVideo, isRefused: isCameraRefused))
+    }
+    
+    /// On, off or not allowed (045 R50): refused is said as such, never as merely off.
+    static func lobbyCameraValue(hasVideo: Bool, isRefused: Bool) -> String {
+        if isRefused {
+            L10nPending.a11yCameraNotAllowed
+        } else {
+            hasVideo ? L10n.a11yCameraOn : L10n.a11yCameraOff
+        }
     }
     
     /// "You, Camera on, Bottom right": the corner only while it floats, since inline it is simply
@@ -268,7 +296,7 @@ struct ElementCallTileView: View, Equatable {
                         // A tile slot (the spotlight in particular) keeps its view identity when the
                         // tile in it changes; without an explicit identity the renderer would stay
                         // attached to the previous tile's stream.
-                        .id(tile.id)
+                        .id(tile.viewID)
                         // Both sides of this branch start on the same avatar, the video view's as
                         // its placeholder, so the swap is instant. The stage animates every change
                         // to its tiles, and a cross-fade between two identical avatars dips through
@@ -281,6 +309,13 @@ struct ElementCallTileView: View, Equatable {
                 }
                 avatar
                     .transition(.identity)
+                if isLoading {
+                    // In the preview's final frame, so nothing moves when loading ends (R59).
+                    ProgressView()
+                        .tint(style.theme.iconPrimary)
+                        .offset(y: Self.largeAvatarDiameter / 2 + 32)
+                        .accessibilityHidden(true)
+                }
                 if appearance == .fullBleed, tile.isMediaInterrupted {
                     // Under the avatar rather than in the corner where other nameless tiles carry
                     // it: this tile's corner is under the control bar and the home indicator
@@ -382,9 +417,14 @@ struct ElementCallTileView: View, Equatable {
     /// moves as one picture whatever the host draws in it, and is the design's size whatever size the
     /// host draws it at.
     private var avatar: some View {
-        let diameter = isLarge ? Self.largeAvatarDiameter : Self.gridAvatarDiameter
+        var diameter = isLarge ? Self.largeAvatarDiameter : Self.gridAvatarDiameter
+        // The lobby's preview can be short, held sideways under its summary: the avatar keeps inside
+        // it rather than spilling over the chrome (045 R9).
+        if appearance == .lobby, size.height > 0 {
+            diameter = min(diameter, max(Self.gridAvatarDiameter, size.height * 0.6))
+        }
         return style.avatars.avatar(userID: tile.userID,
-                                    displayName: tile.displayName,
+                                    displayName: tile.avatarName ?? tile.displayName,
                                     avatarURL: tile.avatarURL,
                                     size: .full)
             .scaledAvatar(to: diameter)
@@ -674,8 +714,12 @@ struct ElementCallVideoView<Placeholder: View>: View {
     
     @State private var slot = VideoFrameSlot()
     @State private var gate = FrameGate()
+    /// The fan-out our own tile attached to, so it detaches from the same one: the camera's in the
+    /// lobby, which is the session's own after Join (045 R49).
+    @State private var attachedOwnVideo: LocalVideoFanOut?
     /// Only ever set by the example harness. See ``ElementCallPreviewVideo``.
     @Environment(\.elementCallPreviewVideo) private var previewVideo
+    @Environment(\.elementCallOwnVideo) private var ownVideo
     
     var body: some View {
         ZStack {
@@ -709,12 +753,16 @@ struct ElementCallVideoView<Placeholder: View>: View {
                 previewVideo.attach(slot, memberID, kind)
                 return
             }
-            guard let call = callProvider() else { return }
             if isLocal {
-                call.localVideo.attach(slot)
-            } else {
-                call.attachVideo(slot, memberID: memberID, kind: kind)
+                // The attempt's camera, which is the session's too: in the lobby there is no
+                // session yet, and the tile keeps this through the join.
+                let fanOut = callProvider()?.localVideo ?? ownVideo?.fanOut()
+                fanOut?.attach(slot)
+                attachedOwnVideo = fanOut
+                return
             }
+            guard let call = callProvider() else { return }
+            call.attachVideo(slot, memberID: memberID, kind: kind)
         }
         .onDisappear {
             slot.setOnFirstFrame(nil)
@@ -722,12 +770,13 @@ struct ElementCallVideoView<Placeholder: View>: View {
                 previewVideo.detach(slot)
                 return
             }
-            guard let call = callProvider() else { return }
             if isLocal {
-                call.localVideo.detach(slot)
-            } else {
-                call.detachVideo(slot, memberID: memberID, kind: kind)
+                attachedOwnVideo?.detach(slot)
+                attachedOwnVideo = nil
+                return
             }
+            guard let call = callProvider() else { return }
+            call.detachVideo(slot, memberID: memberID, kind: kind)
         }
     }
 }

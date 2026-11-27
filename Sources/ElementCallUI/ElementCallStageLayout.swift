@@ -195,7 +195,22 @@ struct ElementCallStageLayout: Equatable {
         var floatingInsets = ElementCallSmallCallLayout.FloatingInsets.zero
         /// A direct chat, where our camera-off tile is hidden even when we are alone.
         var isDirect = false
+        /// The lobby's chrome, when the stage is the lobby's preview (045): what it keeps clear of.
+        var lobbyInsets: LobbyInsets?
     }
+    
+    /// How far the lobby's preview keeps from the top of the stage's area and from the bottom safe
+    /// area: the chrome above it, and the controls and Join below.
+    struct LobbyInsets: Equatable {
+        var top: CGFloat
+        var bottom: CGFloat
+        /// Held sideways, the lobby's controls are a column at the trailing edge.
+        var trailing: CGFloat = 0
+    }
+    
+    /// The widest the lobby's preview grows, so a large screen does not become a large face (R39,
+    /// pending design: open question Q5).
+    static let lobbyMaximumWidth: CGFloat = 560
     
     /// What the layout asks the core for full records of: a rank range over the remote order for
     /// the grid, plus the tiles drawn out of rank (R52, R53). Ranks rather than pages, and carried
@@ -259,6 +274,10 @@ struct ElementCallStageLayout: Equatable {
         var layout = ElementCallSmallCallLayout.applies(to: input.tiles)
             ? ElementCallSmallCallLayout.arrange(input, viewport: viewport)
             : arrange(input, viewport: viewport)
+        // The lobby is one placement, ours, whatever else the arrangement would do (045 C3).
+        if let insets = input.lobbyInsets, let own = input.tiles.first(where: \.isLocal) {
+            return lobby(tile: own, insets: insets, metrics: metrics, viewport: viewport)
+        }
         // A tile that has gone is no longer in `tiles` — its member left, or their share stopped —
         // and the arrangement falls back on its own rather than showing an empty screen. The screen
         // clears the stale id when it notices.
@@ -266,6 +285,36 @@ struct ElementCallStageLayout: Equatable {
             layout = fullscreen(tile: tile, others: input.tiles.filter { $0.id != fullscreenID }, over: layout)
         }
         return layout
+    }
+    
+    // MARK: - The lobby
+    
+    /// Our own tile alone, in the preview's frame: the space between the chrome, never the camera's
+    /// shape, so the frame is the same with the camera on, off or refused and nothing jumps when it
+    /// is toggled (045 R9). At Join the input loses its lobby insets and the same tile, under the
+    /// same view identity, moves to its place in the call (R24).
+    static func lobby(tile: ElementCallTile,
+                      insets: LobbyInsets,
+                      metrics: Metrics,
+                      viewport: CGRect) -> ElementCallStageLayout {
+        let top = insets.top
+        let bottom = metrics.safeBottom - insets.bottom
+        let available = max(0, metrics.cardsWidth - insets.trailing)
+        let width = min(available, lobbyMaximumWidth)
+        let frame = CGRect(x: metrics.cardsLeading + (available - width) / 2,
+                           y: top,
+                           width: width,
+                           height: max(0, bottom - top))
+        return ElementCallStageLayout(placements: [ElementCallTilePlacement(tile: tile,
+                                                                            frame: frame,
+                                                                            appearance: .lobby,
+                                                                            isSpotlight: false,
+                                                                            visibility: .live,
+                                                                            orderIndex: nil,
+                                                                            zIndex: 0)],
+                                      contentHeight: viewport.height,
+                                      viewport: viewport,
+                                      isStatic: true)
     }
     
     // MARK: - Full screen

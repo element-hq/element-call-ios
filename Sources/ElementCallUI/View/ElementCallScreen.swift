@@ -30,7 +30,8 @@ public struct ElementCallScreen: View {
             viewModel.call
         }
         .environment(\.elementCallStyle, viewModel.context.style)
-        .reportInterfaceOrientation { [viewModel] in viewModel.call }
+        .environment(\.elementCallOwnVideo, ElementCallOwnVideo { [viewModel] in viewModel.ownVideo })
+        .reportInterfaceOrientation { [viewModel] in viewModel.updateInterfaceOrientation($0) }
     }
 }
 
@@ -47,32 +48,34 @@ public struct ElementCallScreen: View {
 /// subscribe to, and because a half turn from portrait to upside down changes it while changing no
 /// size a layout could have noticed.
 private struct InterfaceOrientationReporter: ViewModifier {
-    let callProvider: () -> MatrixRTCMediaSession?
+    /// To the controller rather than to the call, which does not exist in the lobby: the camera is
+    /// already running there, and its frames have to be the right way up at the hand-over (045 R34).
+    let report: (UIInterfaceOrientation) -> Void
     
     func body(content: Content) -> some View {
         content
             .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in
-                report()
+                reportCurrent()
             }
             .onAppear {
                 // UIKit only posts the notification while someone has asked for it. Paired with the
                 // end below, which is refcounted, so this does not disturb anyone else asking.
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
-                report()
+                reportCurrent()
             }
             .onDisappear {
                 UIDevice.current.endGeneratingDeviceOrientationNotifications()
             }
     }
     
-    private func report() {
+    private func reportCurrent() {
         guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        callProvider()?.updateInterfaceOrientation(scene.interfaceOrientation)
+        report(scene.interfaceOrientation)
     }
 }
 
 private extension View {
-    func reportInterfaceOrientation(_ callProvider: @escaping () -> MatrixRTCMediaSession?) -> some View {
-        modifier(InterfaceOrientationReporter(callProvider: callProvider))
+    func reportInterfaceOrientation(_ report: @escaping (UIInterfaceOrientation) -> Void) -> some View {
+        modifier(InterfaceOrientationReporter(report: report))
     }
 }
